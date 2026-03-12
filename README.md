@@ -1,8 +1,3 @@
-Berikut **VERSI ULTRA PREMIUM README** yang lebih **modern, animatif, dan GitHub-friendly** (tanpa CSS yang tidak didukung GitHub, tapi tetap terasa interaktif). Ini biasanya dipakai di repo **startup / open-source besar**. 🚀
-
-Kamu tinggal **replace seluruh README.md** dengan ini.
-
----
 
 # 🚀 TOKO RONI POS SYSTEM
 
