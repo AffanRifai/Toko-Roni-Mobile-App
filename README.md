@@ -3,7 +3,7 @@
 <div align="center">
   
   <!-- 3D Animated Logo -->
-  <img src="[https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Shopping/Department%20Store.png](https://cdn.textstudio.com/output/graphic/preview/large/0/6/9/9/9960_a863ac94.webp)" alt="Toko Roni" width="200" />
+  <img src="https://drive.google.com/file/d/1YViGex1nroBaAsQcbb-uszwTiwAgClbc/view?usp=sharing" alt="Toko Roni" width="200" />
   
   <!-- Glitch Effect Title -->
   <h1>
@@ -774,47 +774,3 @@ flutter build apk --release</pre>
 </div>
 
 ---
-
-<!-- CSS Animations -->
-<style>
-@keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-20px); }
-  100% { transform: translateY(0px); }
-}
-
-@keyframes glow {
-  0% { box-shadow: 0 0 5px #6A5ACD; }
-  50% { box-shadow: 0 0 20px #6A5ACD, 0 0 30px #FF2D20; }
-  100% { box-shadow: 0 0 5px #6A5ACD; }
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-
-* {
-  transition: all 0.3s ease;
-}
-
-table {
-  border-collapse: separate;
-  border-spacing: 15px;
-}
-
-td {
-  transition: transform 0.3s, box-shadow 0.3s;
-}
-
-td:hover {
-  transform: translateY(-10px);
-  box-shadow: 0 20px 30px rgba(106, 90, 205, 0.3);
-}
-</style>
