@@ -1,0 +1,115 @@
+/* ===============================
+   USER MANAGEMENT PAGE
+================================ */
+
+.user-page {
+    min-height: 100vh;
+    background-color: #f8f9fa;
+}
+
+/* ===============================
+   TABLE
+================================ */
+
+.table th {
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.table td {
+    vertical-align: middle;
+    font-size: 0.9rem;
+}
+
+/* ===============================
+   BADGES
+================================ */
+
+.role-badge,
+.status-badge {
+    display: inline-block;
+    padding: 0.35em 0.65em;
+    border-radius: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+/* Role */
+.role-badge.owner {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.role-badge.kasir {
+    background-color: #cff4fc;
+    color: #055160;
+}
+
+/* Status */
+.status-badge.active {
+    background-color: #d1e7dd;
+    color: #0f5132;
+}
+
+.status-badge.inactive {
+    background-color: #f8d7da;
+    color: #842029;
+}
+
+/* ===============================
+   BUTTON
+================================ */
+
+.btn-light {
+    border: 1px solid #dee2e6;
+}
+
+.btn-light:hover {
+    background-color: #e9ecef;
+}
+
+/* ===============================
+   EMPTY STATE
+================================ */
+
+.table tbody tr td i {
+    opacity: 0.6;
+}
+
+/* ===============================
+   RESPONSIVE
+================================ */
+
+@media (max-width: 768px) {
+    .table thead {
+        display: none;
+    }
+
+    .table tbody tr {
+        display: block;
+        margin-bottom: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        background: #fff;
+    }
+
+    .table tbody td {
+        display: flex;
+        justify-content: space-between;
+        border: none;
+        padding: 0.25rem 0;
+    }
+
+    .table tbody td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #6c757d;
+    }
+
+    .table tbody td.text-end {
+        justify-content: flex-end;
+    }
+}

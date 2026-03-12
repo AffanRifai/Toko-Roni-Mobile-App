@@ -1,0 +1,118 @@
+/* ===============================
+   GLOBAL USER PAGE
+================================ */
+.user-page {
+    background-color: #f6f8fb;
+    min-height: 100vh;
+}
+
+/* ===============================
+   PAGE HEADER
+================================ */
+.page-header .icon-wrapper {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #0d6efd, #0a58ca);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ===============================
+   CARD
+================================ */
+.card {
+    border-radius: 12px;
+}
+
+.card-header {
+    border-bottom: 1px solid #f0f0f0;
+}
+
+/* ===============================
+   FORM
+================================ */
+.form-label {
+    font-size: 0.9rem;
+    color: #495057;
+}
+
+.form-control,
+.form-select {
+    border-radius: 10px;
+    padding: 10px 14px;
+    border: 1px solid #dee2e6;
+    font-size: 0.9rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.15);
+}
+
+/* ===============================
+   SWITCH
+================================ */
+.form-check-input {
+    cursor: pointer;
+}
+
+.form-check-label {
+    font-size: 0.9rem;
+}
+
+/* ===============================
+   BUTTON
+================================ */
+.btn {
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #0d6efd, #0a58ca);
+    border: none;
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+}
+
+.btn-outline-secondary {
+    border-radius: 10px;
+}
+
+/* ===============================
+   ALERT
+================================ */
+.alert {
+    border-radius: 10px;
+    font-size: 0.9rem;
+}
+
+/* ===============================
+   SIDEBAR INFO
+================================ */
+.card-body ul {
+    list-style: disc;
+}
+
+.card-body ul li {
+    margin-bottom: 6px;
+}
+
+/* ===============================
+   RESPONSIVE
+================================ */
+@media (max-width: 768px) {
+    .page-header .card-body {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .page-header .icon-wrapper {
+        margin-bottom: 10px;
+    }
+}
