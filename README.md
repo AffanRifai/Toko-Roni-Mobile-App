@@ -3,7 +3,7 @@
 <div align="center">
   
   <!-- 3D Animated Logo -->
-  <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Shopping/Department%20Store.png" alt="Toko Roni" width="200" />
+  <img src="[https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Shopping/Department%20Store.png](https://cdn.textstudio.com/output/graphic/preview/large/0/6/9/9/9960_a863ac94.webp)" alt="Toko Roni" width="200" />
   
   <!-- Glitch Effect Title -->
   <h1>
