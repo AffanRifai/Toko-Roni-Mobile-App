@@ -1,59 +1,473 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🛒 Toko Roni POS Mobile
 
 <p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=28&duration=3000&pause=500&color=6A5ACD&center=true&vCenter=true&width=435&lines=Toko+Roni+POS;Flutter+Mobile+App;Modern+POS+Solution" alt="Typing Animation" />
 </p>
 
-## About Laravel
+<p align="center">
+  <img src="https://img.shields.io/badge/Flutter-3.16+-02569B?style=for-the-badge&logo=flutter&logoColor=white" />
+  <img src="https://img.shields.io/badge/Dart-3.2+-0175C2?style=for-the-badge&logo=dart&logoColor=white" />
+  <img src="https://img.shields.io/badge/Laravel-11.0-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" />
+  <img src="https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white" />
+</p>
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+<p align="center">
+  <img src="https://profile-counter.glitch.me/Toko-Roni-Mobile-App/count.svg" alt="Visitor Count" />
+</p>
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## 📱 **Tentang Aplikasi**
 
-## Learning Laravel
+> **Aplikasi Point of Sale (POS) Mobile** yang modern dan powerful, dibangun dengan Flutter dan terintegrasi dengan Laravel REST API. Dirancang khusus untuk memudahkan proses transaksi, manajemen produk, dan monitoring stok secara real-time.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+<div align="center">
+  
+  ### ⚡ **Web Admin** · **Mobile App** · **REST API**
+  
+</div>
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-## Laravel Sponsors
+## 👥 **Tim Pengembang**
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+<p align="center">
+  <table>
+    <tr>
+      <td align="center" width="200">
+        <img src="https://avatars.githubusercontent.com/u/101376947?v=4" width="120" style="border-radius: 50%;" />
+        <br />
+        <b>🎯 Affan Rifai</b>
+        <br />
+        <sub>Front End Mobile</sub>
+        <br />
+        <a href="https://github.com/AffanRifai">
+          <img src="https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white" />
+        </a>
+      </td>
+      <td align="center" width="200">
+        <img src="https://avatars.githubusercontent.com/u/101377456?v=4" width="120" style="border-radius: 50%;" />
+        <br />
+        <b>🚀 Faiz Jihad A.B.</b>
+        <br />
+        <sub>Fullstack & Project Manager</sub>
+        <br />
+        <a href="https://github.com/faizjihad">
+          <img src="https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white" />
+        </a>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" width="200">
+        <img src="https://avatars.githubusercontent.com/u/101377789?v=4" width="120" style="border-radius: 50%;" />
+        <br />
+        <b>⚙️ Tio Ramadhan</b>
+        <br />
+        <sub>Backend Developer</sub>
+        <br />
+        <a href="https://github.com/tioramadhan">
+          <img src="https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white" />
+        </a>
+      </td>
+      <td align="center" width="200">
+        <img src="https://avatars.githubusercontent.com/u/101378012?v=4" width="120" style="border-radius: 50%;" />
+        <br />
+        <b>🎨 Fadhlan M Rindan</b>
+        <br />
+        <sub>Front End Web & QA</sub>
+        <br />
+        <a href="https://github.com/fadhlanrindan">
+          <img src="https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white" />
+        </a>
+      </td>
+    </tr>
+  </table>
+</p>
 
-### Premium Partners
+---
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## 🎯 **Pembagian Tugas**
 
-## Contributing
+| **Role** | **Nama** | **Tanggung Jawab** |
+|----------|----------|-------------------|
+| 🎯 **Front End Mobile** | Affan Rifai | - Pengembangan UI/UX mobile Flutter<br>- Integrasi API mobile<br>- State management<br>- Testing mobile |
+| 🚀 **Fullstack & PM** | Faiz Jihad A.B. | - Manajemen proyek & timeline<br>- Koordinasi tim<br>- Fullstack development<br>- Code review & merging |
+| ⚙️ **Backend Developer** | Tio Ramadhan | - Pengembangan REST API Laravel<br>- Database design & optimization<br>- Authentication & security<br>- Server management |
+| 🎨 **Front End Web & QA** | Fadhlan M Rindan | - Pengembangan web admin (Laravel Blade)<br>- UI/UX web<br>- Quality assurance<br>- Testing & bug reporting |
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+---
 
-## Code of Conduct
+## ✨ **Fitur Unggulan**
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+<p align="center">
+  <table>
+    <tr>
+      <td align="center" width="200">
+        <img src="https://raw.githubusercontent.com/tandpfun/skill-icons/main/icons/Google-Login.svg" width="50" />
+        <br />
+        <b>🔐 Multi Login</b>
+        <br />
+        <sub>Password & Face Recognition</sub>
+        <br />
+        <sub>👤 Affan Rifai</sub>
+      </td>
+      <td align="center" width="200">
+        <img src="https://raw.githubusercontent.com/tandpfun/skill-icons/main/icons/GraphQL-Light.svg" width="50" />
+        <br />
+        <b>📊 Dashboard</b>
+        <br />
+        <sub>Statistik Real-time</sub>
+        <br />
+        <sub>👤 Fadhlan & Affan</sub>
+      </td>
+      <td align="center" width="200">
+        <img src="https://raw.githubusercontent.com/tandpfun/skill-icons/main/icons/Firebase-Dark.svg" width="50" />
+        <br />
+        <b>🛍️ Manajemen Produk</b>
+        <br />
+        <sub>CRUD & Kategori</sub>
+        <br />
+        <sub>👤 Tio & Affan</sub>
+      </td>
+    </tr>
+    <tr>
+      <td align="center">
+        <img src="https://raw.githubusercontent.com/tandpfun/skill-icons/main/icons/Stripe-Light.svg" width="50" />
+        <br />
+        <b>💳 Transaksi</b>
+        <br />
+        <sub>Keranjang & Riwayat</sub>
+        <br />
+        <sub>👤 Faiz & Affan</sub>
+      </td>
+      <td align="center">
+        <img src="https://raw.githubusercontent.com/tandpfun/skill-icons/main/icons/MySQL-Light.svg" width="50" />
+        <br />
+        <b>📦 Inventory</b>
+        <br />
+        <sub>Stok & Kadaluarsa</sub>
+        <br />
+        <sub>👤 Tio & Fadhlan</sub>
+      </td>
+      <td align="center">
+        <img src="https://raw.githubusercontent.com/tandpfun/skill-icons/main/icons/GitHub-Dark.svg" width="50" />
+        <br />
+        <b>🔔 Notifikasi</b>
+        <br />
+        <sub>Stok Rendah</sub>
+        <br />
+        <sub>👤 Faiz & Tio</sub>
+      </td>
+    </tr>
+  </table>
+</p>
 
-## Security Vulnerabilities
+---
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## 🏗️ **Arsitektur Sistem**
 
-## License
+```mermaid
+graph TB
+    subgraph "Frontend Team"
+        A[Affan Rifai<br/>Flutter Mobile] --> F[API Calls]
+        B[Fadhlan M Rindan<br/>Laravel Web Admin] --> F
+    end
+    
+    subgraph "Backend Team"
+        C[Tio Ramadhan<br/>REST API Laravel] --> D[(MySQL Database)]
+        E[Faiz Jihad A.B.<br/>Fullstack & PM] --> C
+        E --> F
+    end
+    
+    F[API Gateway] --> C
+    
+    style A fill:#02569B,stroke:#333,stroke-width:2px
+    style B fill:#FF2D20,stroke:#333,stroke-width:2px
+    style C fill:#FF2D20,stroke:#333,stroke-width:2px
+    style D fill:#4479A1,stroke:#333,stroke-width:2px
+    style E fill:#6A5ACD,stroke:#333,stroke-width:2px
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+---
+
+## 📂 **Struktur Project**
+
+```bash
+📦 Toko-Roni-Mobile-App
+ ┣ 📂 lib
+ ┃ ┣ 📂 models          # 📊 Data models
+ ┃ ┃ ┣ 📜 product_model.dart
+ ┃ ┃ ┣ 📜 category_model.dart
+ ┃ ┃ ┗ 📜 transaction_model.dart
+ ┃ ┣ 📂 services         # 🔌 API Services
+ ┃ ┃ ┣ 📜 api_service.dart
+ ┃ ┃ ┣ 📜 auth_service.dart
+ ┃ ┃ ┗ 📜 product_service.dart
+ ┃ ┣ 📂 screens          # 📱 UI Screens
+ ┃ ┃ ┣ 📂 login
+ ┃ ┃ ┣ 📂 dashboard
+ ┃ ┃ ┣ 📂 product
+ ┃ ┃ ┗ 📂 transaction
+ ┃ ┣ 📂 widgets          # 🧩 Reusable widgets
+ ┃ ┗ 📜 main.dart        # 🚀 Entry point
+ ┣ 📂 assets             # 🖼️ Images & fonts
+ ┣ 📜 pubspec.yaml       # 📦 Dependencies
+ ┗ 📜 README.md          # 📖 Documentation
+```
+
+---
+
+## 🚀 **Quick Start**
+
+### 📋 **Prerequisites**
+- Flutter SDK (>=3.16.0)
+- Dart SDK (>=3.2.0)
+- Android Studio / VS Code
+- Git
+
+### ⚙️ **Instalasi**
+
+```bash
+# Clone repository
+git clone https://github.com/AffanRifai/Toko-Roni-Mobile-App.git
+
+# Masuk ke direktori
+cd Toko-Roni-Mobile-App
+
+# Install dependencies
+flutter pub get
+
+# Jalankan aplikasi
+flutter run
+
+# Build APK release
+flutter build apk --release
+```
+
+---
+
+## 🔌 **API Configuration**
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Base_URL-http://localhost:8000/api-6A5ACD?style=flat-square" />
+</p>
+
+```dart
+// lib/services/api_service.dart
+class ApiService {
+  static const String baseUrl = 'http://localhost:8000/api';
+  static const String login = '$baseUrl/login';
+  static const String products = '$baseUrl/products';
+  static const String categories = '$baseUrl/categories';
+  static const String transactions = '$baseUrl/transactions';
+  static const String dashboard = '$baseUrl/dashboard';
+}
+```
+
+### 📡 **Endpoint API**
+
+| Method | Endpoint | Deskripsi | Developer |
+|--------|----------|-----------|-----------|
+| `POST` | `/api/login` | Autentikasi user | 👤 Tio |
+| `GET` | `/api/products` | Daftar produk | 👤 Tio |
+| `GET` | `/api/categories` | Daftar kategori | 👤 Tio |
+| `POST` | `/api/transactions` | Buat transaksi | 👤 Faiz |
+| `GET` | `/api/dashboard` | Data dashboard | 👤 Faiz |
+
+---
+
+## 📊 **Development Progress**
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Overall_Progress-65%25-orange?style=for-the-badge" />
+</p>
+
+### 🎯 **Affan Rifai - Front End Mobile** (80%)
+- [x] Setup Flutter project
+- [x] Login screen UI
+- [x] Dashboard layout
+- [x] Product listing
+- [x] Product detail
+- [ ] Transaction screen
+- [ ] Cart system
+- [ ] Face recognition
+
+### 🚀 **Faiz Jihad - Fullstack & PM** (70%)
+- [x] Project planning
+- [x] Sprint management
+- [x] API documentation
+- [x] Database schema
+- [ ] Transaction API
+- [ ] Code review
+- [ ] Deployment
+
+### ⚙️ **Tio Ramadhan - Backend** (75%)
+- [x] Laravel setup
+- [x] Authentication API
+- [x] Product API
+- [x] Category API
+- [x] Database optimization
+- [ ] Inventory API
+- [ ] Report API
+
+### 🎨 **Fadhlan M Rindan - Web & QA** (60%)
+- [x] Web admin layout
+- [x] Login page
+- [x] Dashboard web
+- [ ] Product management
+- [ ] Testing scenarios
+- [ ] Bug reporting
+- [ ] QA documentation
+
+---
+
+## 📈 **Project Timeline**
+
+```mermaid
+gantt
+    title Toko Roni POS Development Timeline
+    dateFormat  YYYY-MM-DD
+    
+    section Planning
+    Project Setup           :done, 2024-01-01, 7d
+    
+    section Backend
+    API Development         :active, 2024-01-08, 21d
+    Database Design         :done, 2024-01-08, 14d
+    
+    section Mobile
+    UI/UX Design           :done, 2024-01-08, 14d
+    Mobile Development     :active, 2024-01-22, 28d
+    
+    section Web
+    Web Admin              :active, 2024-01-15, 28d
+    
+    section Testing
+    QA & Testing           :2024-02-12, 14d
+```
+
+---
+
+## 🛠️ **Tech Stack**
+
+<p align="center">
+  <img src="https://skillicons.dev/icons?i=flutter,dart,laravel,mysql,git,github,postman,androidstudio,vscode" />
+</p>
+
+| **Bidang** | **Teknologi** | **Developer** |
+|------------|--------------|---------------|
+| 📱 Mobile | Flutter, Dart, Provider | Affan Rifai |
+| 🌐 Web | Laravel, Blade, Bootstrap | Fadhlan M Rindan |
+| 🔧 Backend | Laravel, Sanctum, MySQL | Tio Ramadhan |
+| 📊 Database | MySQL, Laravel Eloquent | Tio Ramadhan |
+| 🎯 Management | Git, GitHub, Trello | Faiz Jihad A.B. |
+| 🧪 Testing | Postman, PHPUnit | Fadhlan M Rindan |
+
+---
+
+## 🤝 **Cara Kolaborasi**
+
+### Branch Strategy
+```bash
+main
+├── develop
+│   ├── feature/mobile/*      # Affan Rifai
+│   ├── feature/web/*          # Fadhlan M Rindan
+│   ├── feature/api/*          # Tio Ramadhan
+│   └── feature/integration/*  # Faiz Jihad A.B.
+```
+
+### Git Workflow
+```bash
+# 1. Pull latest changes
+git checkout develop
+git pull origin develop
+
+# 2. Create feature branch
+git checkout -b feature/mobile/login
+
+# 3. Commit changes
+git add .
+git commit -m "Add login screen UI"
+
+# 4. Push and create PR
+git push origin feature/mobile/login
+# Create Pull Request to develop branch
+```
+
+---
+
+## 🐛 **Issue Tracking**
+
+| **Priority** | **Issue** | **Assignee** | **Status** |
+|--------------|-----------|--------------|------------|
+| 🔴 High | Face recognition integration | @AffanRifai | In Progress |
+| 🟡 Medium | Transaction API optimization | @tioramadhan | Review |
+| 🟢 Low | UI responsive improvements | @fadhlanrindan | Todo |
+| 🔴 High | Database indexing | @faizjihad | Done |
+
+---
+
+## 📝 **Meeting Schedule**
+
+- **Daily Standup**: 09:00 WIB (15 menit)
+- **Sprint Planning**: Setiap Senin (1 jam)
+- **Sprint Review**: Setiap Jumat (1 jam)
+- **Retrospective**: Setiap 2 minggu
+
+---
+
+## 📄 **License**
+
+<p align="center">
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" />
+</p>
+
+```
+MIT License
+
+Copyright (c) 2024 Tim Pengembang Toko Roni POS
+
+Dibuat dengan ❤️ oleh:
+- Affan Rifai
+- Faiz Jihad Al Baihaqi
+- Tio Ramadhan
+- Fadhlan M Rindan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files...
+```
+
+---
+
+## 🌟 **Kontributor**
+
+<p align="center">
+  <a href="https://github.com/AffanRifai">
+    <img src="https://img.shields.io/badge/Affan_Rifai-Front_End_Mobile-02569B?style=for-the-badge" />
+  </a>
+  <a href="https://github.com/faizjihad">
+    <img src="https://img.shields.io/badge/Faiz_Jihad-Fullstack_&_PM-6A5ACD?style=for-the-badge" />
+  </a>
+  <a href="https://github.com/tioramadhan">
+    <img src="https://img.shields.io/badge/Tio_Ramadhan-Backend-FF2D20?style=for-the-badge" />
+  </a>
+  <a href="https://github.com/fadhlanrindan">
+    <img src="https://img.shields.io/badge/Fadhlan_Rindan-Web_&_QA-FF6B6B?style=for-the-badge" />
+  </a>
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png" width="100%" />
+</p>
+
+<p align="center">
+  <b>🚀 Tim Pengembang Toko Roni POS</b>
+  <br />
+  <sub>Affan Rifai · Faiz Jihad · Tio Ramadhan · Fadhlan M Rindan</sub>
+  <br />
+  <br />
+  <img src="https://img.shields.io/badge/Made%20with%20%E2%9D%A4%EF%B8%8F%20by-Tim%20Toko%20Roni-red" />
+  <br />
+  © 2024 Toko Roni POS System
+</p>
