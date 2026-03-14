@@ -31,7 +31,10 @@ class UserController extends Controller
             'inactive' => User::where('is_active', false)->count(),
             'owner'   => User::where('role', 'owner')->count(),
             'kasir'   => User::where('role', 'kasir')->count(),
-            'gudang'  => User::where('role', 'gudang')->count(),
+            'kepala_gudang'  => User::where('role', 'kepala_gudang')->count(),
+            'logistik' => User::where('role', 'logistik')->count(),
+            'checker_barang' => User::where('role', 'checker_barang')->count(),
+            'manager' => User::where('role', 'manager')->count(),
             'active_percentage' => $totalUsers > 0
                 ? round(($activeUsers / $totalUsers) * 100, 1)
                 : 0,
@@ -284,8 +287,11 @@ class UserController extends Controller
     {
         return match($role) {
             'owner' => route('dashboard'),
-            'kasir' => route('pos.index'),
-            'gudang' => route('inventory.index'),
+            'manager' => route('dashboard'),
+            'kasir' => route('transactions.create'),
+            'kepala_gudang' => route('products.index'),
+            'checker_barang' => route('products.index'),
+            'logistik' => route('delivery.index'),
             default => route('dashboard')
         };
     }
@@ -481,7 +487,7 @@ class UserController extends Controller
             'name'       => 'required|string|max:255',
             'email'      => 'required|email|unique:users,email',
             'password'   => 'required|min:8|confirmed',
-            'role'       => 'required|in:owner,kasir,gudang,logistik,checker_barang',
+            'role'       => 'required|in:owner,kasir,kepala_gudang,logistik,checker_barang,manager',
             'jenis_toko' => 'required|in:grosir,eceran',
             'phone'      => 'nullable|string|max:20',
             'address'    => 'nullable|string|max:500',
@@ -490,9 +496,9 @@ class UserController extends Controller
         ]);
 
         // Validasi logic role x jenis toko
-        if ($validated['role'] === 'gudang' && $validated['jenis_toko'] === 'eceran') {
+        if ($validated['role'] === 'kepala_gudang' && $validated['jenis_toko'] === 'eceran') {
             return back()->withErrors([
-                'jenis_toko' => 'Role gudang hanya untuk toko grosir'
+                'jenis_toko' => 'Role Kepala Gudang hanya untuk toko grosir'
             ])->withInput();
         }
 
@@ -507,43 +513,42 @@ class UserController extends Controller
         $user = User::create($validated);
 
         // KIRIM NOTIFIKASI
-    try {
-        // 1. Kirim ke semua user dengan role owner
-        $owners = User::where('role', 'owner')->where('id', '!=', auth()->id())->get();
-        
-        foreach ($owners as $owner) {
-            $owner->notify(new UserCreatedNotification($user, auth()->user()));
-            Log::info('Notifikasi terkirim ke owner:', [
-                'owner_id' => $owner->id,
-                'user_id' => $user->id
+        try {
+            // 1. Kirim ke semua user dengan role owner dan manager
+            $owners = User::whereIn('role', ['owner', 'manager'])->where('id', '!=', auth()->id())->get();
+            
+            foreach ($owners as $owner) {
+                $owner->notify(new UserCreatedNotification($user, auth()->user()));
+                Log::info('Notifikasi terkirim ke owner/manager:', [
+                    'owner_id' => $owner->id,
+                    'user_id' => $user->id
+                ]);
+            }
+            
+            // 2. Kirim ke user yang baru dibuat (jika aktif)
+            if ($user->is_active) {
+                $user->notify(new UserCreatedNotification($user, auth()->user()));
+                Log::info('Notifikasi terkirim ke user baru:', ['user_id' => $user->id]);
+            }
+            
+            // 3. KIRIM KE DIRI SENDIRI (USER YANG SEDANG LOGIN)
+            $currentUser = auth()->user();
+            
+            // Kirim notifikasi ke diri sendiri
+            $currentUser->notify(new UserCreatedNotification($user, $currentUser));
+            Log::info('Notifikasi terkirim ke diri sendiri:', [
+                'user_id' => $currentUser->id,
+                'user_name' => $currentUser->name,
+                'action' => 'membuat user baru',
+                'new_user_id' => $user->id
             ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Gagal mengirim notifikasi: ' . $e->getMessage());
         }
-        
-        // 2. Kirim ke user yang baru dibuat (jika aktif)
-        if ($user->is_active) {
-            $user->notify(new UserCreatedNotification($user, auth()->user()));
-            Log::info('Notifikasi terkirim ke user baru:', ['user_id' => $user->id]);
-        }
-        
-        // 3. KIRIM KE DIRI SENDIRI (USER YANG SEDANG LOGIN)
-        // INI YANG PALING PENTING - UNTUK NOTIFIKASI KE PEMBUAT
-        $currentUser = auth()->user();
-        
-        // Kirim notifikasi ke diri sendiri
-        $currentUser->notify(new UserCreatedNotification($user, $currentUser));
-        Log::info('Notifikasi terkirim ke diri sendiri:', [
-            'user_id' => $currentUser->id,
-            'user_name' => $currentUser->name,
-            'action' => 'membuat user baru',
-            'new_user_id' => $user->id
-        ]);
-        
-    } catch (\Exception $e) {
-        Log::error('Gagal mengirim notifikasi: ' . $e->getMessage());
-    }
 
-    return redirect()->route('users.index')->with('success', 'User berhasil ditambahkan');
-}
+        return redirect()->route('users.index')->with('success', 'User berhasil ditambahkan');
+    }
     
     /* =======================
      * SHOW
@@ -569,7 +574,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'name'       => 'required|string|max:255',
             'email'      => ['required', 'email', Rule::unique('users')->ignore($user->id)],
-            'role'       => 'required|in:owner,kasir,gudang,logistik,checker_barang',
+            'role'       => 'required|in:owner,kasir,kepala_gudang,logistik,checker_barang,manager',
             'jenis_toko' => 'required|in:grosir,eceran',
             'password'   => 'nullable|min:8|confirmed',
             'phone'      => 'nullable|string|max:20',
@@ -578,9 +583,9 @@ class UserController extends Controller
             'image'      => 'nullable|image|max:2048'
         ]);
 
-        if ($validated['role'] === 'gudang' && $validated['jenis_toko'] === 'eceran') {
+        if ($validated['role'] === 'kepala_gudang' && $validated['jenis_toko'] === 'eceran') {
             return back()->withErrors([
-                'jenis_toko' => 'Role gudang hanya untuk toko grosir'
+                'jenis_toko' => 'Role Kepala Gudang hanya untuk toko grosir'
             ])->withInput();
         }
 
@@ -599,7 +604,7 @@ class UserController extends Controller
             $validated['image'] = $request->file('image')->store('users', 'public');
         }
 
-         // Catat perubahan sebelum update
+        // Catat perubahan sebelum update
         $oldData = $user->toArray();
         $changes = [];
         
@@ -616,14 +621,14 @@ class UserController extends Controller
         
         // Kirim notifikasi jika ada perubahan
         if (!empty($changes)) {
-            // 1. Kirim ke semua owner
-            $owners = User::where('role', 'owner')
+            // 1. Kirim ke semua owner dan manager
+            $owners = User::whereIn('role', ['owner', 'manager'])
                 ->where('id', '!=', auth()->id())
                 ->get();
             
             foreach ($owners as $owner) {
                 $owner->notify(new UserUpdatedNotification($user, auth()->user(), $changes));
-                Log::info('Notifikasi update terkirim ke owner:', [
+                Log::info('Notifikasi update terkirim ke owner/manager:', [
                     'owner_id' => $owner->id,
                     'user_id' => $user->id
                 ]);
@@ -635,10 +640,9 @@ class UserController extends Controller
                 Log::info('Notifikasi update terkirim ke user yang diupdate:', ['user_id' => $user->id]);
             }
             
-            // 3. KIRIM KE DIRI SENDIRI (USER YANG SEDANG LOGIN MELAKUKAN UPDATE)
+            // 3. KIRIM KE DIRI SENDIRI
             $currentUser = auth()->user();
             
-            // Kirim notifikasi ke diri sendiri (pembuat update)
             $currentUser->notify(new UserUpdatedNotification($user, $currentUser, $changes));
             Log::info('Notifikasi update terkirim ke diri sendiri:', [
                 'user_id' => $currentUser->id,
@@ -651,7 +655,6 @@ class UserController extends Controller
 
         return redirect()->route('users.index')->with('success', 'User berhasil diperbarui');
     }
-
 
     /* =======================
      * DELETE

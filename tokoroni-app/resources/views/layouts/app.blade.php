@@ -529,7 +529,7 @@
                         </a>
                     @endif
 
-                    @if (in_array(Auth::user()->role, ['owner', 'gudang']))
+                    @if (in_array(Auth::user()->role, ['owner']))
                         <!-- Inventory Section -->
                         <div class="sidebar-hide pt-3 mt-2 border-t border-gray-100 dark:border-gray-700">
                             <div class="px-3 mb-1">
@@ -556,6 +556,36 @@
                             <span class="sidebar-hide text-sm font-medium">Categories</span>
                         </a>
                     @endif
+
+                    @if (in_array(Auth::user()->role, ['owner', 'manager', 'kepala_gudang', 'checker_barang']))
+                        <!-- Inventory Section -->
+                        <div class="sidebar-hide pt-3 mt-2 border-t border-gray-100 dark:border-gray-700">
+                            <div class="px-3 mb-1">
+                                <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Inventory
+                                </div>
+                            </div>
+                        </div>
+
+                        <a href="{{ route('products.index') }}"
+                            class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 {{ request()->routeIs('products.*') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50' }}"
+                            data-tooltip="Products">
+                            <div class="sidebar-menu-icon w-5 h-5 flex items-center justify-center mr-3">
+                                <i class="fas fa-box text-sm"></i>
+                            </div>
+                            <span class="sidebar-hide text-sm font-medium">Products</span>
+                        </a>
+
+                        @if (in_array(Auth::user()->role, ['owner', 'manager', 'kepala_gudang']))
+                        <a href="{{ route('categories.index') }}"
+                            class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 {{ request()->routeIs('categories.*') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50' }}"
+                            data-tooltip="Categories">
+                            <div class="sidebar-menu-icon w-5 h-5 flex items-center justify-center mr-3">
+                                <i class="fas fa-tags text-sm"></i>
+                            </div>
+                            <span class="sidebar-hide text-sm font-medium">Categories</span>
+                        </a>
+                        @endif
+        @endif
 
                     <!-- Delivery Section -->
                     @if (in_array(Auth::user()->role, ['owner', 'logistik','admin']))

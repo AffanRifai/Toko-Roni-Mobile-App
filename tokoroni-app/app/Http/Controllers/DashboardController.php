@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\CheckerReport;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use Illuminate\Support\Facades\DB;
@@ -24,8 +25,10 @@ class DashboardController extends Controller
                 return $this->ownerDashboard();
             case 'kasir':
                 return $this->kasirDashboard();
-            case 'gudang':
+            case 'kepala_gudang':
                 return $this->gudangDashboard();
+            case 'checker_barang':
+                return $this->checkerDashboard();
             case 'logistik':
                 return $this->logistikDashboard();
             default:
@@ -526,6 +529,105 @@ class DashboardController extends Controller
             'totalFleet',
             'activeRoutes',
             'totalDrivers'
+        ));
+    }
+        
+    /**
+     * CHECKER BARANG DASHBOARD
+     */
+    public function checkerDashboard()
+    {
+        // STATISTIK UMUM
+        $totalProducts = Product::count();
+        $totalCategories = Category::count();
+        $activeProducts = Product::where('is_active', true)->count();
+
+        // STOK RENDAH
+        $lowStockProducts = Product::where(function ($query) {
+            $query->where('stock', '<', 10)
+                ->orWhereRaw('stock < COALESCE(min_stock, 10)');
+        })->count();
+
+        // PRODUK AKAN KADALUARSA
+        $expiringSoonCount = Product::whereNotNull('expiry_date')
+            ->where('expiry_date', '<=', now()->addDays(30))
+            ->where('expiry_date', '>', now())
+            ->count();
+
+        $expiredCount = Product::whereNotNull('expiry_date')
+            ->where('expiry_date', '<', now())
+            ->count();
+
+        // DAFTAR PRODUK STOK RENDAH
+        $lowStockItems = Product::with('category')
+            ->where(function ($query) {
+                $query->where('stock', '<', 10)
+                    ->orWhereRaw('stock < COALESCE(min_stock, 10)');
+            })
+            ->orderBy('stock', 'asc')
+            ->limit(10)
+            ->get()
+            ->map(function ($product) {
+                $product->stock_percentage = $product->min_stock > 0 
+                    ? min(100, ($product->stock / $product->min_stock) * 100) 
+                    : 0;
+                return $product;
+            });
+
+        // DAFTAR PRODUK AKAN KADALUARSA
+        $expiringProducts = Product::with('category')
+            ->whereNotNull('expiry_date')
+            ->where('expiry_date', '<=', now()->addDays(30))
+            ->orderBy('expiry_date', 'asc')
+            ->limit(10)
+            ->get()
+            ->map(function ($product) {
+                $daysLeft = now()->startOfDay()->diffInDays(Carbon::parse($product->expiry_date)->startOfDay(), false);
+                $product->days_left = (int) floor($daysLeft);
+                
+                if ($product->days_left == 0 && $daysLeft > 0) {
+                    $product->days_display = '< 1 hari lagi';
+                } elseif ($product->days_left == 0) {
+                    $product->days_display = 'Hari ini';
+                } else {
+                    $product->days_display = $product->days_left . ' hari lagi';
+                }
+                
+                return $product;
+            });
+
+        // DAFTAR PRODUK EXPIRED
+        $expiredProducts = Product::with('category')
+            ->whereNotNull('expiry_date')
+            ->where('expiry_date', '<', now())
+            ->orderBy('expiry_date', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(function ($product) {
+                $daysExpired = (int) floor(Carbon::parse($product->expiry_date)->startOfDay()->diffInDays(now()->startOfDay(), false));
+                $product->days_expired = abs($daysExpired);
+                return $product;
+            });
+
+        // RIWAYAT LAPORAN CHECKER
+        $recentReports = CheckerReport::with(['product', 'reportedBy'])
+            ->where('reported_by', auth()->id())
+            ->orWhereIn('status', ['pending', 'in_progress'])
+            ->latest()
+            ->limit(10)
+            ->get();
+
+        return view('dashboard.checker', compact(
+            'totalProducts',
+            'totalCategories',
+            'activeProducts',
+            'lowStockProducts',
+            'expiringSoonCount',
+            'expiredCount',
+            'lowStockItems',
+            'expiringProducts',
+            'expiredProducts',
+            'recentReports'
         ));
     }
 }

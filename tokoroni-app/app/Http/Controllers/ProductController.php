@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\User;
+use App\Models\CheckerReport;
+use App\Notifications\ProductReportedNotification;
 use App\Notifications\ProductCreatedNotification;
 use App\Notifications\ProductUpdatedNotification;
 use App\Notifications\ProductDeletedNotification;
@@ -894,4 +896,70 @@ class ProductController extends Controller
             Log::error('Gagal mengirim notifikasi hapus produk: ' . $e->getMessage());
         }
     }
+
+    /**
+ * Report product to kepala gudang (for checker)
+ */
+public function reportProduct(Request $request, Product $product)
+{
+    $request->validate([
+        'report_type' => 'required|in:low_stock,expiring,expired,damaged,other',
+        'notes' => 'required|string|max:500',
+        'quantity' => 'nullable|integer|min:1',
+    ]);
+
+    try {
+        DB::beginTransaction();
+
+        // Buat laporan
+        $report = CheckerReport::create([
+            'product_id' => $product->id,
+            'reported_by' => auth()->id(),
+            'report_type' => $request->report_type,
+            'notes' => $request->notes,
+            'quantity' => $request->quantity ?? $product->stock,
+            'status' => 'pending',
+            'reported_at' => now(),
+        ]);
+
+        // Kirim notifikasi ke semua kepala gudang
+        $kepalaGudang = User::where('role', 'kepala_gudang')->get();
+        
+        foreach ($kepalaGudang as $kg) {
+            $kg->notify(new ProductReportedNotification($report, $product, auth()->user()));
+        }
+
+        // Kirim juga ke owner dan manager
+        $owners = User::whereIn('role', ['owner', 'manager'])->get();
+        
+        foreach ($owners as $owner) {
+            $owner->notify(new ProductReportedNotification($report, $product, auth()->user()));
+        }
+
+        DB::commit();
+
+        if ($request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Laporan berhasil dikirim ke Kepala Gudang',
+                'report' => $report
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Laporan berhasil dikirim ke Kepala Gudang');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error reporting product: ' . $e->getMessage());
+
+        if ($request->ajax()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengirim laporan: ' . $e->getMessage()
+            ], 500);
+        }
+
+        return redirect()->back()->with('error', 'Gagal mengirim laporan: ' . $e->getMessage());
+    }
+}
 }

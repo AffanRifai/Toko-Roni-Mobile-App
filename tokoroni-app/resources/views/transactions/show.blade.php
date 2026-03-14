@@ -866,7 +866,68 @@
     </style>
     @push('scripts')
 <script>
-// ================= SIDEBAR FIX - FINAL VERSION =================
+        function toggleDeliveryOptions(show) {
+            const deliveryOptions = document.getElementById('deliveryOptions');
+            if (deliveryOptions) {
+                if (show) {
+                    deliveryOptions.classList.remove('hidden');
+                } else {
+                    deliveryOptions.classList.add('hidden');
+                }
+            }
+        }
+
+        function createDeliveryRequest() {
+            document.getElementById('createDeliveryForm').submit();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animasi pada hover statistik
+            const statCards = document.querySelectorAll('.bg-gradient-to-br');
+            statCards.forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-2px)';
+                });
+
+                card.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0)';
+                });
+            });
+
+            // Print button loading state
+            const printButton = document.querySelector('a[href*="print"]');
+            if (printButton) {
+                printButton.addEventListener('click', function(e) {
+                    if (!this.hasAttribute('target')) return;
+
+                    const originalHTML = this.innerHTML;
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Menyiapkan...';
+                    this.classList.add('opacity-75', 'cursor-not-allowed');
+
+                    setTimeout(() => {
+                        this.innerHTML = originalHTML;
+                        this.classList.remove('opacity-75', 'cursor-not-allowed');
+                    }, 1500);
+                });
+            }
+
+            // Cek apakah ada radio yang terpilih sebelumnya
+            const selectedRadio = document.querySelector('input[name="need_delivery"]:checked');
+            if (selectedRadio && selectedRadio.value === 'yes') {
+                toggleDeliveryOptions(true);
+            }
+
+            // Tooltip untuk badge pembayaran
+            const paymentBadges = document.querySelectorAll('[class*="bg-"][class*="text-"]');
+            paymentBadges.forEach(badge => {
+                if (badge.textContent.includes('cash') || badge.textContent.includes('card') || badge.textContent.includes('wallet')) {
+                    badge.setAttribute('title', 'Metode Pembayaran: ' + badge.textContent.trim());
+                }
+            });
+        });
+    </script>
+
+// ================= SIDEBAR  =================
 (function() {
     'use strict';
     
@@ -877,6 +938,7 @@
     const closeBtn = document.getElementById('sidebar-close');
     const toggleBtn = document.getElementById('sidebar-toggle');
     const mainContent = document.querySelector('.main-content');
+    
     
     // Fungsi buka sidebar (mobile)
     function openSidebarMobile() {

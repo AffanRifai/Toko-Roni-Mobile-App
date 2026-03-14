@@ -25,6 +25,7 @@
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-3">
+                    @if(in_array(auth()->user()->role, ['owner', 'manager', 'kepala_gudang']))
                     <!-- Tambah Kategori Button -->
                     <button onclick="showAddCategoryModal()"
                         class="group flex items-center gap-2 px-5 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl hover:bg-white hover:shadow-lg transition-all duration-300">
@@ -37,6 +38,7 @@
                         <i class="fas fa-plus-circle group-hover:rotate-90 transition-transform"></i>
                         <span class="font-medium">Tambah Produk</span>
                     </a>
+                    @endif
                 </div>
             </div>
         </div>
@@ -330,21 +332,36 @@
                         <!-- Overlay with Quick Actions -->
                         <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                             <div class="absolute bottom-3 left-3 right-3 flex justify-center gap-2">
+                                <!-- Quick View Button (Semua role bisa lihat) -->
                                 <button onclick="showQuickView({{ $product->id }})"
                                     class="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center text-blue-600 hover:bg-blue-600 hover:text-white transition-all transform hover:scale-110"
                                     title="Quick View">
                                     <i class="fas fa-eye"></i>
                                 </button>
-                                <a href="{{ route('products.edit', $product->id) }}"
-                                    class="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center text-amber-600 hover:bg-amber-600 hover:text-white transition-all transform hover:scale-110"
-                                    title="Edit">
-                                    <i class="fas fa-edit"></i>
-                                </a>
-                                <button onclick="confirmDelete({{ $product->id }}, '{{ $product->name }}')"
-                                    class="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center text-red-600 hover:bg-red-600 hover:text-white transition-all transform hover:scale-110"
-                                    title="Delete">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                
+                                @if(in_array(auth()->user()->role, ['owner', 'manager', 'kepala_gudang']))
+                                    <!-- Edit Button (Hanya untuk owner, manager, kepala_gudang) -->
+                                    <a href="{{ route('products.edit', $product->id) }}"
+                                        class="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center text-amber-600 hover:bg-amber-600 hover:text-white transition-all transform hover:scale-110"
+                                        title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    
+                                    <!-- Delete Button (Hanya untuk owner, manager, kepala_gudang) -->
+                                    <button onclick="confirmDelete({{ $product->id }}, '{{ $product->name }}')"
+                                        class="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center text-red-600 hover:bg-red-600 hover:text-white transition-all transform hover:scale-110"
+                                        title="Delete">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+
+                                @elseif(auth()->user()->role === 'checker_barang')
+                                    <!-- Report Button (Khusus untuk checker_barang) -->
+                                    <button onclick="showReportModal({{ $product->id }}, '{{ $product->name }}')"
+                                        class="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center text-orange-600 hover:bg-orange-600 hover:text-white transition-all transform hover:scale-110"
+                                        title="Laporkan Produk">
+                                        <i class="fas fa-flag"></i>
+                                    </button>
+                                @endif
                             </div>
                         </div>
 
@@ -484,6 +501,7 @@
                                         </div>
                                     </div>
                                     <div class="flex gap-1">
+                                        @if(in_array(auth()->user()->role, ['owner', 'manager', 'kepala_gudang']))
                                         <button onclick="editCategory({{ $category->id }}, '{{ $category->name }}')"
                                             class="w-8 h-8 rounded-lg hover:bg-amber-50 text-amber-600 transition-all"
                                             title="Edit Kategori">
@@ -500,6 +518,7 @@
                                                 title="Tidak dapat dihapus (masih digunakan)" disabled>
                                                 <i class="fas fa-trash"></i>
                                             </button>
+                                        @endif
                                         @endif
                                     </div>
                                 </div>

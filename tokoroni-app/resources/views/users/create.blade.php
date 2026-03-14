@@ -2,7 +2,6 @@
 
 @section('title', 'Tambah Pengguna Baru')
 
-@vite(['resources/css/tambahuser.css'])
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css">
@@ -205,7 +204,10 @@
                                                 required>
                                                 <option value="">Pilih Peran</option>
                                                 <option value="owner" {{ old('role') == 'owner' ? 'selected' : '' }}>
-                                                    Owner (Administrator)
+                                                    Owner (Pemilik)
+                                                </option>
+                                                <option value="manager" {{ old('role') == 'manager' ? 'selected' : '' }}>
+                                                    Manager
                                                 </option>
                                                 <option value="kasir" {{ old('role') == 'kasir' ? 'selected' : '' }}>
                                                     Kasir
@@ -221,10 +223,6 @@
                                                 <option value="checker_barang"
                                                     {{ old('role') == 'checker_barang' ? 'selected' : '' }}>
                                                     Checker Barang
-                                                </option>
-                                                <option value="manager_toko_eceran"
-                                                    {{ old('role') == 'manager_toko_eceran' ? 'selected' : '' }}>
-                                                    Manager Toko Eceran
                                                 </option>
                                             </select>
                                             @error('role')
@@ -397,6 +395,15 @@
 
                                 <div class="mb-3">
                                     <h6 class="fw-semibold mb-2 text-primary">
+                                        <i class="fas fa-user-tie me-1"></i> Manager
+                                    </h6>
+                                    <p class="text-muted small mb-0">
+                                        Mengelola operasional toko, staff, dan laporan penjualan.
+                                    </p>
+                                </div>
+
+                                <div class="mb-3">
+                                    <h6 class="fw-semibold mb-2 text-primary">
                                         <i class="fas fa-cash-register me-1"></i> Kasir
                                     </h6>
                                     <p class="text-muted small mb-0">
@@ -428,15 +435,6 @@
                                     </h6>
                                     <p class="text-muted small mb-0">
                                         Memeriksa kualitas dan kuantitas barang masuk/keluar.
-                                    </p>
-                                </div>
-
-                                <div class="mb-3">
-                                    <h6 class="fw-semibold mb-2 text-primary">
-                                        <i class="fas fa-store-alt me-1"></i> Manager Toko Eceran
-                                    </h6>
-                                    <p class="text-muted small mb-0">
-                                        Mengelola operasional toko eceran, staff, dan laporan penjualan.
                                     </p>
                                 </div>
                             </div>
@@ -610,8 +608,9 @@
                 roleSelect.addEventListener('change', function() {
                     const role = this.value;
 
-                    if (role === 'manager_toko_eceran') {
-                        storeTypeSelect.value = 'eceran';
+                    if (role === 'kepala_gudang') {
+                        // Untuk Kepala Gudang, set toko grosir dan disable
+                        storeTypeSelect.value = 'grosir';
                         storeTypeSelect.disabled = true;
                     } else {
                         storeTypeSelect.disabled = false;
@@ -628,10 +627,9 @@
                         if (option.value === '') return;
 
                         if (storeType === 'eceran') {
-                            option.hidden = !['owner', 'kasir', 'manager_toko_eceran'].includes(
-                                option.value);
+                            option.hidden = !['owner', 'manager', 'kasir'].includes(option.value);
                         } else if (storeType === 'grosir') {
-                            option.hidden = !['owner', 'kasir', 'kepala_gudang', 'logistik',
+                            option.hidden = !['owner', 'manager', 'kasir', 'kepala_gudang', 'logistik',
                                 'checker_barang'
                             ].includes(option.value);
                         } else {

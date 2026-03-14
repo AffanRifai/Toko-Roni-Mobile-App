@@ -89,7 +89,7 @@
                                     </div>
 
                                     {{-- ROLE --}}
-                                     <div class="col-md-6">
+                                    <div class="col-md-6">
                                         <label for="role" class="form-label fw-semibold">
                                             <i class="fas fa-user-tag me-1 text-primary"></i> Peran (Role)
                                             <span class="text-danger">*</span>
@@ -102,27 +102,26 @@
                                                 class="form-select border-start-0 @error('role') is-invalid @enderror"
                                                 required>
                                                 <option value="">Pilih Peran</option>
-                                                <option value="owner" {{ old('role') == 'owner' ? 'selected' : '' }}>
-                                                    Owner (Administrator)
+                                                <option value="owner" {{ old('role', $user->role) == 'owner' ? 'selected' : '' }}>
+                                                    Owner (Pemilik)
                                                 </option>
-                                                <option value="kasir" {{ old('role') == 'kasir' ? 'selected' : '' }}>
+                                                <option value="manager" {{ old('role', $user->role) == 'manager' ? 'selected' : '' }}>
+                                                    Manager
+                                                </option>
+                                                <option value="kasir" {{ old('role', $user->role) == 'kasir' ? 'selected' : '' }}>
                                                     Kasir
                                                 </option>
                                                 <option value="kepala_gudang"
-                                                    {{ old('role') == 'kepala_gudang' ? 'selected' : '' }}>
+                                                    {{ old('role', $user->role) == 'kepala_gudang' ? 'selected' : '' }}>
                                                     Kepala Gudang
                                                 </option>
                                                 <option value="logistik"
-                                                    {{ old('role') == 'logistik' ? 'selected' : '' }}>
+                                                    {{ old('role', $user->role) == 'logistik' ? 'selected' : '' }}>
                                                     Staff Logistik
                                                 </option>
                                                 <option value="checker_barang"
-                                                    {{ old('role') == 'checker_barang' ? 'selected' : '' }}>
+                                                    {{ old('role', $user->role) == 'checker_barang' ? 'selected' : '' }}>
                                                     Checker Barang
-                                                </option>
-                                                <option value="manager_toko_eceran"
-                                                    {{ old('role') == 'manager_toko_eceran' ? 'selected' : '' }}>
-                                                    Manager Toko Eceran
                                                 </option>
                                             </select>
                                             @error('role')
@@ -141,14 +140,14 @@
                                         <label class="form-label fw-semibold">Jenis Toko</label>
 
                                         <input type="hidden" name="jenis_toko" id="jenis_toko_hidden"
-                                            value="{{ $user->jenis_toko }}">
+                                            value="{{ old('jenis_toko', $user->jenis_toko) }}">
 
                                         <select id="jenis_toko" class="form-select">
                                             <option value="">- Pilih -</option>
-                                            <option value="grosir" {{ $user->jenis_toko == 'grosir' ? 'selected' : '' }}>
+                                            <option value="grosir" {{ old('jenis_toko', $user->jenis_toko) == 'grosir' ? 'selected' : '' }}>
                                                 Grosir
                                             </option>
-                                            <option value="eceran" {{ $user->jenis_toko == 'eceran' ? 'selected' : '' }}>
+                                            <option value="eceran" {{ old('jenis_toko', $user->jenis_toko) == 'eceran' ? 'selected' : '' }}>
                                                 Eceran
                                             </option>
                                         </select>
@@ -160,7 +159,7 @@
                                         <div class="form-check form-switch mt-2">
                                             <input type="hidden" name="is_active" value="0">
                                             <input class="form-check-input" type="checkbox" name="is_active" value="1"
-                                                {{ $user->is_active ? 'checked' : '' }}>
+                                                {{ old('is_active', $user->is_active) ? 'checked' : '' }}>
                                             <label class="form-check-label">Akun aktif</label>
                                         </div>
                                     </div>
@@ -209,9 +208,13 @@
             const hiddenJenis = document.getElementById('jenis_toko_hidden');
 
             function syncJenisToko() {
-                if (role.value === 'owner') {
+                if (role.value === 'owner' || role.value === 'manager') {
+                    jenisToko.disabled = false;
+                    hiddenJenis.value = jenisToko.value;
+                } else if (role.value === 'kepala_gudang') {
+                    jenisToko.value = 'grosir';
                     jenisToko.disabled = true;
-                    hiddenJenis.value = '';
+                    hiddenJenis.value = 'grosir';
                 } else {
                     jenisToko.disabled = false;
                     hiddenJenis.value = jenisToko.value;
