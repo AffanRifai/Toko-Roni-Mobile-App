@@ -27,6 +27,7 @@ use App\Http\Controllers\NotificationController;
 | ROOT ROUTE
 |--------------------------------------------------------------------------
 */
+
 Route::get('/', function () {
     return auth()->check() ? redirect()->route('dashboard') : redirect()->route('login');
 });
@@ -230,18 +231,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Request delivery from transaction
     Route::post('/transactions/{transaction}/delivery-request', [DeliveryController::class, 'requestDelivery'])->name('delivery.request');
 
-   // Route untuk laporan PDF
+    // Route untuk laporan PDF
     Route::prefix('reports')->middleware(['auth'])->group(function () {
-    // Route untuk PDF laporan pengiriman
-    Route::get('/delivery/pdf', [DeliveryReportController::class, 'exportPdf'])->name('reports.delivery.pdf');
-    
-    // Route untuk summary (jika ada)
-    Route::get('/delivery/summary', [DeliveryReportController::class, 'summary'])->name('reports.delivery.summary');
+        // Route untuk PDF laporan pengiriman
+        Route::get('/delivery/pdf', [DeliveryReportController::class, 'exportPdf'])->name('reports.delivery.pdf');
+
+        // Route untuk summary (jika ada)
+        Route::get('/delivery/summary', [DeliveryReportController::class, 'summary'])->name('reports.delivery.summary');
     });
 
     // Route export alternatif dengan nama berbeda
     Route::get('/delivery-report/export-pdf', [DeliveryReportController::class, 'exportPdf'])->name('delivery.export.pdf');
-    
+
     /*
     |--------------------------------------------------------------------------
     | CATEGORY ROUTES (OWNER & GUDANG)
@@ -303,7 +304,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/update', [UserController::class, 'updateProfile'])->name('update');
     });
 
-     /*
+    /*
     |--------------------------------------------------------------------------
     | NOTIFICATIONS
     |--------------------------------------------------------------------------

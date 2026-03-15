@@ -84,7 +84,7 @@ class MemberController extends Controller
 
         try {
             DB::beginTransaction();
-            
+
             // Set tanggal registrasi
             $validated['tanggal_registrasi'] = now();
 
@@ -113,10 +113,10 @@ class MemberController extends Controller
     {
         try {
             $currentUser = auth()->user();
-            
+
             // 1. Kirim ke semua user dengan role owner
             $owners = User::where('role', 'owner')->get();
-            
+
             foreach ($owners as $owner) {
                 if ($owner->id != $currentUser->id) {
                     $owner->notify(new MemberCreatedNotification($member, $currentUser));
@@ -126,14 +126,14 @@ class MemberController extends Controller
                     ]);
                 }
             }
-            
+
             // 2. Kirim ke diri sendiri (pembuat)
             $currentUser->notify(new MemberCreatedNotification($member, $currentUser));
             Log::info('Notifikasi member terkirim ke diri sendiri:', [
                 'user_id' => $currentUser->id,
                 'member_id' => $member->id
             ]);
-            
+
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi member: ' . $e->getMessage());
         }
@@ -192,7 +192,7 @@ class MemberController extends Controller
             // Catat perubahan sebelum update
             $oldData = $member->toArray();
             $changes = [];
-            
+
             foreach ($validated as $key => $value) {
                 if (isset($oldData[$key]) && $oldData[$key] != $value) {
                     $changes[$key] = [
@@ -228,12 +228,12 @@ class MemberController extends Controller
     {
         try {
             $currentUser = auth()->user();
-            
+
             // 1. Kirim ke semua user dengan role owner
             $owners = User::where('role', 'owner')
                 ->where('id', '!=', $currentUser->id)
                 ->get();
-            
+
             foreach ($owners as $owner) {
                 $owner->notify(new MemberUpdatedNotification($member, $currentUser, $changes));
                 Log::info('Notifikasi update member terkirim ke owner:', [
@@ -241,14 +241,14 @@ class MemberController extends Controller
                     'member_id' => $member->id
                 ]);
             }
-            
+
             // 2. Kirim ke diri sendiri (pembuat update)
             $currentUser->notify(new MemberUpdatedNotification($member, $currentUser, $changes));
             Log::info('Notifikasi update member terkirim ke diri sendiri:', [
                 'user_id' => $currentUser->id,
                 'member_id' => $member->id
             ]);
-            
+
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi update member: ' . $e->getMessage());
         }
@@ -264,7 +264,7 @@ class MemberController extends Controller
             $member->update(['is_active' => !$member->is_active]);
 
             $status = $member->is_active ? 'diaktifkan' : 'dinonaktifkan';
-            
+
             // Kirim notifikasi untuk perubahan status
             $changes = [
                 'is_active' => [
@@ -272,7 +272,7 @@ class MemberController extends Controller
                     'new' => $member->is_active
                 ]
             ];
-            
+
             $this->sendMemberUpdatedNotifications($member, $changes);
 
             return redirect()->back()
