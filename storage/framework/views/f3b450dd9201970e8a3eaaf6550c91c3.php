@@ -2616,3 +2616,4 @@
 </body>
 
 </html>
+<?php /**PATH D:\PROJECT3\Toko-Roni-Mobile-App\tokoroni-app\resources\views/welcome.blade.php ENDPATH**/ ?>

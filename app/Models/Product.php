@@ -69,6 +69,16 @@ class Product extends Model
         return 'in_stock';
     }
 
+    public function forecasts()
+    {
+        return $this->hasMany(Forecast::class);
+    }
+
+    public function latestForecast()
+    {
+        return $this->hasOne(Forecast::class)->latest('forecast_date');
+    }
+
     public function getImageUrlAttribute()
     {
         return $this->image

@@ -27,8 +27,11 @@ use App\Http\Controllers\NotificationController;
 | ROOT ROUTE
 |--------------------------------------------------------------------------
 */
-
 Route::get('/', function () {
+    return view('welcome');
+});
+
+Route::get('/login', function () {
     return auth()->check() ? redirect()->route('dashboard') : redirect()->route('login');
 });
 
