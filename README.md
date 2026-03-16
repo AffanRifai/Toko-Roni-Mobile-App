@@ -352,8 +352,8 @@ server {
 Hak Cipta © 2024 Toko Roni. All rights reserved.
 
 ## 👨‍💻 Kontributor
-- **Back-end Dev** - [Nama Developer]
-- **Full-stack Dev** - [Nama Developer]
+- **Back-end Dev** - [Faiz J]
+- **Full-stack Dev** - [Tio R]
 - **Front-End Dev** - [Fadhlan M R]
 - **UI/UX Designer & Mobile Dev** - [Affan Rifaiz]
 
