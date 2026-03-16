@@ -6,6 +6,8 @@ use App\Models\Receivable;
 use App\Models\ReceivablePayment;
 use App\Models\Member;
 use App\Models\Transaction;
+use App\Models\User; // Tambahkan ini
+use App\Notifications\PaymentReceivedNotification; // Tambahkan ini
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -93,6 +95,20 @@ class ReceivableController extends Controller
                 }
             ])->findOrFail($id);
 
+            // Check if member exists
+            if (!$receivable->member) {
+                Log::warning('Receivable without member:', ['receivable_id' => $id]);
+
+                // Try to load member separately
+                $member = Member::find($receivable->member_id);
+                if ($member) {
+                    $receivable->setRelation('member', $member);
+                } else {
+                    return redirect()->route('receivables.index')
+                        ->with('error', 'Data member tidak ditemukan untuk piutang ini');
+                }
+            }
+
             // Calculate remaining limit
             $sisaLimit = $receivable->member->limit_kredit - $receivable->member->total_piutang;
 
@@ -168,35 +184,73 @@ class ReceivableController extends Controller
                 $receivable->sisa_piutang = 0;
 
                 // Update transaction status
-                Transaction::where('id', $receivable->transaction_id)
-                    ->update(['payment_status' => 'LUNAS']);
+                if ($receivable->transaction_id) {
+                    Transaction::where('id', $receivable->transaction_id)
+                        ->update(['payment_status' => 'LUNAS']);
+                }
             }
 
             $receivable->save();
 
             // Update member's total piutang
             $member = $receivable->member;
-            $member->total_piutang -= $request->jumlah_bayar;
-            $member->save();
+            if ($member) {
+                // Recalculate total piutang from all receivables
+                $member->total_piutang = Receivable::where('member_id', $member->id)
+                    ->where('status', '!=', 'LUNAS')
+                    ->sum('sisa_piutang');
+                $member->save();
+            }
 
             DB::commit();
+
+            // ===== KIRIM NOTIFIKASI =====
+            try {
+                // Kirim ke semua user dengan role owner, admin, dan kasir
+                $users = User::whereIn('role', ['owner', 'admin', 'kasir'])->get();
+
+                // Kasir yang melakukan pembayaran
+                $receivedBy = auth()->user();
+
+                foreach ($users as $user) {
+                    $user->notify(new PaymentReceivedNotification(
+                        $receivable,
+                        $payment,
+                        $receivedBy
+                    ));
+                }
+
+                Log::info('Payment notifications sent to ' . $users->count() . ' users');
+
+            } catch (\Exception $e) {
+                // Jangan sampai gagal kirim notifikasi mengganggu transaksi utama
+                Log::error('Failed to send payment notification: ' . $e->getMessage());
+            }
+            // ===== END NOTIFIKASI =====
 
             Log::info('Payment recorded:', [
                 'receivable' => $receivable->no_piutang,
                 'amount' => $request->jumlah_bayar,
                 'kasir' => auth()->user()->name,
-                'remaining' => $receivable->sisa_piutang
+                'remaining' => $receivable->sisa_piutang,
+                'member_id' => $member ? $member->id : null
             ]);
 
             $message = 'Pembayaran berhasil dicatat.';
             if ($receivable->status === 'LUNAS') {
-                $message = 'Pembayaran lunas! Piutang telah diselesaikan.';
+                $message = '✅ Pembayaran lunas! Piutang telah diselesaikan.';
             } else {
                 $message .= ' Sisa piutang: Rp ' . number_format($receivable->sisa_piutang, 0, ',', '.');
             }
 
-            return redirect()->route('receivables.show', $receivable)
-                ->with('success', $message);
+            // Redirect ke halaman member receivables
+            if ($member) {
+                return redirect()->route('members.receivables', $member->id)
+                    ->with('success', $message);
+            } else {
+                return redirect()->route('receivables.index')
+                    ->with('success', $message);
+            }
 
         } catch (\Exception $e) {
             DB::rollBack();

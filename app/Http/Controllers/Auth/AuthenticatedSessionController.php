@@ -7,8 +7,10 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Session;
 use Illuminate\View\View;
 
 class AuthenticatedSessionController extends Controller
@@ -92,13 +94,16 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        // // Log login activity
-        // Log::info('User login via password', [
-        //     'user_id' => auth()->id(),
-        //     'email' => auth()->user()->email,
-        //     'ip_address' => $request->ip(),
-        //     'user_agent' => $request->userAgent()
-        // ]);
+        // Regenerate CSRF token after login
+        Session::put('_token', csrf_token());
+
+        // Log login activity
+        Log::info('User login via password', [
+            'user_id' => auth()->id(),
+            'email' => auth()->user()->email,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent()
+        ]);
 
         // Redirect based on role
         return $this->redirectBasedOnRole();
@@ -107,9 +112,10 @@ class AuthenticatedSessionController extends Controller
     /**
      * Handle face recognition login.
      */
-    public function faceLogin(Request $request)
+    public function faceLogin(Request $request): JsonResponse|RedirectResponse
     {
         try {
+            // Validate request
             $request->validate([
                 'user_id' => 'required|integer|exists:users,id',
             ]);
@@ -118,59 +124,110 @@ class AuthenticatedSessionController extends Controller
 
             // Check if user has face descriptor
             if (!$user->face_descriptor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User belum terdaftar untuk face recognition'
-                ], 400);
+                $message = 'User belum terdaftar untuk face recognition';
+
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $message
+                    ], 400);
+                }
+
+                return back()->withErrors(['face' => $message]);
             }
 
             // Check if user is active
             if (!$user->is_active) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Akun ini tidak aktif'
-                ], 400);
+                $message = 'Akun ini tidak aktif';
+
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $message
+                    ], 400);
+                }
+
+                return back()->withErrors(['face' => $message]);
             }
 
             // Login user
             Auth::login($user, $request->boolean('remember', false));
 
+            // Regenerate session
             $request->session()->regenerate();
 
-            // // Log login activity
-            // Log::info('User login via face recognition', [
-            //     'user_id' => $user->id,
-            //     'email' => $user->email,
-            //     'ip_address' => $request->ip(),
-            //     'user_agent' => $request->userAgent()
-            // ]);
+            // Regenerate CSRF token
+            Session::put('_token', csrf_token());
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Login berhasil',
-                'redirect' => $this->getDashboardUrl($user->role)
+            // Log login activity
+            Log::info('User login via face recognition', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
             ]);
+
+            $redirectUrl = $this->getDashboardUrl($user->role);
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Login berhasil',
+                    'redirect' => $redirectUrl,
+                    'csrf_token' => csrf_token() // Send new CSRF token
+                ]);
+            }
+
+            return redirect()->intended($redirectUrl);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Face login validation error: ' . json_encode($e->errors()));
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validasi gagal',
+                    'errors' => $e->errors()
+                ], 422);
+            }
+
+            return back()->withErrors($e->errors());
+
         } catch (\Exception $e) {
             Log::error('Face login error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Terjadi kesalahan saat login dengan wajah'
-            ], 500);
+
+            $message = 'Terjadi kesalahan saat login dengan wajah';
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'debug' => config('app.debug') ? $e->getMessage() : null
+                ], 500);
+            }
+
+            return back()->withErrors(['face' => $message]);
         }
     }
 
     /**
      * Handle face registration.
      */
-    public function faceRegister(Request $request)
+    public function faceRegister(Request $request): JsonResponse|RedirectResponse
     {
         try {
             // Validate only admin/owner can register faces
             if (!auth()->check() || !in_array(auth()->user()->role, ['owner', 'admin'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Anda tidak memiliki izin untuk registrasi wajah'
-                ], 403);
+                $message = 'Anda tidak memiliki izin untuk registrasi wajah';
+
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $message
+                    ], 403);
+                }
+
+                return back()->withErrors(['face' => $message]);
             }
 
             $request->validate([
@@ -185,10 +242,16 @@ class AuthenticatedSessionController extends Controller
             $faceDescriptor = json_decode($request->face_descriptor, true);
 
             if (!is_array($faceDescriptor) || count($faceDescriptor) !== 128) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Face descriptor tidak valid (harus 128 values)'
-                ], 400);
+                $message = 'Face descriptor tidak valid (harus 128 values)';
+
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $message
+                    ], 400);
+                }
+
+                return back()->withErrors(['face' => $message]);
             }
 
             // Save face descriptor to database
@@ -207,29 +270,55 @@ class AuthenticatedSessionController extends Controller
                 'score' => $request->face_score
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Wajah berhasil didaftarkan untuk ' . $user->name
-            ]);
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Wajah berhasil didaftarkan untuk ' . $user->name
+                ]);
+            }
+
+            return redirect()->route('users.index')
+                ->with('success', 'Wajah berhasil didaftarkan untuk ' . $user->name);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Face registration validation error: ' . json_encode($e->errors()));
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validasi gagal',
+                    'errors' => $e->errors()
+                ], 422);
+            }
+
+            return back()->withErrors($e->errors());
+
         } catch (\Exception $e) {
             Log::error('Face registration error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Terjadi kesalahan saat registrasi wajah: ' . $e->getMessage()
-            ], 500);
+
+            $message = 'Terjadi kesalahan saat registrasi wajah: ' . $e->getMessage();
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 500);
+            }
+
+            return back()->withErrors(['face' => $message]);
         }
     }
 
     /**
      * Compare face with registered users.
      */
-    public function compareFace(Request $request)
+    public function compareFace(Request $request): JsonResponse
     {
         try {
             $request->validate([
                 'descriptor' => 'required|array',
                 'descriptor.*' => 'required|numeric',
-                'threshold' => 'numeric|min:0|max:1'
+                'threshold' => 'sometimes|numeric|min:0|max:1'
             ]);
 
             $inputDescriptor = $request->descriptor;
@@ -250,6 +339,7 @@ class AuthenticatedSessionController extends Controller
 
             $bestMatch = null;
             $bestDistance = PHP_FLOAT_MAX;
+            $matches = [];
 
             foreach ($users as $user) {
                 try {
@@ -261,6 +351,12 @@ class AuthenticatedSessionController extends Controller
 
                     // Calculate Euclidean distance
                     $distance = $this->calculateEuclideanDistance($inputDescriptor, $storedDescriptor);
+
+                    $matches[] = [
+                        'user_id' => $user->id,
+                        'name' => $user->name,
+                        'distance' => $distance
+                    ];
 
                     if ($distance < $bestDistance && $distance < $threshold) {
                         $bestDistance = $distance;
@@ -281,15 +377,26 @@ class AuthenticatedSessionController extends Controller
                         'email' => $bestMatch->email,
                         'distance' => round($bestDistance, 4),
                         'score' => $bestMatch->face_score
-                    ]
+                    ],
+                    'all_matches' => $matches
                 ]);
             }
 
             return response()->json([
                 'success' => true,
                 'matched' => false,
-                'message' => 'Wajah tidak dikenali'
+                'message' => 'Wajah tidak dikenali',
+                'closest_match' => !empty($matches) ? min(array_column($matches, 'distance')) : null,
+                'all_matches' => $matches
             ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validasi gagal',
+                'errors' => $e->errors()
+            ], 422);
+
         } catch (\Exception $e) {
             Log::error('Face comparison error: ' . $e->getMessage());
             return response()->json([
@@ -302,7 +409,7 @@ class AuthenticatedSessionController extends Controller
     /**
      * Get face recognition status.
      */
-    public function faceStatus(Request $request)
+    public function faceStatus(Request $request): JsonResponse
     {
         try {
             $user = auth()->user();
@@ -333,7 +440,7 @@ class AuthenticatedSessionController extends Controller
     /**
      * Get users for face registration.
      */
-    public function getUsersForRegistration(Request $request)
+    public function getUsersForRegistration(Request $request): JsonResponse
     {
         try {
             if (!auth()->check() || !in_array(auth()->user()->role, ['owner', 'admin'])) {
@@ -368,7 +475,7 @@ class AuthenticatedSessionController extends Controller
     /**
      * Get all registered faces.
      */
-    public function getRegisteredFaces(Request $request)
+    public function getRegisteredFaces(Request $request): JsonResponse
     {
         try {
             $users = User::whereNotNull('face_descriptor')
@@ -407,6 +514,29 @@ class AuthenticatedSessionController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error loading face data'
+            ], 500);
+        }
+    }
+
+    /**
+     * Refresh CSRF token.
+     */
+    public function refreshCsrf(Request $request): JsonResponse
+    {
+        try {
+            // Regenerate CSRF token
+            Session::regenerateToken();
+
+            return response()->json([
+                'success' => true,
+                'token' => csrf_token(),
+                'message' => 'CSRF token refreshed successfully'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('CSRF refresh error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to refresh CSRF token'
             ], 500);
         }
     }
@@ -470,8 +600,9 @@ class AuthenticatedSessionController extends Controller
         return match($role) {
             'owner' => route('dashboard.owner'),
             'kasir' => route('dashboard.kasir'),
-            'gudang' => route('dashboard.gudang'),
+            'kepala_gudang', 'checker' => route('dashboard.gudang'),
             'logistik' => route('dashboard.logistik'),
+            'kurir' => route('dashboard.kurir'),
             default => route('dashboard'),
         };
     }

@@ -1,54 +1,52 @@
-@extends('layouts.app')
+<?php $__env->startSection('title', 'Piutang Member'); ?>
+<?php $__env->startSection('page-title', 'Riwayat Piutang Member'); ?>
+<?php $__env->startSection('page-subtitle', 'Daftar piutang dan pembayaran'); ?>
 
-@section('title', 'Piutang Member')
-@section('page-title', 'Riwayat Piutang Member')
-@section('page-subtitle', 'Daftar piutang dan pembayaran')
-
-@section('content')
+<?php $__env->startSection('content'); ?>
     <div class="min-h-screen bg-gradient-to-br from-blue-50/50 to-purple-50/30 p-4 md:p-6">
 
-        {{-- Alert Messages --}}
-        @if (session('success'))
+        
+        <?php if(session('success')): ?>
             <div
                 class="mb-4 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-lg flex items-center justify-between animate-fade-in">
                 <div class="flex items-center">
                     <i class="fas fa-check-circle text-green-500 mr-3"></i>
-                    <span>{{ session('success') }}</span>
+                    <span><?php echo e(session('success')); ?></span>
                 </div>
                 <button onclick="this.parentElement.remove()" class="text-green-700 hover:text-green-900">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-        @endif
+        <?php endif; ?>
 
-        @if (session('error'))
+        <?php if(session('error')): ?>
             <div
                 class="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg flex items-center justify-between animate-fade-in">
                 <div class="flex items-center">
                     <i class="fas fa-exclamation-circle text-red-500 mr-3"></i>
-                    <span>{{ session('error') }}</span>
+                    <span><?php echo e(session('error')); ?></span>
                 </div>
                 <button onclick="this.parentElement.remove()" class="text-red-700 hover:text-red-900">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-        @endif
+        <?php endif; ?>
 
-        @if ($errors->any())
+        <?php if($errors->any()): ?>
             <div class="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg animate-fade-in">
                 <div class="flex items-center mb-2">
                     <i class="fas fa-exclamation-triangle text-red-500 mr-3"></i>
                     <span class="font-semibold">Terjadi kesalahan:</span>
                 </div>
                 <ul class="list-disc list-inside ml-6">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
+                    <?php $__currentLoopData = $errors->all(); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $error): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                        <li><?php echo e($error); ?></li>
+                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                 </ul>
             </div>
-        @endif
+        <?php endif; ?>
 
-        {{-- Header with Member Info --}}
+        
         <div class="glass-effect rounded-3xl p-6 md:p-8 shadow-elegant mb-6 animate-fade-in">
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div class="flex items-center gap-4">
@@ -63,11 +61,11 @@
                     </div>
                     <div>
                         <h1 class="text-3xl font-bold text-gray-800">Piutang Member</h1>
-                        <p class="text-gray-600 mt-1">{{ $member->nama }} ({{ $member->kode_member }})</p>
+                        <p class="text-gray-600 mt-1"><?php echo e($member->nama); ?> (<?php echo e($member->kode_member); ?>)</p>
                     </div>
                 </div>
                 <div class="flex gap-3">
-                    <a href="{{ route('members.show', $member->id) }}"
+                    <a href="<?php echo e(route('members.show', $member->id)); ?>"
                         class="px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all inline-flex items-center">
                         <i class="fas fa-arrow-left mr-2"></i>
                         Kembali ke Profil
@@ -76,16 +74,16 @@
             </div>
         </div>
 
-        {{-- Summary Cards --}}
+        
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div class="stat-card group">
                 <div class="stat-card-glow bg-gradient-to-r from-blue-500 to-cyan-500"></div>
                 <div class="stat-card-content">
                     <p class="text-sm text-gray-500">Total Piutang</p>
                     <h3 class="text-2xl font-bold text-amber-600">Rp
-                        {{ number_format($member->total_piutang, 0, ',', '.') }}</h3>
+                        <?php echo e(number_format($member->total_piutang, 0, ',', '.')); ?></h3>
                     <p class="text-xs text-gray-400 mt-1">Dari limit Rp
-                        {{ number_format($member->limit_kredit, 0, ',', '.') }}</p>
+                        <?php echo e(number_format($member->limit_kredit, 0, ',', '.')); ?></p>
                 </div>
             </div>
 
@@ -93,9 +91,10 @@
                 <div class="stat-card-glow bg-gradient-to-r from-green-500 to-emerald-500"></div>
                 <div class="stat-card-content">
                     <p class="text-sm text-gray-500">Sisa Limit</p>
-                    @php $sisaLimit = $member->limit_kredit - $member->total_piutang; @endphp
-                    <h3 class="text-2xl font-bold {{ $sisaLimit > 0 ? 'text-green-600' : 'text-red-600' }}">
-                        Rp {{ number_format($sisaLimit, 0, ',', '.') }}
+                    <?php $sisaLimit = $member->limit_kredit - $member->total_piutang; ?>
+                    <h3 class="text-2xl font-bold <?php echo e($sisaLimit > 0 ? 'text-green-600' : 'text-red-600'); ?>">
+                        Rp <?php echo e(number_format($sisaLimit, 0, ',', '.')); ?>
+
                     </h3>
                     <p class="text-xs text-gray-400 mt-1">Tersedia untuk transaksi kredit</p>
                 </div>
@@ -105,13 +104,13 @@
                 <div class="stat-card-glow bg-gradient-to-r from-purple-500 to-pink-500"></div>
                 <div class="stat-card-content">
                     <p class="text-sm text-gray-500">Total Transaksi Kredit</p>
-                    <h3 class="text-2xl font-bold text-gray-800">{{ $receivables->total() }}</h3>
+                    <h3 class="text-2xl font-bold text-gray-800"><?php echo e($receivables->total()); ?></h3>
                     <p class="text-xs text-gray-400 mt-1">Riwayat transaksi</p>
                 </div>
             </div>
         </div>
 
-        {{-- Receivables Table --}}
+        
         <div class="glass-effect rounded-2xl overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full">
@@ -128,70 +127,75 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
-                        @forelse($receivables as $receivable)
+                        <?php $__empty_1 = true; $__currentLoopData = $receivables; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $receivable): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                             <tr class="hover:bg-white/30 transition-colors">
                                 <td class="px-6 py-4">
-                                    <span class="font-mono text-sm">{{ $receivable->no_piutang }}</span>
+                                    <span class="font-mono text-sm"><?php echo e($receivable->no_piutang); ?></span>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <span class="font-mono text-sm">{{ $receivable->invoice_number }}</span>
+                                    <span class="font-mono text-sm"><?php echo e($receivable->invoice_number); ?></span>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    {{ \Carbon\Carbon::parse($receivable->tanggal_transaksi)->format('d/m/Y') }}
+                                    <?php echo e(\Carbon\Carbon::parse($receivable->tanggal_transaksi)->format('d/m/Y')); ?>
+
                                 </td>
                                 <td class="px-6 py-4 font-medium">
-                                    Rp {{ number_format($receivable->total_piutang, 0, ',', '.') }}
+                                    Rp <?php echo e(number_format($receivable->total_piutang, 0, ',', '.')); ?>
+
                                 </td>
                                 <td class="px-6 py-4">
                                     <span
-                                        class="font-medium {{ $receivable->sisa_piutang > 0 ? 'text-amber-600' : 'text-green-600' }}">
-                                        Rp {{ number_format($receivable->sisa_piutang, 0, ',', '.') }}
+                                        class="font-medium <?php echo e($receivable->sisa_piutang > 0 ? 'text-amber-600' : 'text-green-600'); ?>">
+                                        Rp <?php echo e(number_format($receivable->sisa_piutang, 0, ',', '.')); ?>
+
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    @if ($receivable->jatuh_tempo)
-                                        @php
+                                    <?php if($receivable->jatuh_tempo): ?>
+                                        <?php
                                             $jatuhTempo = \Carbon\Carbon::parse($receivable->jatuh_tempo);
                                             $now = \Carbon\Carbon::now();
-                                        @endphp
+                                        ?>
                                         <span
-                                            class="{{ $jatuhTempo < $now && $receivable->status != 'LUNAS' ? 'text-red-600 font-medium' : '' }}">
-                                            {{ $jatuhTempo->format('d/m/Y') }}
+                                            class="<?php echo e($jatuhTempo < $now && $receivable->status != 'LUNAS' ? 'text-red-600 font-medium' : ''); ?>">
+                                            <?php echo e($jatuhTempo->format('d/m/Y')); ?>
+
                                         </span>
-                                        @if ($jatuhTempo < $now && $receivable->status != 'LUNAS')
+                                        <?php if($jatuhTempo < $now && $receivable->status != 'LUNAS'): ?>
                                             <span class="text-xs text-red-600 block">Terlambat</span>
-                                        @endif
-                                    @else
+                                        <?php endif; ?>
+                                    <?php else: ?>
                                         <span class="text-gray-400">-</span>
-                                    @endif
+                                    <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4">
-                                    @php
+                                    <?php
                                         $statusClass =
                                             $receivable->status == 'LUNAS'
                                                 ? 'bg-green-100 text-green-800'
                                                 : 'bg-amber-100 text-amber-800';
-                                    @endphp
-                                    <span class="badge {{ $statusClass }}">
-                                        {{ $receivable->status }}
+                                    ?>
+                                    <span class="badge <?php echo e($statusClass); ?>">
+                                        <?php echo e($receivable->status); ?>
+
                                     </span>
                                 </td>
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-2">
-                                        <a href="{{ route('receivables.show', $receivable->id) }}"
+                                        <a href="<?php echo e(route('receivables.show', $receivable->id)); ?>"
                                             class="w-8 h-8 rounded-lg hover:bg-blue-50 flex items-center justify-center text-blue-600 transition-colors"
                                             title="Detail">
                                             <i class="fas fa-eye"></i>
                                         </a>
-                                        @if ($receivable->status != 'LUNAS')
+                                        <?php if($receivable->status != 'LUNAS'): ?>
                                             <button
-                                                onclick="showPayModal('{{ $receivable->id }}', '{{ $receivable->no_piutang }}', {{ $receivable->sisa_piutang }})"
+                                                onclick="showPayModal('<?php echo e($receivable->id); ?>', '<?php echo e($receivable->no_piutang); ?>', <?php echo e($receivable->sisa_piutang); ?>)"
                                                 class="w-8 h-8 rounded-lg hover:bg-green-50 flex items-center justify-center text-green-600 transition-colors"
                                                 title="Bayar">
                                                 <i class="fas fa-credit-card"></i>
                                             </button>
-                                        @endif
-                                        <a href="{{ route('receivables.payment-history', $receivable->id) }}"
+                                        <?php endif; ?>
+                                        <a href="<?php echo e(route('receivables.payment-history', $receivable->id)); ?>"
                                             class="w-8 h-8 rounded-lg hover:bg-purple-50 flex items-center justify-center text-purple-600 transition-colors"
                                             title="Riwayat Pembayaran">
                                             <i class="fas fa-history"></i>
@@ -199,7 +203,7 @@
                                     </div>
                                 </td>
                             </tr>
-                        @empty
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                             <tr>
                                 <td colspan="8" class="px-6 py-12 text-center">
                                     <div class="flex flex-col items-center">
@@ -208,25 +212,26 @@
                                             <i class="fas fa-hand-holding-usd text-3xl text-gray-400"></i>
                                         </div>
                                         <h3 class="text-lg font-medium text-gray-900 mb-2">Tidak ada data piutang</h3>
-                                        <p class="text-gray-600">{{ $member->nama }} belum memiliki transaksi kredit</p>
+                                        <p class="text-gray-600"><?php echo e($member->nama); ?> belum memiliki transaksi kredit</p>
                                     </div>
                                 </td>
                             </tr>
-                        @endforelse
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
 
-            {{-- Pagination --}}
-            @if ($receivables->hasPages())
+            
+            <?php if($receivables->hasPages()): ?>
                 <div class="px-6 py-4 border-t border-gray-100">
-                    {{ $receivables->withQueryString()->links() }}
+                    <?php echo e($receivables->withQueryString()->links()); ?>
+
                 </div>
-            @endif
+            <?php endif; ?>
         </div>
     </div>
 
-    {{-- Modal Bayar Piutang --}}
+    
     <div id="payModal"
         class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 transition-all">
         <div class="bg-white rounded-2xl max-w-md w-full p-6 transform transition-all scale-100 opacity-100">
@@ -238,7 +243,7 @@
             </div>
 
             <form id="payForm" method="POST" action="">
-                @csrf
+                <?php echo csrf_field(); ?>
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -386,7 +391,7 @@
                     console.error('Form not found');
                     return;
                 }
-                form.action = '{{ url('receivables') }}/' + id + '/pay';
+                form.action = '<?php echo e(url('receivables')); ?>/' + id + '/pay';
 
                 // Set values
                 const noPiutangInput = document.getElementById('pay_no_piutang');
@@ -539,4 +544,6 @@
             });
         });
     </script>
-@endsection
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH D:\PROJECT3\Toko-Roni-Mobile-App\tokoroni-app\resources\views\members\receivables.blade.php ENDPATH**/ ?>

@@ -14,6 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
+            'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+        ]);
+
+        // Tambahkan middleware untuk web group
+        $middleware->web(append: [
+            \App\Http\Middleware\VerifyCsrfToken::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

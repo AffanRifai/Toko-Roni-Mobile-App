@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Toko Roni - Login</title>
     <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -99,10 +102,81 @@
             border-radius: 8px;
             box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
         }
+
+        /* CSRF Error Styles */
+        .csrf-error-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .csrf-error-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 400px;
+            text-align: center;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .auto-refresh-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #3B82F6;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            z-index: 9998;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 
 <body class="bg-gray-50 min-h-screen flex items-center justify-center p-4">
+
+    <!-- CSRF Refresh Indicator -->
+    <div id="csrfRefreshIndicator" class="auto-refresh-indicator hidden">
+        <div class="spinner" style="width: 16px; height: 16px; border-top-color: white;"></div>
+        <span>Memperbarui token keamanan...</span>
+    </div>
 
     <!-- Login Container -->
     <div class="w-full max-w-6xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col lg:flex-row">
@@ -185,6 +259,7 @@
             <!-- Password Login Form -->
             <form method="POST" action="<?php echo e(route('login')); ?>" id="passwordForm" class="space-y-6">
                 <?php echo csrf_field(); ?>
+                <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>" id="csrfToken">
 
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
@@ -215,7 +290,7 @@
 
                     <?php if(Route::has('password.request')): ?>
                         <a href="<?php echo e(route('password.request')); ?>" class="text-sm text-blue-600 hover:text-blue-800">
-
+                            Lupa Password?
                         </a>
                     <?php endif; ?>
                 </div>
@@ -301,18 +376,10 @@
                 </div>
             </div>
 
-            <!-- Error Messages -->
-            <?php if($errors->any()): ?>
-                <div class="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl">
-                    <div class="flex items-center">
-                        <i class="fas fa-exclamation-circle text-red-500 mr-3"></i>
-                        <div>
-                            <p class="font-medium text-red-800">Login Gagal</p>
-                            <p class="text-red-600 text-sm"><?php echo e($errors->first()); ?></p>
-                        </div>
-                    </div>
-                </div>
-            <?php endif; ?>
+            <!-- CSRF Error Message (will be shown dynamically) -->
+            <div id="csrfErrorMessage" class="mt-6 hidden">
+                <!-- Will be filled by JavaScript -->
+            </div>
         </div>
     </div>
 
@@ -437,6 +504,7 @@
     <form id="faceLoginForm" method="POST" action="<?php echo e(route('face.login.direct')); ?>" style="display: none;">
         <?php echo csrf_field(); ?>
         <input type="hidden" name="user_id" id="faceLoginUserId">
+        <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>" id="faceLoginCsrfToken">
     </form>
 
     <!-- Hidden Form untuk Face Registration -->
@@ -445,6 +513,7 @@
         <input type="hidden" name="user_id" id="registerUserId">
         <input type="hidden" name="face_descriptor" id="registerDescriptor">
         <input type="hidden" name="face_score" id="registerScore">
+        <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>" id="faceRegisterCsrfToken">
     </form>
 
     <!-- Pass data dari Laravel ke JavaScript -->
@@ -452,11 +521,245 @@
         // Pass PHP data to JavaScript
         window.faceDescriptorsData = <?php echo json_encode($faceDescriptors, 15, 512) ?>;
         window.usersForRegistration = <?php echo json_encode($usersForRegistration, 15, 512) ?>;
+        window.csrfToken = "<?php echo e(csrf_token()); ?>";
+        window.baseUrl = "<?php echo e(url('/')); ?>";
+        window.routes = {
+            faceLogin: "<?php echo e(route('face.login.direct')); ?>",
+            faceRegister: "<?php echo e(route('face.register.direct')); ?>",
+            refreshCsrf: "<?php echo e(route('csrf.refresh')); ?>"
+        };
+        window.sessionLifetime = <?php echo e(config('session.lifetime', 120) * 60); ?>; // in seconds
     </script>
 
     <script>
         // ==============================
-        // FACE RECOGNITION SYSTEM - FINAL VERSION
+        // CSRF TOKEN MANAGER
+        // ==============================
+        class CsrfTokenManager {
+            constructor() {
+                this.token = window.csrfToken;
+                this.lastRefresh = Date.now();
+                this.refreshInterval = (window.sessionLifetime / 2) * 1000; // Refresh at half lifetime
+                this.isRefreshing = false;
+                this.refreshQueue = [];
+
+                this.initAutoRefresh();
+                this.setupAjaxForCsrf();
+            }
+
+            // Initialize auto-refresh
+            initAutoRefresh() {
+                setInterval(() => {
+                    this.refreshToken();
+                }, this.refreshInterval);
+
+                // Also refresh on page focus
+                window.addEventListener('focus', () => {
+                    const timeSinceLastRefresh = (Date.now() - this.lastRefresh) / 1000;
+                    if (timeSinceLastRefresh > window.sessionLifetime / 2) {
+                        this.refreshToken();
+                    }
+                });
+            }
+
+            // Setup global AJAX to handle CSRF token expiration
+            setupAjaxForCsrf() {
+                // Override fetch to handle 419, tapi kecualikan face-login
+                const originalFetch = window.fetch;
+                window.fetch = async (...args) => {
+                    const [url] = args;
+
+                    // Jangan handle 419 untuk face-login
+                    if (url.includes('/face-login')) {
+                        return originalFetch(...args);
+                    }
+
+                    try {
+                        const response = await originalFetch(...args);
+
+                        // If 419 (CSRF token mismatch) dan bukan face-login
+                        if (response.status === 419 && !url.includes('/face-login')) {
+                            console.log('CSRF token expired, refreshing...');
+
+                            // Refresh token and retry
+                            await this.refreshToken();
+
+                            // Update token in request and retry
+                            const [url, options = {}] = args;
+                            options.headers = {
+                                ...options.headers,
+                                'X-CSRF-TOKEN': this.token,
+                                'X-Requested-With': 'XMLHttpRequest'
+                            };
+
+                            return originalFetch(url, options);
+                        }
+
+                        return response;
+                    } catch (error) {
+                        throw error;
+                    }
+                };
+            }
+
+            // Refresh CSRF token
+            async refreshToken() {
+                if (this.isRefreshing) {
+                    // Queue this refresh
+                    return new Promise((resolve) => {
+                        this.refreshQueue.push(resolve);
+                    });
+                }
+
+                this.isRefreshing = true;
+                this.showRefreshingIndicator(true);
+
+                try {
+                    // Try multiple methods to refresh token
+                    let newToken = null;
+
+                    // Method 1: Fetch from API
+                    try {
+                        const response = await fetch(window.routes.refreshCsrf, {
+                            method: 'GET',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json'
+                            },
+                            credentials: 'same-origin'
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            newToken = data.token;
+                        }
+                    } catch (e) {
+                        console.log('Fetch refresh failed, trying meta tag...');
+                    }
+
+                    // Method 2: Get from meta tag
+                    if (!newToken) {
+                        const metaToken = document.querySelector('meta[name="csrf-token"]');
+                        if (metaToken) {
+                            newToken = metaToken.getAttribute('content');
+                        }
+                    }
+
+                    // Method 3: Force page refresh as last resort
+                    if (!newToken) {
+                        console.log('All refresh methods failed, reloading page...');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                        return;
+                    }
+
+                    // Update all tokens
+                    this.updateTokens(newToken);
+
+                    this.lastRefresh = Date.now();
+                    console.log('CSRF token refreshed successfully');
+
+                    // Resolve queued refreshes
+                    this.refreshQueue.forEach(resolve => resolve());
+                    this.refreshQueue = [];
+
+                } catch (error) {
+                    console.error('Failed to refresh CSRF token:', error);
+
+                    // Show error to user
+                    this.showCsrfError('Gagal memperbarui token keamanan. Halaman akan dimuat ulang.');
+
+                    // Reload page after 3 seconds
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+
+                } finally {
+                    this.isRefreshing = false;
+                    this.showRefreshingIndicator(false);
+                }
+            }
+
+            // Update all token instances
+            updateTokens(newToken) {
+                this.token = newToken;
+                window.csrfToken = newToken;
+
+                // Update meta tag
+                const metaToken = document.querySelector('meta[name="csrf-token"]');
+                if (metaToken) {
+                    metaToken.setAttribute('content', newToken);
+                }
+
+                // Update all forms
+                document.querySelectorAll('input[name="_token"]').forEach(input => {
+                    input.value = newToken;
+                });
+
+                // Update all forms by ID
+                const forms = ['passwordForm', 'faceLoginForm', 'faceRegisterForm'];
+                forms.forEach(formId => {
+                    const form = document.getElementById(formId);
+                    if (form) {
+                        const tokenInput = form.querySelector('input[name="_token"]');
+                        if (tokenInput) {
+                            tokenInput.value = newToken;
+                        }
+                    }
+                });
+
+                // Dispatch event for other components
+                window.dispatchEvent(new CustomEvent('csrf-token-refreshed', {
+                    detail: {
+                        token: newToken
+                    }
+                }));
+            }
+
+            // Show refreshing indicator
+            showRefreshingIndicator(show) {
+                const indicator = document.getElementById('csrfRefreshIndicator');
+                if (indicator) {
+                    if (show) {
+                        indicator.classList.remove('hidden');
+                    } else {
+                        indicator.classList.add('hidden');
+                    }
+                }
+            }
+
+            // Show CSRF error
+            showCsrfError(message) {
+                const errorDiv = document.getElementById('csrfErrorMessage');
+                if (errorDiv) {
+                    errorDiv.classList.remove('hidden');
+                    errorDiv.innerHTML = `
+                        <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                            <div class="flex items-center">
+                                <i class="fas fa-exclamation-triangle text-yellow-500 mr-3"></i>
+                                <div>
+                                    <p class="font-medium text-yellow-800">Token Keamanan Kedaluwarsa</p>
+                                    <p class="text-yellow-600 text-sm">${message}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    setTimeout(() => {
+                        errorDiv.classList.add('hidden');
+                    }, 5000);
+                }
+            }
+
+            // Get current token
+            getToken() {
+                return this.token;
+            }
+        }
+
+        // ==============================
+        // FACE RECOGNITION SYSTEM WITH CSRF HANDLING
         // ==============================
         class FaceRecognitionSystem {
             constructor() {
@@ -468,14 +771,23 @@
                 this.detectionInterval = null;
                 this.useFrontCamera = true;
                 this.currentDetection = null;
+                this.isProcessing = false;
+
+                // Initialize CSRF manager
+                this.csrfManager = new CsrfTokenManager();
 
                 // Initialize from Laravel data
                 this.initializeFaceDescriptors();
                 this.initializeElements();
                 this.bindEvents();
+
+                // Listen for CSRF refresh
+                window.addEventListener('csrf-token-refreshed', (e) => {
+                    console.log('CSRF token refreshed, updating forms...');
+                });
             }
 
-            // Load face descriptors from Laravel - FIXED FOR CONTROLLER DATA
+            // Load face descriptors from Laravel
             initializeFaceDescriptors() {
                 console.log('=== INITIALIZING FACE DESCRIPTORS ===');
 
@@ -522,7 +834,7 @@
                                 score: user.score || 0.95
                             });
 
-                            console.log(`  ✅ Valid descriptor loaded for ${user.name}`);
+                            console.log(`  Valid descriptor loaded for ${user.name}`);
                             console.log(
                                 `    Sample: [${normalizedDescriptor.slice(0, 3).map(v => v.toFixed(4)).join(', ')}...]`
                             );
@@ -1086,6 +1398,8 @@
                 }
             }
 
+            // Di dalam class FaceRecognitionSystem, ganti method loginWithFace:
+
             async loginWithFace(userId) {
                 try {
                     console.log(`Attempting face login for user ID: ${userId}`);
@@ -1096,24 +1410,42 @@
 
                     this.showFaceStatus('Wajah dikenali! Mengarahkan ke dashboard...', 'success');
 
-                    const response = await fetch(this.faceLoginForm.action, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
-                        },
-                        body: JSON.stringify({
-                            user_id: userId
-                        })
-                    });
+                    // METHOD 1: Coba fetch API (tanpa CSRF token)
+                    try {
+                        const response = await fetch('/face-login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                                // JANGAN kirim X-CSRF-TOKEN karena route di-exclude
+                            },
+                            body: JSON.stringify({
+                                user_id: userId,
+                                remember: true
+                            }),
+                            credentials: 'same-origin' // Penting untuk session
+                        });
 
-                    const result = await response.json();
-                    console.log('Face login response:', result);
+                        // Cek response
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
 
-                    if (result.success && result.redirect) {
-                        window.location.href = result.redirect;
-                    } else {
-                        throw new Error(result.message || 'Login gagal');
+                        const data = await response.json();
+                        console.log('Face login response:', data);
+
+                        if (data.success && data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            throw new Error(data.message || 'Login gagal');
+                        }
+
+                    } catch (fetchError) {
+                        console.warn('Fetch failed, trying form submit fallback:', fetchError);
+
+                        // METHOD 2: Fallback ke form submit
+                        this.submitFaceLoginForm(userId);
                     }
 
                 } catch (error) {
@@ -1126,7 +1458,55 @@
                     Swal.fire({
                         icon: 'error',
                         title: 'Login Gagal',
-                        text: error.message,
+                        text: error.message || 'Terjadi kesalahan saat login',
+                        confirmButtonColor: '#3b82f6'
+                    });
+                }
+            }
+
+            // Method baru untuk form submit fallback
+            submitFaceLoginForm(userId) {
+                try {
+                    console.log('Submitting face login form for user:', userId);
+
+                    // Buat form dinamis
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '/face-login';
+                    form.style.display = 'none';
+
+                    // Tambah CSRF token (tetap dikirim, tapi route akan mengabaikannya)
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+                    const csrfInput = document.createElement('input');
+                    csrfInput.type = 'hidden';
+                    csrfInput.name = '_token';
+                    csrfInput.value = csrfToken;
+                    form.appendChild(csrfInput);
+
+                    // Tambah user_id
+                    const userIdInput = document.createElement('input');
+                    userIdInput.type = 'hidden';
+                    userIdInput.name = 'user_id';
+                    userIdInput.value = userId;
+                    form.appendChild(userIdInput);
+
+                    // Tambah remember
+                    const rememberInput = document.createElement('input');
+                    rememberInput.type = 'hidden';
+                    rememberInput.name = 'remember';
+                    rememberInput.value = 'true';
+                    form.appendChild(rememberInput);
+
+                    document.body.appendChild(form);
+                    form.submit();
+
+                } catch (error) {
+                    console.error('Form submit error:', error);
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Login Gagal',
+                        text: 'Tidak dapat memproses login. Silakan coba login dengan password.',
                         confirmButtonColor: '#3b82f6'
                     });
                 }
@@ -1301,6 +1681,10 @@
 
                     // Calculate score
                     const score = this.calculateFaceScore(descriptor);
+
+                    // Update CSRF token
+                    const csrfToken = this.csrfManager.getToken();
+                    document.getElementById('faceRegisterCsrfToken').value = csrfToken;
 
                     // Submit form to Laravel
                     this.registerUserId.value = userId;
@@ -1510,6 +1894,10 @@
                 console.log('=== SYSTEM INFO ===');
                 console.log('Face descriptors loaded:', window.faceRecognitionSystem.faceDescriptors.length);
                 console.log('Raw data count:', window.faceDescriptorsData?.length || 0);
+                console.log('CSRF Token:', window.csrfToken);
+
+                // Request camera permission early
+                requestCameraPermission();
 
             } catch (error) {
                 console.error('Failed to initialize Face Recognition System:', error);
@@ -1522,10 +1910,7 @@
                 });
             }
         });
-    </script>
-    
 
-    <script>
         // Request camera permission on page load
         async function requestCameraPermission() {
             try {
@@ -1550,12 +1935,10 @@
                 stream.getTracks().forEach(track => track.stop());
 
                 console.log('Camera permission granted');
-                updateDebugInfo('Camera permission: ✓ Granted');
 
             } catch (error) {
                 console.warn('Camera permission denied or unavailable:', error);
                 console.error('Error details:', error.name, error.message);
-                updateDebugInfo(`Camera permission: ✗ ${error.name}`);
 
                 // Show error to user on mobile
                 if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
@@ -1567,36 +1950,7 @@
                     });
                 }
             }
-        };
-
-
-        // Debug function to update panel
-        function updateDebugInfo(info) {
-            const debugContent = document.getElementById('debugContent');
-            if (debugContent) {
-                debugContent.innerHTML = info;
-            }
         }
-
-        // Update debug info when system initializes
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initial debug info
-            updateDebugInfo(`
-        Face Descriptors from DB: ${window.faceDescriptorsData?.length || 0}<br>
-        Users for Registration: ${window.usersForRegistration?.length || 0}
-    `);
-
-            // Update when face recognition system loads
-            setTimeout(() => {
-                if (window.faceRecognitionSystem) {
-                    updateDebugInfo(`
-                System: Initialized<br>
-                Loaded Faces: ${window.faceRecognitionSystem.faceDescriptors.length}<br>
-                Camera: ${window.faceRecognitionSystem.isCameraActive ? 'Active' : 'Inactive'}
-            `);
-                }
-            }, 1000);
-        });
     </script>
 </body>
 

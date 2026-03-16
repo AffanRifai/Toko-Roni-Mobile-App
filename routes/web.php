@@ -34,6 +34,15 @@ Route::get('/', function () {
 
 /*
 |--------------------------------------------------------------------------
+| CSRF TOKEN REFRESH ROUTE (NO CSRF PROTECTION)
+|--------------------------------------------------------------------------
+*/
+Route::get('/csrf-token', [AuthenticatedSessionController::class, 'refreshCsrf'])
+    ->name('csrf.refresh')
+    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
+
+/*
+|--------------------------------------------------------------------------
 | AUTH ROUTES (Breeze)
 |--------------------------------------------------------------------------
 */
@@ -41,12 +50,47 @@ require __DIR__ . '/auth.php';
 
 /*
 |--------------------------------------------------------------------------
-| PUBLIC FACE RECOGNITION ROUTES
+| PUBLIC FACE RECOGNITION ROUTES - TANPA CSRF
 |--------------------------------------------------------------------------
 */
-Route::post('/face-login', [AuthenticatedSessionController::class, 'faceLogin'])->name('face.login.direct');
-Route::post('/face-register', [AuthenticatedSessionController::class, 'faceRegister'])->name('face.register.direct');
+// Route face login TANPA middleware CSRF
+Route::post('/face-login', [AuthenticatedSessionController::class, 'faceLogin'])
+    ->name('face.login.direct')
+    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
 
+// Route face register (tetap pakai CSRF karena perlu auth)
+Route::post('/face-register', [AuthenticatedSessionController::class, 'faceRegister'])
+    ->name('face.register.direct')
+    ->middleware(['auth']); // Hanya untuk yang sudah login
+
+// Route face comparison (public API, tanpa CSRF)
+Route::post('/face-compare', [AuthenticatedSessionController::class, 'compareFace'])
+    ->name('face.compare')
+    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
+
+// Route face status (public)
+Route::get('/face-status', [AuthenticatedSessionController::class, 'faceStatus'])
+    ->name('face.status')
+    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
+
+// Get users for face registration (AJAX) - perlu auth
+Route::get('/face-users', [AuthenticatedSessionController::class, 'getUsersForRegistration'])
+    ->name('face.users')
+    ->middleware(['auth']);
+
+// Get all registered faces (public)
+Route::get('/registered-faces', [AuthenticatedSessionController::class, 'getRegisteredFaces'])
+    ->name('face.registered')
+    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
+
+/*
+|--------------------------------------------------------------------------
+| AUTHENTICATED USERS ROUTES
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'verified'])->group(function () {
+    // ... rest of your authenticated routes ...
+});
 /*
 |--------------------------------------------------------------------------
 | AUTHENTICATED USERS ROUTES
@@ -59,8 +103,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     | DASHBOARD ROUTES
     |--------------------------------------------------------------------------
     */
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    Route::get('/dashboard/chart-data/{range?}', [DashboardController::class, 'getChartData'])->name('dashboard.chart-data');
+// Contoh route yang menggunakan middleware 'verified'
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified']) // 'verified' sekarang benar
+    ->name('dashboard');
+        Route::get('/dashboard/chart-data/{range?}', [DashboardController::class, 'getChartData'])->name('dashboard.chart-data');
 
     // Role-specific dashboard routes
     Route::get('/dashboard/owner', [DashboardController::class, 'ownerDashboard'])->name('dashboard.owner')->middleware('role:owner');

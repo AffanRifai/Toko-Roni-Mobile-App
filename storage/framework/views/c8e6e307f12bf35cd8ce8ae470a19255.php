@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Toko Roni - Login</title>
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -230,11 +230,11 @@
                 <div class="mt-12 p-6 bg-blue-500/20 rounded-2xl">
                     <div class="grid grid-cols-2 gap-4">
                         <div class="text-center">
-                            <p class="text-2xl font-bold">{{ $totalUsers }}</p>
+                            <p class="text-2xl font-bold"><?php echo e($totalUsers); ?></p>
                             <p class="text-sm text-blue-200">Total User</p>
                         </div>
                         <div class="text-center">
-                            <p class="text-2xl font-bold">{{ $faceRegisteredUsers }}</p>
+                            <p class="text-2xl font-bold"><?php echo e($faceRegisteredUsers); ?></p>
                             <p class="text-sm text-blue-200">Wajah Terdaftar</p>
                         </div>
                     </div>
@@ -257,15 +257,15 @@
             </div>
 
             <!-- Password Login Form -->
-            <form method="POST" action="{{ route('login') }}" id="passwordForm" class="space-y-6">
-                @csrf
-                <input type="hidden" name="_token" value="{{ csrf_token() }}" id="csrfToken">
+            <form method="POST" action="<?php echo e(route('login')); ?>" id="passwordForm" class="space-y-6">
+                <?php echo csrf_field(); ?>
+                <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>" id="csrfToken">
 
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
                     <input type="email" name="email"
                         class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                        placeholder="you@example.com" required autofocus value="{{ old('email') }}">
+                        placeholder="you@example.com" required autofocus value="<?php echo e(old('email')); ?>">
                 </div>
 
                 <div>
@@ -288,11 +288,11 @@
                         <span class="ml-2 text-sm text-gray-600">Remember me</span>
                     </label>
 
-                    @if (Route::has('password.request'))
-                        <a href="{{ route('password.request') }}" class="text-sm text-blue-600 hover:text-blue-800">
+                    <?php if(Route::has('password.request')): ?>
+                        <a href="<?php echo e(route('password.request')); ?>" class="text-sm text-blue-600 hover:text-blue-800">
                             Lupa Password?
                         </a>
-                    @endif
+                    <?php endif; ?>
                 </div>
 
                 <button type="submit"
@@ -300,12 +300,12 @@
                     <i class="fas fa-sign-in-alt mr-2"></i>Sign In
                 </button>
 
-                @if (auth()->check() && in_array(auth()->user()->role, ['owner', 'admin']))
+                <?php if(auth()->check() && in_array(auth()->user()->role, ['owner', 'admin'])): ?>
                     <button type="button" id="registerFace"
                         class="w-full border-2 border-blue-600 text-blue-600 font-semibold py-3 rounded-xl hover:bg-blue-50 transition-all duration-300 mt-4">
                         <i class="fas fa-user-plus mr-2"></i>Daftarkan Wajah Baru
                     </button>
-                @endif
+                <?php endif; ?>
             </form>
 
             <!-- Face Recognition Login -->
@@ -451,10 +451,10 @@
                                 <select id="userSelect"
                                     class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
                                     <option value="">-- Pilih Pengguna --</option>
-                                    @foreach ($usersForRegistration as $user)
-                                        <option value="{{ $user->id }}">{{ $user->name }} ({{ $user->email }}) -
-                                            {{ $user->role }}</option>
-                                    @endforeach
+                                    <?php $__currentLoopData = $usersForRegistration; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $user): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                        <option value="<?php echo e($user->id); ?>"><?php echo e($user->name); ?> (<?php echo e($user->email); ?>) -
+                                            <?php echo e($user->role); ?></option>
+                                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                                 </select>
                             </div>
 
@@ -501,34 +501,34 @@
     </div>
 
     <!-- Hidden Form untuk Face Login -->
-    <form id="faceLoginForm" method="POST" action="{{ route('face.login.direct') }}" style="display: none;">
-        @csrf
+    <form id="faceLoginForm" method="POST" action="<?php echo e(route('face.login.direct')); ?>" style="display: none;">
+        <?php echo csrf_field(); ?>
         <input type="hidden" name="user_id" id="faceLoginUserId">
-        <input type="hidden" name="_token" value="{{ csrf_token() }}" id="faceLoginCsrfToken">
+        <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>" id="faceLoginCsrfToken">
     </form>
 
     <!-- Hidden Form untuk Face Registration -->
-    <form id="faceRegisterForm" method="POST" action="{{ route('face.register.direct') }}" style="display: none;">
-        @csrf
+    <form id="faceRegisterForm" method="POST" action="<?php echo e(route('face.register.direct')); ?>" style="display: none;">
+        <?php echo csrf_field(); ?>
         <input type="hidden" name="user_id" id="registerUserId">
         <input type="hidden" name="face_descriptor" id="registerDescriptor">
         <input type="hidden" name="face_score" id="registerScore">
-        <input type="hidden" name="_token" value="{{ csrf_token() }}" id="faceRegisterCsrfToken">
+        <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>" id="faceRegisterCsrfToken">
     </form>
 
     <!-- Pass data dari Laravel ke JavaScript -->
     <script>
         // Pass PHP data to JavaScript
-        window.faceDescriptorsData = @json($faceDescriptors);
-        window.usersForRegistration = @json($usersForRegistration);
-        window.csrfToken = "{{ csrf_token() }}";
-        window.baseUrl = "{{ url('/') }}";
+        window.faceDescriptorsData = <?php echo json_encode($faceDescriptors, 15, 512) ?>;
+        window.usersForRegistration = <?php echo json_encode($usersForRegistration, 15, 512) ?>;
+        window.csrfToken = "<?php echo e(csrf_token()); ?>";
+        window.baseUrl = "<?php echo e(url('/')); ?>";
         window.routes = {
-            faceLogin: "{{ route('face.login.direct') }}",
-            faceRegister: "{{ route('face.register.direct') }}",
-            refreshCsrf: "{{ route('csrf.refresh') }}"
+            faceLogin: "<?php echo e(route('face.login.direct')); ?>",
+            faceRegister: "<?php echo e(route('face.register.direct')); ?>",
+            refreshCsrf: "<?php echo e(route('csrf.refresh')); ?>"
         };
-        window.sessionLifetime = {{ config('session.lifetime', 120) * 60 }}; // in seconds
+        window.sessionLifetime = <?php echo e(config('session.lifetime', 120) * 60); ?>; // in seconds
     </script>
 
     <script>
@@ -1955,3 +1955,4 @@
 </body>
 
 </html>
+<?php /**PATH D:\PROJECT3\Toko-Roni-Mobile-App\tokoroni-app\resources\views\auth\login.blade.php ENDPATH**/ ?>
