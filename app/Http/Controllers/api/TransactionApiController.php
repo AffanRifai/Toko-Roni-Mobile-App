@@ -1,22 +1,49 @@
 <?php
 // app/Http/Controllers/Api/TransactionApiController.php
-// Add these methods to your existing TransactionController
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Controller;
 use App\Models\Transaction;
-use App\Models\Member;
+use App\Models\TransactionItem;
 use App\Models\Product;
+use App\Models\Member;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class TransactionController extends Controller
+class TransactionApiController extends Controller
 {
     /**
-     * Get recent transactions
+     * GET /api/v1/transactions
      */
-    public function recentTransactions(Request $request)
+    public function index(Request $request)
+    {
+        try {
+            $query = Transaction::with(['user', 'member'])->latest();
+
+            if ($request->filled('search')) {
+                $s = $request->search;
+                $query->where(function ($q) use ($s) {
+                    $q->where('invoice_number', 'like', "%{$s}%")
+                        ->orWhere('customer_name', 'like', "%{$s}%");
+                });
+            }
+
+            return response()->json([
+                'success' => true,
+                'data'    => $query->paginate($request->get('per_page', 20)),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * GET /api/v1/transactions/recent
+     * ⚠️ Method harus bernama recent sesuai route api.php
+     */
+    public function recent(Request $request)
     {
         try {
             $limit = $request->get('limit', 10);
@@ -25,142 +52,162 @@ class TransactionController extends Controller
                 ->latest()
                 ->limit($limit)
                 ->get()
-                ->map(function ($transaction) {
+                ->map(function ($trx) {
+                    // Nama produk dari item pertama
+                    $firstItem   = $trx->items->first();
+                    $productName = $firstItem?->product?->name ?? 'Berbagai produk';
+                    if ($trx->items->count() > 1) {
+                        $productName .= ' +' . ($trx->items->count() - 1) . ' lainnya';
+                    }
+
+                    // Status: cocokkan dengan format Flutter (success/gagal)
+                    $status = strtolower($trx->payment_status ?? $trx->status ?? '');
+                    $isSuccess = in_array($status, ['lunas', 'success', 'completed', 'paid']);
+
                     return [
-                        'id' => $transaction->id,
-                        'invoice_number' => $transaction->invoice_number,
-                        'customer_name' => $transaction->member->nama ?? $transaction->customer_name,
-                        'total_amount' => $transaction->total_amount,
-                        'formatted_total' => 'Rp ' . number_format($transaction->total_amount, 0, ',', '.'),
-                        'payment_method' => $transaction->payment_method,
-                        'status' => $transaction->status,
-                        'status_badge' => $this->getStatusBadge($transaction->status),
-                        'items_count' => $transaction->items->count(),
-                        'created_at' => $transaction->created_at->format('d/m/Y H:i'),
-                        'created_by' => $transaction->user->name ?? 'System'
+                        'id'             => $trx->id,
+                        'invoice_number' => $trx->invoice_number,
+                        'product_name'   => $productName,
+                        'customer_name'  => $trx->member?->nama ?? $trx->customer_name ?? 'Umum',
+                        'total_amount'   => $trx->total_amount,
+                        'payment_method' => $trx->payment_method,
+                        'status'         => $isSuccess ? 'success' : 'pending',
+                        'items_count'    => $trx->items->count(),
+                        'created_at'     => $trx->created_at->toISOString(),
+                        'created_by'     => $trx->user?->name ?? 'System',
                     ];
                 });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Recent transactions retrieved successfully',
-                'data' => $transactions
-            ], 200);
+            return response()->json(['success' => true, 'data' => $transactions]);
         } catch (\Exception $e) {
             Log::error('Recent transactions error: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get recent transactions',
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Get today's transaction statistics
+     * GET /api/v1/transactions/today-stats
      */
     public function todayStats(Request $request)
     {
         try {
-            $today = now()->format('Y-m-d');
-
-            $stats = [
-                'total_transactions' => Transaction::whereDate('created_at', $today)->count(),
-                'total_amount' => (float) Transaction::whereDate('created_at', $today)->sum('total_amount'),
-                'formatted_total' => 'Rp ' . number_format(Transaction::whereDate('created_at', $today)->sum('total_amount'), 0, ',', '.'),
-                'by_payment_method' => [
-                    'cash' => Transaction::whereDate('created_at', $today)->where('payment_method', 'cash')->count(),
-                    'credit' => Transaction::whereDate('created_at', $today)->where('payment_method', 'credit')->count(),
-                    'transfer' => Transaction::whereDate('created_at', $today)->where('payment_method', 'transfer')->count(),
-                ],
-                'by_status' => [
-                    'pending' => Transaction::whereDate('created_at', $today)->where('status', 'pending')->count(),
-                    'processing' => Transaction::whereDate('created_at', $today)->where('status', 'processing')->count(),
-                    'completed' => Transaction::whereDate('created_at', $today)->where('status', 'completed')->count(),
-                ],
-                'average_transaction' => (float) Transaction::whereDate('created_at', $today)->avg('total_amount'),
-                'highest_transaction' => (float) Transaction::whereDate('created_at', $today)->max('total_amount'),
-            ];
+            $today = now()->toDateString();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Today stats retrieved successfully',
-                'data' => $stats
-            ], 200);
+                'data'    => [
+                    'total_transactions' => Transaction::whereDate('created_at', $today)->count(),
+                    'total_amount'       => (float) Transaction::whereDate('created_at', $today)->sum('total_amount'),
+                    'average'            => (float) Transaction::whereDate('created_at', $today)->avg('total_amount'),
+                    'highest'            => (float) Transaction::whereDate('created_at', $today)->max('total_amount'),
+                ],
+            ]);
         } catch (\Exception $e) {
-            Log::error('Today stats error: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get today stats',
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Search transactions
+     * GET /api/v1/transactions/statistics
      */
-    public function search(Request $request)
+    public function getStatistics(Request $request)
     {
         try {
-            $search = $request->get('q', '');
-            $limit = $request->get('limit', 10);
-
-            $transactions = Transaction::with(['member'])
-                ->where(function($query) use ($search) {
-                    $query->where('invoice_number', 'like', "%{$search}%")
-                          ->orWhere('customer_name', 'like', "%{$search}%")
-                          ->orWhereHas('member', function($q) use ($search) {
-                              $q->where('nama', 'like', "%{$search}%")
-                                ->orWhere('kode_member', 'like', "%{$search}%");
-                          });
-                })
-                ->latest()
-                ->limit($limit)
-                ->get()
-                ->map(function ($transaction) {
-                    return [
-                        'id' => $transaction->id,
-                        'invoice_number' => $transaction->invoice_number,
-                        'customer' => $transaction->member->nama ?? $transaction->customer_name,
-                        'total' => $transaction->total_amount,
-                        'formatted_total' => 'Rp ' . number_format($transaction->total_amount, 0, ',', '.'),
-                        'status' => $transaction->status,
-                        'payment_method' => $transaction->payment_method,
-                        'date' => $transaction->created_at->format('d/m/Y'),
-                    ];
-                });
+            $today        = now()->toDateString();
+            $startOfMonth = now()->startOfMonth()->toDateString();
+            $endOfMonth   = now()->endOfMonth()->toDateString();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Search results retrieved successfully',
-                'data' => $transactions
-            ], 200);
+                'data'    => [
+                    'today' => [
+                        'count'  => Transaction::whereDate('created_at', $today)->count(),
+                        'amount' => (float) Transaction::whereDate('created_at', $today)->sum('total_amount'),
+                    ],
+                    'this_month' => [
+                        'count'  => Transaction::whereBetween('created_at', [$startOfMonth, $endOfMonth])->count(),
+                        'amount' => (float) Transaction::whereBetween('created_at', [$startOfMonth, $endOfMonth])->sum('total_amount'),
+                    ],
+                    'total' => Transaction::count(),
+                ],
+            ]);
         } catch (\Exception $e) {
-            Log::error('Transaction search error: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to search transactions',
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Get status badge class
+     * GET /api/v1/transactions/{transaction}
      */
-    private function getStatusBadge($status)
+    public function show(Transaction $transaction)
     {
-        $badges = [
-            'pending' => 'warning',
-            'processing' => 'info',
-            'completed' => 'success',
-            'cancelled' => 'danger'
-        ];
+        $transaction->load(['user', 'member', 'items.product']);
+        return response()->json(['success' => true, 'data' => $transaction]);
+    }
 
-        return $badges[$status] ?? 'secondary';
+    /**
+     * POST /api/v1/transactions
+     */
+    public function store(Request $request)
+    {
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+    }
+
+    /**
+     * PUT /api/v1/transactions/{transaction}
+     */
+    public function update(Request $request, Transaction $transaction)
+    {
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+    }
+
+    /**
+     * DELETE /api/v1/transactions/{transaction}
+     */
+    public function destroy(Transaction $transaction)
+    {
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+    }
+
+    /**
+     * POST /api/v1/transactions/{transaction}/complete
+     */
+    public function complete(Transaction $transaction)
+    {
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+    }
+
+    /**
+     * POST /api/v1/transactions/{transaction}/cancel
+     */
+    public function cancel(Transaction $transaction)
+    {
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+    }
+
+    /**
+     * GET /api/v1/transactions/{transaction}/items
+     */
+    public function getItems(Transaction $transaction)
+    {
+        $transaction->load('items.product');
+        return response()->json(['success' => true, 'data' => $transaction->items]);
+    }
+
+    /**
+     * GET /api/v1/transactions/{transaction}/receipt
+     */
+    public function getReceipt(Transaction $transaction)
+    {
+        $transaction->load(['user', 'member', 'items.product']);
+        return response()->json(['success' => true, 'data' => $transaction]);
+    }
+
+    /**
+     * GET /api/v1/transactions/export/csv
+     */
+    public function export()
+    {
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
     }
 }

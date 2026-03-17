@@ -6,7 +6,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
@@ -19,16 +18,16 @@ class AuthApiController extends Controller
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'password' => 'required|string',
+            'email'       => 'required|email',
+            'password'    => 'required|string',
             'device_name' => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validation errors',
-                'errors' => $validator->errors()
+                'message' => 'Validasi gagal',
+                'errors'  => $validator->errors(),
             ], 422);
         }
 
@@ -38,49 +37,47 @@ class AuthApiController extends Controller
             if (!$user || !Hash::check($request->password, $user->password)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Email atau password salah'
+                    'message' => 'Email atau password salah',
                 ], 401);
             }
 
             if (!$user->is_active) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Akun Anda tidak aktif. Silakan hubungi administrator.'
+                    'message' => 'Akun Anda tidak aktif. Silakan hubungi administrator.',
                 ], 403);
             }
 
             // Update last login
             $user->update(['last_login_at' => now()]);
 
-            // Create token
-            $deviceName = $request->device_name ?? $request->userAgent() ?? 'unknown';
-            $token = $user->createToken($deviceName)->plainTextToken;
+            // Buat token
+            $deviceName = $request->device_name ?? $request->userAgent() ?? 'flutter-app';
+            $token      = $user->createToken($deviceName)->plainTextToken;
 
-            // Load relationships
-            $user->load(['faceRegistration']);
-
-            Log::info('User logged in via API:', [
+            Log::info('User logged in via API', [
                 'user_id' => $user->id,
-                'email' => $user->email,
-                'device' => $deviceName
+                'email'   => $user->email,
+                'device'  => $deviceName,
             ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Login berhasil',
-                'data' => [
-                    'user' => $this->formatUserData($user),
-                    'token' => $token,
-                    'token_type' => 'Bearer'
-                ]
+                'data'    => [
+                    'token'      => $token,
+                    'token_type' => 'Bearer',
+                    'user'       => $this->formatUserData($user),
+                ],
             ], 200);
+
         } catch (\Exception $e) {
             Log::error('API Login error: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan server',
-                'error' => $e->getMessage()
+                'error'   => config('app.debug') ? $e->getMessage() : 'Internal server error',
             ], 500);
         }
     }
@@ -92,68 +89,61 @@ class AuthApiController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'face_descriptor' => 'required|array',
-            'device_name' => 'nullable|string|max:255',
+            'device_name'     => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validation errors',
-                'errors' => $validator->errors()
+                'message' => 'Validasi gagal',
+                'errors'  => $validator->errors(),
             ], 422);
         }
 
         try {
-            // Find user by face descriptor
-            // This is a simplified version - you'll need to implement actual face matching
             $user = $this->findUserByFaceDescriptor($request->face_descriptor);
 
             if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Wajah tidak dikenali'
+                    'message' => 'Wajah tidak dikenali',
                 ], 401);
             }
 
             if (!$user->is_active) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Akun Anda tidak aktif. Silakan hubungi administrator.'
+                    'message' => 'Akun Anda tidak aktif. Silakan hubungi administrator.',
                 ], 403);
             }
 
-            // Update last login
             $user->update(['last_login_at' => now()]);
 
-            // Create token
-            $deviceName = $request->device_name ?? $request->userAgent() ?? 'unknown';
-            $token = $user->createToken($deviceName)->plainTextToken;
+            $deviceName = $request->device_name ?? $request->userAgent() ?? 'flutter-app';
+            $token      = $user->createToken($deviceName)->plainTextToken;
 
-            // Load relationships
-            $user->load(['faceRegistration']);
-
-            Log::info('User logged in via Face API:', [
+            Log::info('User logged in via Face API', [
                 'user_id' => $user->id,
-                'email' => $user->email,
-                'device' => $deviceName
+                'email'   => $user->email,
             ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Face login berhasil',
-                'data' => [
-                    'user' => $this->formatUserData($user),
-                    'token' => $token,
-                    'token_type' => 'Bearer'
-                ]
+                'data'    => [
+                    'token'      => $token,
+                    'token_type' => 'Bearer',
+                    'user'       => $this->formatUserData($user),
+                ],
             ], 200);
+
         } catch (\Exception $e) {
             Log::error('API Face Login error: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan server',
-                'error' => $e->getMessage()
+                'error'   => config('app.debug') ? $e->getMessage() : 'Internal server error',
             ], 500);
         }
     }
@@ -164,80 +154,153 @@ class AuthApiController extends Controller
     public function profile(Request $request)
     {
         try {
-            $user = $request->user()->load(['faceRegistration']);
-
             return response()->json([
                 'success' => true,
-                'message' => 'Profile retrieved successfully',
-                'data' => $this->formatUserData($user)
+                'message' => 'Profile berhasil diambil',
+                'data'    => $this->formatUserData($request->user()),
             ], 200);
+
         } catch (\Exception $e) {
             Log::error('API Profile error: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to get profile',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil profile',
+                'error'   => config('app.debug') ? $e->getMessage() : 'Internal server error',
             ], 500);
         }
     }
 
     /**
-     * Logout user
+     * Logout — hapus token saat ini
      */
     public function logout(Request $request)
     {
         try {
-            // Revoke current access token
             $request->user()->currentAccessToken()->delete();
 
-            Log::info('User logged out via API:', [
-                'user_id' => $request->user()->id
-            ]);
+            Log::info('User logged out via API', ['user_id' => $request->user()->id]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Logout berhasil'
+                'message' => 'Logout berhasil',
             ], 200);
+
         } catch (\Exception $e) {
             Log::error('API Logout error: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal logout',
-                'error' => $e->getMessage()
+                'error'   => config('app.debug') ? $e->getMessage() : 'Internal server error',
             ], 500);
         }
     }
 
     /**
-     * Format user data for response
+     * Get registered faces (public)
      */
-    private function formatUserData($user)
+    public function getRegisteredFaces()
+    {
+        try {
+            // Ambil user yang punya face_descriptor
+            $users = User::whereNotNull('face_descriptor')
+                ->where('is_active', true)
+                ->get(['id', 'name', 'email', 'face_descriptor']);
+
+            return response()->json([
+                'success' => true,
+                'data'    => $users,
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Face status (public)
+     */
+    public function faceStatus()
+    {
+        $count = User::whereNotNull('face_descriptor')->where('is_active', true)->count();
+
+        return response()->json([
+            'success'            => true,
+            'registered_count'   => $count,
+            'face_login_enabled' => $count > 0,
+        ]);
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    /**
+     * Format data user untuk response
+     * Tidak memakai relasi apapun — aman untuk semua konfigurasi User model
+     */
+    private function formatUserData(User $user): array
     {
         return [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'role' => $user->role,
-            'phone' => $user->phone,
-            'avatar' => $user->avatar ? asset('storage/' . $user->avatar) : null,
-            'is_active' => $user->is_active,
-            'has_face_registration' => $user->faceRegistration ? true : false,
-            'last_login_at' => $user->last_login_at ? $user->last_login_at->format('d/m/Y H:i:s') : null,
-            'created_at' => $user->created_at->format('d/m/Y H:i:s'),
+            'id'            => $user->id,
+            'name'          => $user->name,
+            'email'         => $user->email,
+            'role'          => $user->role,
+            'phone'         => $user->phone         ?? null,
+            'address'       => $user->address       ?? null,
+            'gender'        => $user->gender        ?? null,
+            'is_active'     => (bool) $user->is_active,
+            'jenis_toko'    => $user->jenis_toko    ?? null,
+            'avatar'        => $user->image
+                                ? asset('storage/' . $user->image)
+                                : null,
+            'has_face'      => !empty($user->face_descriptor),
+            'last_login_at' => $user->last_login_at
+                                ? $user->last_login_at->format('d/m/Y H:i:s')
+                                : null,
+            'created_at'    => $user->created_at->format('d/m/Y H:i:s'),
         ];
     }
 
     /**
-     * Find user by face descriptor
-     * This is a placeholder - implement actual face matching logic
+     * Cari user berdasarkan face descriptor (Euclidean distance)
      */
-    private function findUserByFaceDescriptor($descriptor)
+    private function findUserByFaceDescriptor(array $descriptor): ?User
     {
-        // Implement actual face matching logic here
-        // This could involve comparing with stored face descriptors
-        // For now, return null as placeholder
+        $users = User::whereNotNull('face_descriptor')
+            ->where('is_active', true)
+            ->get();
+
+        foreach ($users as $user) {
+            try {
+                $saved    = json_decode($user->face_descriptor, true);
+                $distance = $this->euclideanDistance($descriptor, $saved);
+
+                if ($distance < 0.5) {
+                    return $user;
+                }
+            } catch (\Exception $e) {
+                continue;
+            }
+        }
+
         return null;
+    }
+
+    /**
+     * Hitung Euclidean distance antara dua descriptor
+     */
+    private function euclideanDistance(array $a, array $b): float
+    {
+        if (count($a) !== count($b)) return 1.0;
+
+        $sum = 0.0;
+        for ($i = 0; $i < count($a); $i++) {
+            $sum += ($a[$i] - $b[$i]) ** 2;
+        }
+
+        return sqrt($sum);
     }
 }

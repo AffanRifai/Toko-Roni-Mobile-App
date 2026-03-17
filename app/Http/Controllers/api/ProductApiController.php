@@ -1,33 +1,56 @@
 <?php
 // app/Http/Controllers/Api/ProductApiController.php
-// Add these methods to your existing ProductController
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
-class ProductController extends Controller
+class ProductApiController extends Controller
 {
     /**
-     * Search products
+     * GET /api/v1/products
+     */
+    public function index(Request $request)
+    {
+        try {
+            $query = Product::with('category')->where('is_active', true);
+
+            if ($request->filled('category_id')) {
+                $query->where('category_id', $request->category_id);
+            }
+
+            $products = $query->latest()->paginate($request->get('per_page', 20));
+
+            return response()->json([
+                'success' => true,
+                'data'    => $products,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * GET /api/v1/products/search?q=keyword
      */
     public function search(Request $request)
     {
         try {
-            $search = $request->get('q', '');
+            $search     = $request->get('q', '');
             $categoryId = $request->get('category_id');
-            $limit = $request->get('limit', 10);
+            $limit      = $request->get('limit', 10);
 
-            $query = Product::where('is_active', true);
+            $query = Product::with('category')->where('is_active', true);
 
             if ($search) {
-                $query->where(function($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('sku', 'like', "%{$search}%")
-                      ->orWhere('barcode', 'like', "%{$search}%");
+                $query->where(function ($q) use ($search) {
+                    $q->where('name',    'like', "%{$search}%")
+                        ->orWhere('code',    'like', "%{$search}%")
+                        ->orWhere('barcode', 'like', "%{$search}%");
                 });
             }
 
@@ -35,166 +58,145 @@ class ProductController extends Controller
                 $query->where('category_id', $categoryId);
             }
 
-            $products = $query->with('category')
-                ->limit($limit)
-                ->get()
-                ->map(function ($product) {
-                    return [
-                        'id' => $product->id,
-                        'name' => $product->name,
-                        'sku' => $product->sku,
-                        'barcode' => $product->barcode,
-                        'price' => $product->price,
-                        'formatted_price' => 'Rp ' . number_format($product->price, 0, ',', '.'),
-                        'stock' => $product->stock,
-                        'unit' => $product->unit,
-                        'category' => $product->category->name ?? 'Uncategorized',
-                        'image' => $product->image ? asset('storage/' . $product->image) : null,
-                        'stock_status' => $this->getStockStatus($product->stock),
-                        'stock_badge' => $this->getStockBadge($product->stock),
-                    ];
-                });
+            $products = $query->limit($limit)->get()->map(fn($p) => [
+                'id'       => $p->id,
+                'name'     => $p->name,
+                'code'     => $p->code,
+                'barcode'  => $p->barcode,
+                'price'    => $p->price,
+                'stock'    => $p->stock,
+                'unit'     => $p->unit,
+                'min_stock' => $p->min_stock ?? 10,
+                'category' => ['name' => $p->category?->name ?? '-'],
+                'image'    => $p->image ? asset('storage/' . $p->image) : null,
+            ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Search results retrieved successfully',
-                'data' => $products
-            ], 200);
+            return response()->json(['success' => true, 'data' => $products]);
         } catch (\Exception $e) {
             Log::error('Product search error: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to search products',
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Get low stock products
+     * GET /api/v1/products/low-stock
+     * ⚠️ Method harus bernama lowStock sesuai route api.php
      */
-    public function lowStockProducts(Request $request)
+    public function lowStock(Request $request)
     {
         try {
-            $threshold = $request->get('threshold', 10);
-            $limit = $request->get('limit', 10);
+            $limit = $request->get('limit', 20);
 
-            $products = Product::where('stock', '<=', $threshold)
+            $products = Product::with('category')
+                ->whereRaw('stock <= min_stock')
                 ->where('is_active', true)
-                ->with('category')
                 ->orderBy('stock', 'asc')
                 ->limit($limit)
                 ->get()
-                ->map(function ($product) {
-                    return [
-                        'id' => $product->id,
-                        'name' => $product->name,
-                        'sku' => $product->sku,
-                        'stock' => $product->stock,
-                        'unit' => $product->unit,
-                        'min_stock' => $product->min_stock ?? 5,
-                        'category' => $product->category->name ?? 'Uncategorized',
-                        'status' => $product->stock <= 0 ? 'out_of_stock' : 'low_stock',
-                        'status_text' => $product->stock <= 0 ? 'Habis' : 'Hampir Habis',
-                        'status_badge' => $product->stock <= 0 ? 'danger' : 'warning',
-                    ];
-                });
+                ->map(fn($p) => [
+                    'id'        => $p->id,
+                    'name'      => $p->name,
+                    'stock'     => $p->stock,
+                    'min_stock' => $p->min_stock ?? 10,
+                    'unit'      => $p->unit,
+                    'category'  => ['name' => $p->category?->name ?? '-'],
+                ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Low stock products retrieved successfully',
-                'data' => $products
-            ], 200);
+            return response()->json(['success' => true, 'data' => $products]);
         } catch (\Exception $e) {
-            Log::error('Low stock products error: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get low stock products',
-                'error' => $e->getMessage()
-            ], 500);
+            Log::error('Low stock error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Quick view product details
+     * GET /api/v1/products/categories
      */
-    public function quickView($id)
+    public function categories()
     {
         try {
-            $product = Product::with(['category', 'supplier'])->find($id);
+            $cats = Category::where('is_active', true)->withCount('products')->get();
+            return response()->json(['success' => true, 'data' => $cats]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
 
-            if (!$product) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Product not found'
-                ], 404);
-            }
+    /**
+     * GET /api/v1/products/{product}
+     */
+    public function show(Product $product)
+    {
+        $product->load('category');
+        return response()->json(['success' => true, 'data' => $product]);
+    }
 
-            $data = [
-                'id' => $product->id,
-                'name' => $product->name,
-                'sku' => $product->sku,
-                'barcode' => $product->barcode,
-                'description' => $product->description,
-                'price' => $product->price,
-                'formatted_price' => 'Rp ' . number_format($product->price, 0, ',', '.'),
-                'purchase_price' => $product->purchase_price,
-                'formatted_purchase_price' => 'Rp ' . number_format($product->purchase_price, 0, ',', '.'),
-                'stock' => $product->stock,
-                'unit' => $product->unit,
-                'min_stock' => $product->min_stock ?? 5,
-                'category' => $product->category->name ?? 'Uncategorized',
-                'supplier' => $product->supplier->name ?? '-',
-                'image' => $product->image ? asset('storage/' . $product->image) : null,
-                'is_active' => $product->is_active,
-                'stock_status' => $this->getStockStatus($product->stock),
-                'created_at' => $product->created_at->format('d/m/Y'),
-                'last_updated' => $product->updated_at->format('d/m/Y H:i'),
-            ];
+    /**
+     * POST /api/v1/products
+     */
+    public function store(Request $request)
+    {
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+    }
 
+    /**
+     * PUT /api/v1/products/{product}
+     */
+    public function update(Request $request, Product $product)
+    {
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+    }
+
+    /**
+     * DELETE /api/v1/products/{product}
+     */
+    public function destroy(Product $product)
+    {
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+    }
+
+    /**
+     * POST /api/v1/products/{product}/update-stock
+     */
+    public function updateStock(Request $request, Product $product)
+    {
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+    }
+
+    /**
+     * POST /api/v1/products/{product}/toggle-active
+     */
+    public function toggleActive(Product $product)
+    {
+        $product->update(['is_active' => !$product->is_active]);
+        return response()->json(['success' => true, 'is_active' => $product->is_active]);
+    }
+
+    /**
+     * GET /api/v1/products/statistics/overview
+     */
+    public function getStatistics()
+    {
+        try {
             return response()->json([
                 'success' => true,
-                'message' => 'Product details retrieved successfully',
-                'data' => $data
-            ], 200);
+                'data'    => [
+                    'total'        => Product::count(),
+                    'active'       => Product::where('is_active', true)->count(),
+                    'low_stock'    => Product::whereRaw('stock <= min_stock AND stock > 0')->count(),
+                    'out_of_stock' => Product::where('stock', '<=', 0)->count(),
+                ],
+            ]);
         } catch (\Exception $e) {
-            Log::error('Product quick view error: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get product details',
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Get stock status
+     * GET /api/v1/products/export/csv
      */
-    private function getStockStatus($stock)
+    public function export()
     {
-        if ($stock <= 0) {
-            return 'out_of_stock';
-        } elseif ($stock <= 10) {
-            return 'low_stock';
-        } else {
-            return 'in_stock';
-        }
-    }
-
-    /**
-     * Get stock badge class
-     */
-    private function getStockBadge($stock)
-    {
-        if ($stock <= 0) {
-            return 'danger';
-        } elseif ($stock <= 10) {
-            return 'warning';
-        } else {
-            return 'success';
-        }
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
     }
 }

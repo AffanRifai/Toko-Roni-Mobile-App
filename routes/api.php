@@ -1,18 +1,18 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use app\Http\Controllers\api\AuthApiController;
-use app\Http\Controllers\api\DashboardApiController;
-use app\Http\Controllers\api\TransactionApiController;
-use app\Http\Controllers\api\DeliveryApiController;
-use app\Http\Controllers\api\VehicleApiController;
-use app\Http\Controllers\api\MemberApiController;
-use app\Http\Controllers\api\ProductApiController;
-use app\Http\Controllers\api\ReportApiController;
-use app\Http\Controllers\api\UserApiController;
-use app\Http\Controllers\api\NotificationApiController;
-use app\Http\Controllers\api\CategoryApiController;
-use app\Http\Controllers\api\ReceivableApiController;
+use App\Http\Controllers\Api\AuthApiController;
+use App\Http\Controllers\Api\DashboardApiController;
+use App\Http\Controllers\Api\TransactionApiController;
+use App\Http\Controllers\Api\DeliveryApiController;
+use App\Http\Controllers\Api\VehicleApiController;
+use App\Http\Controllers\Api\MemberApiController;
+use App\Http\Controllers\Api\ProductApiController;
+use App\Http\Controllers\Api\ReportApiController;
+use App\Http\Controllers\Api\UserApiController;
+use App\Http\Controllers\Api\NotificationApiController;
+use App\Http\Controllers\Api\CategoryApiController;
+use App\Http\Controllers\Api\ReceivableApiController;
 
 /*
 |--------------------------------------------------------------------------
