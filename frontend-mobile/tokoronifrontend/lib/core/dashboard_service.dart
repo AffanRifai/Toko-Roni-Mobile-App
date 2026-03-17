@@ -1,31 +1,41 @@
 // ============================================================
 // lib/core/dashboard_service.dart
 //
-// CATATAN STRUKTUR RESPONSE YANG DIHARAPKAN DARI BACKEND:
+// Disesuaikan dengan DashboardApiController.php yang baru.
 //
-// GET /api/v1/dashboard/stats
-//   { "data": { "total_karyawan": 15, "total_produk": 285,
-//               "stok_hampir_habis": 7, "akan_kadaluarsa": 23,
-//               "stok_normal": 270, "stok_kritis": 2 } }
+// FORMAT RESPONSE getDashboardStats (role owner/admin):
+// {
+//   "success": true,
+//   "data": {
+//     "user": { "name": "...", "role": "owner" },
+//     "transactions": {
+//       "today": { "count": 5, "amount": 500000 },
+//       "this_month": { "count": 120, "amount": 12000000 }
+//     },
+//     "products": {
+//       "total": 285, "low_stock": 7, "out_of_stock": 2,
+//       "active": 280, "total_value": 50000000
+//     },
+//     "members": { "total": 45, "active": 40 },
+//     "users":   { "total": 15, "active": 14 }
+//   }
+// }
 //
-// GET /api/v1/products/low-stock
-//   { "data": [ { "name": "Aqua 1L", "category": {"name":"Minuman"},
-//                 "min_stock": 20, "stock": 5 }, ... ] }
+// FORMAT RESPONSE getChartData:
+// {
+//   "success": true,
+//   "data": {
+//     "labels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+//     "datasets": [
+//       { "label": "Transactions", "data": [5, 3, 8, 4, 6, 2, 7] },
+//       { "label": "Revenue",      "data": [500000, 300000, ...] },
+//       { "label": "Deliveries",   "data": [2, 1, 3, 2, 1, 0, 2] }
+//     ]
+//   }
+// }
 //
-// GET /api/v1/dashboard/notifications
-//   { "data": { "expiring": [ { "name": "Indomie",
-//               "category": {"name":"Makanan"}, "stock": 192,
-//               "expiry_date": "2026-06-01", "days_left": 77 }, ... ] } }
-//
-// GET /api/v1/transactions/recent
-//   { "data": [ { "invoice_number": "INV001", "product_name": "Sukro",
-//                 "created_at": "2026-02-10T00:00:00Z",
-//                 "total_amount": 13000, "status": "success" }, ... ] }
-//
-// GET /api/v1/dashboard/chart-data?days=7
-//   { "data": { "labels": ["Senin",...],
-//               "penjualan": [1200000,...],
-//               "stok_keluar": [20,...] } }
+// FORMAT RESPONSE transactions/recent & products/low-stock:
+// { "success": true, "data": [ {...}, {...} ] }
 // ============================================================
 
 import 'dart:convert';
@@ -43,27 +53,53 @@ class DashboardStats {
   final int stokKritis;
 
   const DashboardStats({
-    this.totalKaryawan    = 0,
-    this.totalProduk      = 0,
-    this.stokHampirHabis  = 0,
-    this.akanKadaluarsa   = 0,
-    this.stokNormal       = 0,
-    this.stokKritis       = 0,
+    this.totalKaryawan = 0,
+    this.totalProduk = 0,
+    this.stokHampirHabis = 0,
+    this.akanKadaluarsa = 0,
+    this.stokNormal = 0,
+    this.stokKritis = 0,
   });
 
+  // Parsing dari response DashboardApiController.getDashboardStats()
+  // data bisa berisi role-based nested object
   factory DashboardStats.fromJson(Map<String, dynamic> raw) {
-    final d           = (raw['data'] as Map<String, dynamic>?) ?? raw;
-    final totalProduk  = _i(d, ['total_produk', 'total_products']);
-    final hampirHabis  = _i(d, ['stok_hampir_habis', 'low_stock_count']);
-    final kritis       = _i(d, ['stok_kritis', 'critical_stock_count']);
-    final normalCalc   = totalProduk - hampirHabis - kritis;
+    // Unwrap root 'data' jika ada
+    final root = (raw['data'] as Map<String, dynamic>?) ?? raw;
+
+    // ── Products block ────────────────────────────────────────
+    final prod = (root['products'] as Map<String, dynamic>?) ?? {};
+    final totalProduk = _i(prod, ['total', 'total_products']);
+    final lowStock = _i(prod, [
+      'low_stock',
+      'low_stock_count',
+      'stok_hampir_habis',
+    ]);
+    final outOfStock = _i(prod, [
+      'out_of_stock',
+      'out_of_stock_count',
+      'stok_kritis',
+    ]);
+    final normalCalc = totalProduk - lowStock - outOfStock;
+
+    // ── Users block ───────────────────────────────────────────
+    final users = (root['users'] as Map<String, dynamic>?) ?? {};
+    final totalKaryawan = _i(users, ['total', 'total_users', 'total_karyawan']);
+
+    // ── Expiring (jika ada di response) ──────────────────────
+    final expiring = _i(root, [
+      'akan_kadaluarsa',
+      'expiring_count',
+      'expiring_soon',
+    ]);
+
     return DashboardStats(
-      totalKaryawan   : _i(d, ['total_karyawan', 'total_employees']),
-      totalProduk     : totalProduk,
-      stokHampirHabis : hampirHabis,
-      akanKadaluarsa  : _i(d, ['akan_kadaluarsa', 'expiring_count']),
-      stokNormal      : _i(d, ['stok_normal']) != 0 ? _i(d, ['stok_normal']) : (normalCalc < 0 ? 0 : normalCalc),
-      stokKritis      : kritis,
+      totalKaryawan: totalKaryawan,
+      totalProduk: totalProduk,
+      stokHampirHabis: lowStock,
+      akanKadaluarsa: expiring,
+      stokNormal: normalCalc < 0 ? 0 : normalCalc,
+      stokKritis: outOfStock,
     );
   }
 
@@ -90,12 +126,18 @@ class StokMenipisItem {
   });
 
   factory StokMenipisItem.fromJson(Map<String, dynamic> d) {
+    // ProductApiController bisa return 'category' object atau 'category_name' string
     final cat = d['category'] as Map<String, dynamic>?;
     return StokMenipisItem(
-      produk   : d['name']?.toString() ?? d['product_name']?.toString() ?? '-',
-      kategori : cat?['name']?.toString() ?? d['category_name']?.toString() ?? '-',
-      stokMin  : (d['min_stock'] ?? d['minimum_stock'] ?? 0 as num).toInt(),
-      sisaStok : (d['stock'] ?? d['current_stock'] ?? d['stok'] ?? 0 as num).toInt(),
+      produk: d['name']?.toString() ?? d['product_name']?.toString() ?? '-',
+      kategori:
+          cat?['name']?.toString() ??
+          d['category_name']?.toString() ??
+          d['kategori']?.toString() ??
+          '-',
+      stokMin: (d['min_stock'] ?? d['minimum_stock'] ?? 10 as num).toInt(),
+      sisaStok: (d['stock'] ?? d['current_stock'] ?? d['stok'] ?? 0 as num)
+          .toInt(),
     );
   }
 }
@@ -119,30 +161,46 @@ class KadaluarsaItem {
   });
 
   factory KadaluarsaItem.fromJson(Map<String, dynamic> d) {
-    final cat      = d['category'] as Map<String, dynamic>?;
+    final cat = d['category'] as Map<String, dynamic>?;
     final daysLeft = d['days_left'] ?? d['sisa_hari'];
-    final expired  = d['is_expired'] == true ||
-        (daysLeft is num && daysLeft <= 0);
+    final expired =
+        d['is_expired'] == true || (daysLeft is num && daysLeft <= 0);
 
     String tglFormatted = '-';
     final rawTgl = d['expiry_date'] ?? d['tanggal_kadaluarsa'] ?? d['expiry'];
     if (rawTgl != null) {
       try {
         final dt = DateTime.parse(rawTgl.toString());
-        const m = ['','Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-        tglFormatted = '${dt.day.toString().padLeft(2,'0')}-${m[dt.month]}-${dt.year}';
+        const m = [
+          '',
+          'Jan',
+          'Feb',
+          'Mar',
+          'Apr',
+          'Mei',
+          'Jun',
+          'Jul',
+          'Agu',
+          'Sep',
+          'Okt',
+          'Nov',
+          'Des',
+        ];
+        tglFormatted =
+            '${dt.day.toString().padLeft(2, '0')}-${m[dt.month]}-${dt.year}';
       } catch (_) {
         tglFormatted = rawTgl.toString();
       }
     }
 
     return KadaluarsaItem(
-      produk            : d['name']?.toString() ?? d['product_name']?.toString() ?? '-',
-      kategori          : cat?['name']?.toString() ?? d['category_name']?.toString() ?? '-',
-      stok              : (d['stock'] ?? d['stok'] ?? 0 as num).toInt(),
-      tanggalKadaluarsa : tglFormatted,
-      sisaHari          : expired ? 'expired' : '${daysLeft ?? '-'} hari',
-      isExpired         : expired,
+      produk: d['name']?.toString() ?? d['product_name']?.toString() ?? '-',
+      kategori:
+          cat?['name']?.toString() ?? d['category_name']?.toString() ?? '-',
+      stok: (d['stock'] ?? d['stok'] ?? 0 as num).toInt(),
+      tanggalKadaluarsa: tglFormatted,
+      sisaHari: expired ? 'expired' : '${daysLeft ?? '-'} hari',
+      isExpired: expired,
     );
   }
 }
@@ -164,38 +222,62 @@ class TransaksiItem {
   });
 
   factory TransaksiItem.fromJson(Map<String, dynamic> d) {
+    // Format tanggal
     String waktuFormatted = '-';
     final rawTgl = d['created_at'] ?? d['date'] ?? d['tanggal'];
     if (rawTgl != null) {
       try {
         final dt = DateTime.parse(rawTgl.toString());
-        const m = ['','Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+        const m = [
+          '',
+          'Jan',
+          'Feb',
+          'Mar',
+          'Apr',
+          'Mei',
+          'Jun',
+          'Jul',
+          'Agu',
+          'Sep',
+          'Okt',
+          'Nov',
+          'Des',
+        ];
         waktuFormatted = '${dt.day} ${m[dt.month]} ${dt.year}';
       } catch (_) {
         waktuFormatted = rawTgl.toString();
       }
     }
 
-    final rawTotal = d['total_amount'] ?? d['total'] ?? d['grand_total'] ?? 0;
-    String totalFormatted;
-    if (rawTotal is num) {
-      totalFormatted = 'Rp ${_fmt(rawTotal.toInt())}';
-    } else {
-      totalFormatted = rawTotal.toString();
-    }
+    // Format rupiah
+    final rawTotal = d['total_amount'] ?? d['amount'] ?? d['total'] ?? 0;
+    final totalFormatted = rawTotal is num
+        ? 'Rp ${_fmtRupiah(rawTotal.toInt())}'
+        : rawTotal.toString();
 
+    // Status: bisa 'LUNAS'/'lunas'/'success'/'completed'
     final status = d['status']?.toString().toLowerCase() ?? '';
+    final success =
+        status == 'success' ||
+        status == 'completed' ||
+        status == 'lunas' ||
+        status == '1';
+
     return TransaksiItem(
-      id       : d['invoice_number']?.toString() ?? d['invoice']?.toString() ?? d['id']?.toString() ?? '-',
-      produk   : d['product_name']?.toString() ?? d['produk']?.toString() ?? '-',
-      waktu    : waktuFormatted,
-      total    : totalFormatted,
-      isSuccess: status == 'success' || status == 'completed' || status == '1',
+      id:
+          d['invoice_number']?.toString() ??
+          d['invoice']?.toString() ??
+          d['id']?.toString() ??
+          '-',
+      produk: d['product_name']?.toString() ?? d['produk']?.toString() ?? '-',
+      waktu: waktuFormatted,
+      total: totalFormatted,
+      isSuccess: success,
     );
   }
 
-  static String _fmt(int n) {
-    final s   = n.toString();
+  static String _fmtRupiah(int n) {
+    final s = n.toString();
     final buf = StringBuffer();
     for (int i = 0; i < s.length; i++) {
       if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
@@ -208,8 +290,8 @@ class TransaksiItem {
 // ── Model: Chart ──────────────────────────────────────────────────────────────
 class ChartData {
   final List<String> labels;
-  final List<double> penjualan;   // dalam jutaan rupiah
-  final List<double> stokKeluar;  // dalam unit
+  final List<double> penjualan; // revenue dalam jutaan rupiah
+  final List<double> stokKeluar; // jumlah transaksi (proxy stok keluar)
 
   const ChartData({
     required this.labels,
@@ -220,88 +302,176 @@ class ChartData {
   bool get isEmpty => labels.isEmpty;
 }
 
-// ── DashboardService ──────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// DASHBOARD SERVICE
+// ════════════════════════════════════════════════════════════════════════════
 class DashboardService {
-
+  // ── Stats ─────────────────────────────────────────────────────────────────
   static Future<DashboardStats> getStats() async {
     try {
-      final res = await http.get(
-        Uri.parse(ApiConfig.dashboardStats),
-        headers: await AuthService.authHeaders(),
-      ).timeout(const Duration(seconds: 15));
+      final res = await http
+          .get(
+            Uri.parse(ApiConfig.dashboardStats),
+            headers: await AuthService.authHeaders(),
+          )
+          .timeout(const Duration(seconds: 15));
+
       if (res.statusCode == 200) {
-        return DashboardStats.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+        final json = jsonDecode(res.body) as Map<String, dynamic>;
+        if (json['success'] == true) {
+          return DashboardStats.fromJson(json);
+        }
       }
     } catch (_) {}
     return const DashboardStats();
   }
 
+  // ── Stok menipis ─────────────────────────────────────────────────────────
   static Future<List<StokMenipisItem>> getLowStockProducts() async {
     try {
-      final res = await http.get(
-        Uri.parse(ApiConfig.productLowStock),
-        headers: await AuthService.authHeaders(),
-      ).timeout(const Duration(seconds: 15));
+      final res = await http
+          .get(
+            Uri.parse(ApiConfig.productLowStock),
+            headers: await AuthService.authHeaders(),
+          )
+          .timeout(const Duration(seconds: 15));
+
       if (res.statusCode == 200) {
-        final list = (jsonDecode(res.body)['data'] as List?) ?? [];
-        return list.map((e) => StokMenipisItem.fromJson(e as Map<String, dynamic>)).toList();
+        final json = jsonDecode(res.body) as Map<String, dynamic>;
+        if (json['success'] == true) {
+          final list = (json['data'] as List?) ?? [];
+          return list
+              .map((e) => StokMenipisItem.fromJson(e as Map<String, dynamic>))
+              .toList();
+        }
       }
     } catch (_) {}
     return [];
   }
 
+  // ── Produk akan kadaluarsa ────────────────────────────────────────────────
+  // Menggunakan endpoint getDashboardStats — field expiring ada di alerts
+  // atau di notifications. Kalau belum ada, return list kosong.
   static Future<List<KadaluarsaItem>> getExpiringProducts() async {
     try {
-      final res = await http.get(
-        Uri.parse(ApiConfig.dashboardNotifications),
-        headers: await AuthService.authHeaders(),
-      ).timeout(const Duration(seconds: 15));
+      // Ambil dari endpoint stats — DashboardApiController sekarang
+      // menyertakan 'expiring_products' list di dalam response data
+      final res = await http
+          .get(
+            Uri.parse(ApiConfig.dashboardStats),
+            headers: await AuthService.authHeaders(),
+          )
+          .timeout(const Duration(seconds: 15));
+
       if (res.statusCode == 200) {
-        final json  = jsonDecode(res.body) as Map<String, dynamic>;
-        final data  = (json['data'] as Map<String, dynamic>?) ?? json;
-        final list  = (data['expiring'] ?? data['kadaluarsa'] ?? []) as List;
-        return list.map((e) => KadaluarsaItem.fromJson(e as Map<String, dynamic>)).toList();
+        final json = jsonDecode(res.body) as Map<String, dynamic>;
+        if (json['success'] == true) {
+          final data = (json['data'] as Map<String, dynamic>?) ?? {};
+          final list = (data['expiring_products'] as List?);
+          if (list != null && list.isNotEmpty) {
+            return list
+                .map((e) => KadaluarsaItem.fromJson(e as Map<String, dynamic>))
+                .toList();
+          }
+        }
       }
     } catch (_) {}
     return [];
   }
 
+  // ── Transaksi terbaru ────────────────────────────────────────────────────
   static Future<List<TransaksiItem>> getRecentTransactions() async {
     try {
-      final res = await http.get(
-        Uri.parse(ApiConfig.transactionsRecent),
-        headers: await AuthService.authHeaders(),
-      ).timeout(const Duration(seconds: 15));
+      final res = await http
+          .get(
+            Uri.parse(ApiConfig.transactionsRecent),
+            headers: await AuthService.authHeaders(),
+          )
+          .timeout(const Duration(seconds: 15));
+
       if (res.statusCode == 200) {
-        final list = (jsonDecode(res.body)['data'] as List?) ?? [];
-        return list.map((e) => TransaksiItem.fromJson(e as Map<String, dynamic>)).toList();
+        final json = jsonDecode(res.body) as Map<String, dynamic>;
+        if (json['success'] == true) {
+          final list = (json['data'] as List?) ?? [];
+          return list
+              .map((e) => TransaksiItem.fromJson(e as Map<String, dynamic>))
+              .toList();
+        }
       }
     } catch (_) {}
     return [];
   }
 
-  /// [filter] = '7 Hari' | '30 Hari' | '90 Hari'
+  // ── Chart penjualan & stok keluar ────────────────────────────────────────
+  // DashboardApiController.getChartData() pakai param:
+  //   ?period=week | month | year
+  //   ?type=all | transactions | revenue | deliveries
+  //
+  // Response: { labels:[], datasets:[ {label:'Revenue', data:[]}, ... ] }
+  //
+  // Flutter mapping:
+  //   penjualan  ← dataset label 'Revenue'  (konversi ke jutaan)
+  //   stokKeluar ← dataset label 'Transactions' (jumlah transaksi)
   static Future<ChartData?> getChartData(String filter) async {
     try {
-      final days = filter.split(' ').first;
-      final res  = await http.get(
-        Uri.parse('${ApiConfig.dashboardChart}?days=$days'),
-        headers: await AuthService.authHeaders(),
-      ).timeout(const Duration(seconds: 15));
+      final period = _filterToPeriod(filter);
+
+      final res = await http
+          .get(
+            Uri.parse('${ApiConfig.dashboardChart}?period=$period'),
+            headers: await AuthService.authHeaders(),
+          )
+          .timeout(const Duration(seconds: 15));
+
       if (res.statusCode == 200) {
-        final json    = jsonDecode(res.body) as Map<String, dynamic>;
-        final data    = (json['data'] as Map<String, dynamic>?) ?? json;
-        final labels  = (data['labels']     as List?)?.map((e) => e.toString()).toList() ?? [];
-        final penjualan = (data['penjualan'] as List?)?.map((e) {
-          final n = (e as num).toDouble();
-          // Jika backend kirim dalam rupiah (> 1000), konversi ke jutaan
-          return n > 1000 ? n / 1_000_000 : n;
-        }).toList() ?? [];
-        final stokKeluar = ((data['stok_keluar'] ?? data['stock_out']) as List?)
-            ?.map((e) => (e as num).toDouble()).toList() ?? [];
-        return ChartData(labels: labels, penjualan: penjualan, stokKeluar: stokKeluar);
+        final json = jsonDecode(res.body) as Map<String, dynamic>;
+        if (json['success'] == true) {
+          final data = (json['data'] as Map<String, dynamic>?) ?? json;
+
+          final labels =
+              (data['labels'] as List?)?.map((e) => e.toString()).toList() ??
+              [];
+
+          // Backend kirim rupiah mentah — TIDAK dikonversi ke jutaan
+          // Flutter handle format label di Y-axis secara dinamis
+          final penjualan =
+              (data['penjualan'] as List?)
+                  ?.map((e) => (e as num).toDouble())
+                  .toList() ??
+              [];
+
+          final stokKeluar =
+              (data['stok_keluar'] as List?)
+                  ?.map((e) => (e as num).toDouble())
+                  .toList() ??
+              [];
+
+          if (labels.isNotEmpty) {
+            return ChartData(
+              labels: labels,
+              penjualan: penjualan.isEmpty
+                  ? List.filled(labels.length, 0.0)
+                  : penjualan,
+              stokKeluar: stokKeluar.isEmpty
+                  ? List.filled(labels.length, 0.0)
+                  : stokKeluar,
+            );
+          }
+        }
       }
     } catch (_) {}
     return null;
+  }
+
+  // ── Helper: filter Flutter → period Laravel ──────────────────────────────
+  static String _filterToPeriod(String filter) {
+    switch (filter) {
+      case '30 Hari':
+        return 'month';
+      case '90 Hari':
+        return 'year';
+      default:
+        return 'week'; // '7 Hari'
+    }
   }
 }

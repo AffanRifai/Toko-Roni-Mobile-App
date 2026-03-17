@@ -800,64 +800,70 @@ class _GrafikSectionState extends State<_GrafikSection> {
   bool _loading = true;
   ChartData? _data;
 
-  // Fallback jika API belum siap
+  // ── Konfigurasi per filter ────────────────────────────────────────────────
+  // Mendeskripsikan apa yang ditampilkan dan lebar per kolom chart
+  static const _config = {
+    '7 Hari': {
+      'desc': 'Data per hari — 7 hari terakhir',
+      'colWidth': 110.0,
+      'xRotate': false,
+    },
+    '30 Hari': {
+      'desc': 'Data per minggu — 5 minggu terakhir',
+      'colWidth': 140.0,
+      'xRotate': false,
+    },
+    '90 Hari': {
+      'desc': 'Data per 10 hari — 90 hari terakhir',
+      'colWidth': 110.0,
+      'xRotate': false,
+    },
+  };
+
+  // ── Fallback data (rupiah mentah) ─────────────────────────────────────────
   static final _fallback = {
     '7 Hari': ChartData(
-      labels: ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'],
-      penjualan: [1.2, 1.8, 1.5, 2.1, 1.7, 2.3, 1.9],
+      labels: ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'],
+      penjualan: [
+        1200000.0,
+        1800000.0,
+        1500000.0,
+        2100000.0,
+        1700000.0,
+        2300000.0,
+        1900000.0,
+      ],
       stokKeluar: [20.0, 35.0, 28.0, 38.0, 25.0, 32.0, 22.0],
     ),
     '30 Hari': ChartData(
       labels: ['Minggu 1', 'Minggu 2', 'Minggu 3', 'Minggu 4', 'Minggu 5'],
-      penjualan: [2.0, 2.2, 2.4, 2.3, 2.2],
-      stokKeluar: [28.0, 32.0, 35.0, 35.0, 29.0],
+      penjualan: [8000000.0, 9500000.0, 11000000.0, 10200000.0, 9800000.0],
+      stokKeluar: [130.0, 150.0, 170.0, 160.0, 145.0],
     ),
     '90 Hari': ChartData(
       labels: [
-        'M1',
-        'M2',
-        'M3',
-        'M4',
-        'M5',
-        'M6',
-        'M7',
-        'M8',
-        'M9',
-        'M10',
-        'M11',
-        'M12',
-        'M13',
+        '27/12',
+        '06/01',
+        '16/01',
+        '26/01',
+        '05/02',
+        '15/02',
+        '25/02',
+        '07/03',
+        '17/03',
       ],
       penjualan: [
-        1.8,
-        2.0,
-        1.9,
-        2.1,
-        2.2,
-        1.7,
-        2.3,
-        2.1,
-        1.9,
-        2.4,
-        2.0,
-        1.8,
-        2.2,
+        5000000.0,
+        7000000.0,
+        6500000.0,
+        8000000.0,
+        9000000.0,
+        7500000.0,
+        10000000.0,
+        8500000.0,
+        11000000.0,
       ],
-      stokKeluar: [
-        25.0,
-        28.0,
-        26.0,
-        32.0,
-        30.0,
-        24.0,
-        35.0,
-        29.0,
-        27.0,
-        36.0,
-        28.0,
-        26.0,
-        31.0,
-      ],
+      stokKeluar: [80.0, 110.0, 95.0, 130.0, 140.0, 115.0, 160.0, 135.0, 170.0],
     ),
   };
 
@@ -880,10 +886,9 @@ class _GrafikSectionState extends State<_GrafikSection> {
     }
   }
 
-  String _dateRange() {
-    final days = int.parse(_filter.split(' ').first);
+  // ── Subtitle periode — sinkron dengan grouping backend ───────────────────
+  String _periodeText() {
     final now = DateTime.now();
-    final start = now.subtract(Duration(days: days - 1));
     const m = [
       'Jan',
       'Feb',
@@ -899,15 +904,33 @@ class _GrafikSectionState extends State<_GrafikSection> {
       'Des',
     ];
     String fmt(DateTime d) => '${d.day} ${m[d.month - 1]} ${d.year}';
-    return '${fmt(start)} - ${fmt(now)}';
+
+    switch (_filter) {
+      case '30 Hari':
+        // 5 minggu terakhir
+        final start = now.subtract(const Duration(days: 34));
+        return '${fmt(start)} – ${fmt(now)}  (per minggu)';
+      case '90 Hari':
+        // 90 hari terakhir, per 10 hari
+        final start90 = now.subtract(const Duration(days: 89));
+        return '${fmt(start90)} – ${fmt(now)}  (per 10 hari)';
+      default: // 7 Hari
+        final start = now.subtract(const Duration(days: 6));
+        return '${fmt(start)} – ${fmt(now)}  (per hari)';
+    }
   }
+
+  double get _colWidth => (_config[_filter]?['colWidth'] as double?) ?? 110.0;
 
   @override
   Widget build(BuildContext context) {
     final data = _data;
+    final chartWidth = data != null ? (data.labels.length * _colWidth) : 0.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ── Legend + Dropdown ──
         Row(
           children: [
             const Expanded(
@@ -942,15 +965,21 @@ class _GrafikSectionState extends State<_GrafikSection> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+
+        const SizedBox(height: 6),
+
+        // ── Periode subtitle ──
         Text(
-          'Periode: ${_dateRange()}',
+          _periodeText(),
           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
+
         const SizedBox(height: 12),
+
+        // ── Chart ──
         if (_loading)
           const SizedBox(
-            height: 200,
+            height: 220,
             child: Center(
               child: CircularProgressIndicator(color: Color(0xFF4169E1)),
             ),
@@ -969,10 +998,10 @@ class _GrafikSectionState extends State<_GrafikSection> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SizedBox(
-              width: (data.labels.length * 120).toDouble(),
+              width: chartWidth,
               height: 300,
               child: CustomPaint(
-                size: Size((data.labels.length * 120).toDouble(), 300),
+                size: Size(chartWidth, 300),
                 painter: _LineChartPainter(
                   penjualan: data.penjualan,
                   stokKeluar: data.stokKeluar,
@@ -1026,12 +1055,14 @@ class _LineChartPainter extends CustomPainter {
     const pl = 55.0, pr = 55.0, pb = 55.0, pt = 20.0;
     final w = size.width - pl - pr;
     final h = size.height - pb - pt;
-    final double maxP = penjualan.isNotEmpty
+    final double rawMaxP = penjualan.isNotEmpty
         ? penjualan.reduce((a, b) => a > b ? a : b)
-        : 1.0;
-    final double maxS = stokKeluar.isNotEmpty
+        : 0.0;
+    final double rawMaxS = stokKeluar.isNotEmpty
         ? stokKeluar.reduce((a, b) => a > b ? a : b)
-        : 1.0;
+        : 0.0;
+    final double maxP = rawMaxP > 0 ? rawMaxP : 1.0;
+    final double maxS = rawMaxS > 0 ? rawMaxS : 1.0;
 
     canvas.drawRect(
       Rect.fromLTWH(pl, pt, w, h),
@@ -1093,11 +1124,36 @@ class _LineChartPainter extends CustomPainter {
     );
     final tp = TextPainter(textDirection: TextDirection.ltr);
     for (int i = 0; i <= 4; i++) {
-      final val = (i / 4) * (left ? 20 : 100);
+      // Label Y-axis dinamis — penjualan dalam rupiah mentah
+      final val = (i / 4) * maxVal;
+      String label;
+      if (left) {
+        // Format rupiah: 0 / ribuan / jutaan / miliaran
+        if (val == 0) {
+          label = 'Rp 0';
+        } else if (val < 1000) {
+          label = 'Rp ${val.toStringAsFixed(0)}';
+        } else if (val < 1000000) {
+          label = 'Rp ${(val / 1000).toStringAsFixed(0)}rb';
+        } else if (val < 1000000000) {
+          final jt = val / 1000000;
+          label =
+              'Rp ${jt >= 10 ? jt.toStringAsFixed(0) : jt.toStringAsFixed(1)}jt';
+        } else {
+          label = 'Rp ${(val / 1000000000).toStringAsFixed(1)}M';
+        }
+      } else {
+        // Stok keluar dalam unit
+        if (val == 0) {
+          label = '0 unit';
+        } else if (val < 1000) {
+          label = '${val.toStringAsFixed(0)} unit';
+        } else {
+          label = '${(val / 1000).toStringAsFixed(1)}k unit';
+        }
+      }
       tp.text = TextSpan(
-        text: left
-            ? (val == 0 ? 'Rp 0' : 'Rp ${val.toStringAsFixed(0)}jt')
-            : '${val.toStringAsFixed(0)} unit',
+        text: label,
         style: const TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w500,
@@ -1129,17 +1185,33 @@ class _LineChartPainter extends CustomPainter {
     final tick = Paint()
       ..color = const Color(0xFFD1D5DB)
       ..strokeWidth = 0.8;
+
+    // Garis X-axis
     c.drawLine(
       Offset(pl, pt + h),
-      Offset(size.width - 55, pt + h),
+      Offset(size.width - pl, pt + h),
       Paint()
         ..color = const Color(0xFFD1D5DB)
         ..strokeWidth = 1.2,
     );
+
+    // Lebar per kolom — tentukan apakah label perlu disingkat
+    final colWidth = days.length > 1 ? w / (days.length - 1) : w;
+
     for (int i = 0; i < days.length; i++) {
       final x = pl + (days.length == 1 ? w / 2 : (i / (days.length - 1)) * w);
+
+      // Singkat label jika tidak cukup ruang (misal "Minggu 1" → "M1")
+      String label = days[i];
+      if (colWidth < 70 && label.length > 4) {
+        // Untuk bulan: ambil 3 karakter pertama
+        label = label.substring(0, label.length > 3 ? 3 : label.length);
+      } else if (colWidth < 50) {
+        label = label.substring(0, 1); // Hanya inisial
+      }
+
       tp.text = TextSpan(
-        text: days[i],
+        text: label,
         style: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w500,
@@ -1147,8 +1219,23 @@ class _LineChartPainter extends CustomPainter {
         ),
       );
       tp.layout();
-      tp.paint(c, Offset(x - tp.width / 2, size.height - pb + 14));
+
+      // Pastikan label tidak terpotong di tepi
+      final labelX = (x - tp.width / 2).clamp(pl, size.width - pl - tp.width);
+
+      tp.paint(c, Offset(labelX, size.height - pb + 12));
+
+      // Tick mark
       c.drawLine(Offset(x, pt + h), Offset(x, pt + h + 5), tick);
+
+      // Garis vertikal grid tipis
+      c.drawLine(
+        Offset(x, pt),
+        Offset(x, pt + h),
+        Paint()
+          ..color = const Color(0xFFE5E7EB)
+          ..strokeWidth = 0.4,
+      );
     }
   }
 

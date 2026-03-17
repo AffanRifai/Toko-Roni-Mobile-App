@@ -9,9 +9,9 @@ import 'api_config.dart';
 class AuthService {
   // ── Kunci SharedPreferences ──────────────────────────────
   static const _kToken = 'auth_token';
-  static const _kName  = 'user_name';
+  static const _kName = 'user_name';
   static const _kEmail = 'user_email';
-  static const _kRole  = 'user_role';
+  static const _kRole = 'user_role';
 
   // ── Cek apakah token tersimpan ───────────────────────────
   static Future<bool> isLoggedIn() async {
@@ -46,8 +46,8 @@ class AuthService {
     final token = await getToken();
     return {
       'Authorization': 'Bearer ${token ?? ''}',
-      'Accept'       : 'application/json',
-      'Content-Type' : 'application/json',
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
     };
   }
 
@@ -55,7 +55,8 @@ class AuthService {
   static Future<void> logout() async {
     try {
       final headers = await authHeaders();
-      await http.post(Uri.parse(ApiConfig.logout), headers: headers)
+      await http
+          .post(Uri.parse(ApiConfig.logout), headers: headers)
           .timeout(const Duration(seconds: 8));
     } catch (_) {
       // Gagal koneksi pun tetap bersihkan data lokal

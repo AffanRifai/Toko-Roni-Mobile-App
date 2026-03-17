@@ -10,7 +10,6 @@ import 'dart:convert';
 import '../core/api_config.dart';
 import '../home/beranda_page.dart';
 import 'face_login.dart'; // sesuaikan path jika berbeda
-import '../product/tambah_produk_page.dart'; // sesuaikan path jika berbeda
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -56,31 +55,35 @@ class _LoginPageState extends State<LoginPage> {
           )
           .timeout(const Duration(seconds: 15));
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
 
-      if (response.statusCode == 200 && data['status'] == true) {
-        // ── Simpan token & info user ke SharedPreferences ──
+      // Response format baru:
+      // { "success": true, "data": { "token": "...", "user": {...} } }
+      if (response.statusCode == 200 && body['success'] == true) {
+        final payload = body['data'] as Map<String, dynamic>;
+        final token = payload['token'] as String;
+        final user = payload['user'] as Map<String, dynamic>;
+
+        // Simpan token & info user ke SharedPreferences
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('auth_token', data['token'] as String);
-
-        final user = data['user'] as Map<String, dynamic>;
-        await prefs.setString('user_name', user['name'] as String? ?? '');
-        await prefs.setString('user_email', user['email'] as String? ?? '');
-        await prefs.setString('user_role', user['role'] as String? ?? '');
+        await prefs.setString('auth_token', token);
+        await prefs.setString('user_name', user['name']?.toString() ?? '');
+        await prefs.setString('user_email', user['email']?.toString() ?? '');
+        await prefs.setString('user_role', user['role']?.toString() ?? '');
 
         if (!mounted) return;
 
-        // ── Navigasi ke dashboard ──────────────────────────
+        // Navigasi ke dashboard
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (_) =>
-                BerandaPage(userName: user['name'] as String? ?? 'User'),
+                BerandaPage(userName: user['name']?.toString() ?? 'User'),
           ),
         );
       } else {
-        // 401 email/password salah | 403 user tidak aktif
-        _showSnack(data['message'] as String? ?? 'Login gagal');
+        // 401 email/password salah | 403 akun tidak aktif | 422 validasi
+        _showSnack(body['message']?.toString() ?? 'Login gagal');
       }
     } on Exception catch (e) {
       // Timeout, no internet, dll.
