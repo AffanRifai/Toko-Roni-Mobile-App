@@ -40,7 +40,7 @@ class DashboardController extends Controller
     {
         $totalUsers = User::count();
         $totalProducts = Product::count();
-        
+
         // TOTAL PENDAPATAN
         $totalRevenue = Transaction::sum('total_amount') ?? 0;
 
@@ -56,13 +56,13 @@ class DashboardController extends Controller
 
         // PRODUK TERLARIS
         $topProducts = TransactionItem::select(
-                'products.id',
-                'products.name',
-                'products.code',
-                'categories.name as category_name',
-                DB::raw('SUM(transaction_items.qty) as total_sold'),
-                DB::raw('SUM(transaction_items.qty * transaction_items.price) as revenue')
-            )
+            'products.id',
+            'products.name',
+            'products.code',
+            'categories.name as category_name',
+            DB::raw('SUM(transaction_items.qty) as total_sold'),
+            DB::raw('SUM(transaction_items.qty * transaction_items.price) as revenue')
+        )
             ->join('products', 'products.id', '=', 'transaction_items.product_id')
             ->leftJoin('categories', 'categories.id', '=', 'products.category_id')
             ->groupBy('products.id', 'products.name', 'products.code', 'categories.name')
@@ -76,7 +76,7 @@ class DashboardController extends Controller
             ->latest()
             ->limit(5)
             ->get()
-            ->map(function($transaction) {
+            ->map(function ($transaction) {
                 $transaction->customer_name = $transaction->customer_name ?? 'Pelanggan Umum';
                 $transaction->formatted_date = $transaction->created_at->format('d M Y H:i');
                 $transaction->invoice_display = $transaction->invoice_number ?? 'TRX-' . str_pad($transaction->id, 6, '0', STR_PAD_LEFT);
@@ -89,7 +89,7 @@ class DashboardController extends Controller
         $normalStockCount = Product::where('stock', '>=', 10)->count();
         $lowStockCount = Product::where('stock', '>', 0)->where('stock', '<', 10)->count();
         $criticalStockCount = Product::where('stock', '<=', 0)->count();
-        
+
         // Pastikan tidak ada nilai negatif
         $normalStockCount = max(0, $normalStockCount);
         $lowStockCount = max(0, $lowStockCount);
@@ -111,7 +111,7 @@ class DashboardController extends Controller
             ->orderBy('stock', 'asc')
             ->limit(10)
             ->get()
-            ->map(function($product) {
+            ->map(function ($product) {
                 $product->min_stock = 10;
                 return $product;
             });
@@ -123,11 +123,11 @@ class DashboardController extends Controller
             ->orderBy('expiry_date', 'asc')
             ->limit(10)
             ->get()
-            ->map(function($product) {
+            ->map(function ($product) {
                 if ($product->expiry_date) {
                     $expiryDate = Carbon::parse($product->expiry_date);
                     $now = Carbon::now();
-                    
+
                     if ($expiryDate < $now) {
                         $product->days_left = -1;
                         $product->expiry_status = 'expired';
@@ -211,9 +211,9 @@ class DashboardController extends Controller
             $salesData[] = $dailySales ?: rand(500000, 2000000); // Gunakan random untuk demo jika tidak ada data
 
             // Data stok keluar per hari (dalam unit)
-            $dailyStockOut = TransactionItem::whereHas('transaction', function($query) use ($dateString) {
-                    $query->whereDate('created_at', $dateString);
-                })
+            $dailyStockOut = TransactionItem::whereHas('transaction', function ($query) use ($dateString) {
+                $query->whereDate('created_at', $dateString);
+            })
                 ->sum('qty');
             $stockOutData[] = $dailyStockOut ?: rand(10, 50); // Gunakan random untuk demo jika tidak ada data
         }
@@ -241,6 +241,117 @@ class DashboardController extends Controller
                 'success' => false,
                 'message' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * API: Stats untuk mobile dashboard
+     * GET /api/v1/dashboard/stats
+     */
+    public function getDashboardStats()
+    {
+        try {
+            $totalKaryawan   = User::count();
+            $totalProduk     = Product::count();
+
+            // Stok hampir habis: stok <= min_stock dan stok > 0
+            $stokHampirHabis = Product::whereRaw('stock <= min_stock AND stock > 0')->count();
+
+            // Stok kritis: stok = 0
+            $stokKritis      = Product::where('stock', '<=', 0)->count();
+
+            // Stok normal: stok > min_stock
+            $stokNormal      = Product::whereRaw('stock > min_stock')->count();
+
+            // Akan kadaluarsa dalam 30 hari
+            $akanKadaluarsa  = Product::whereNotNull('expiry_date')
+                ->where('expiry_date', '<=', now()->addDays(30))
+                ->where('expiry_date', '>', now())
+                ->count();
+
+            return response()->json([
+                'status' => true,
+                'data'   => [
+                    'total_karyawan'    => $totalKaryawan,
+                    'total_produk'      => $totalProduk,
+                    'stok_hampir_habis' => $stokHampirHabis,
+                    'akan_kadaluarsa'   => $akanKadaluarsa,
+                    'stok_normal'       => $stokNormal,
+                    'stok_kritis'       => $stokKritis,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+
+    /**
+     * API: Chart penjualan & stok keluar
+     * GET /api/v1/dashboard/chart-data?days=7
+     */
+    // public function getChartData(Request $request)
+    // {
+    //     try {
+    //         $days = (int) $request->get('days', 7);
+    //         // Batasi maksimal 90 hari
+    //         $days = min(max($days, 7), 90);
+
+    //         $data = $this->getChartDataInternal($days);
+
+    //         return response()->json([
+    //             'status' => true,
+    //             'data'   => [
+    //                 'labels'     => $data['labels'],
+    //                 'penjualan'  => $data['sales'],      // alias untuk Flutter
+    //                 'stok_keluar' => $data['stock_out'],  // alias untuk Flutter
+    //             ],
+    //         ]);
+    //     } catch (\Exception $e) {
+    //         return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+    //     }
+    // }
+
+
+    /**
+     * API: Notifikasi — produk akan kadaluarsa
+     * GET /api/v1/dashboard/notifications
+     */
+    public function getNotifications()
+    {
+        try {
+            $expiring = Product::with('category')
+                ->whereNotNull('expiry_date')
+                ->where('expiry_date', '<=', now()->addDays(30))
+                ->orderBy('expiry_date', 'asc')
+                ->limit(15)
+                ->get()
+                ->map(function ($product) {
+                    $expiry   = Carbon::parse($product->expiry_date);
+                    $now      = Carbon::now();
+                    $daysLeft = $expiry < $now ? -1 : (int) $now->diffInDays($expiry);
+
+                    return [
+                        'id'           => $product->id,
+                        'name'         => $product->name,
+                        'stock'        => $product->stock,
+                        'expiry_date'  => $product->expiry_date->format('Y-m-d'),
+                        'days_left'    => $daysLeft,
+                        'is_expired'   => $expiry < $now,
+                        'category'     => [
+                            'name' => $product->category?->name ?? '-',
+                        ],
+                    ];
+                });
+
+            return response()->json([
+                'status' => true,
+                'data'   => [
+                    'expiring' => $expiring,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
         }
     }
 

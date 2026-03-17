@@ -168,6 +168,77 @@ class TransactionController extends Controller
     }
 
     /**
+     * API: Transaksi terbaru (7 hari terakhir)
+     * GET /api/v1/transactions/recent
+     */
+    public function recentTransactions()
+    {
+        try {
+            $transactions = Transaction::with(['items.product'])
+                ->whereBetween('created_at', [now()->subDays(7)->startOfDay(), now()->endOfDay()])
+                ->latest()
+                ->limit(10)
+                ->get()
+                ->map(function ($trx) {
+                    // Ambil nama produk dari item pertama
+                    $firstItem   = $trx->items->first();
+                    $productName = $firstItem?->product?->name ?? 'Berbagai produk';
+
+                    // Jika lebih dari 1 item, tambahkan keterangan
+                    if ($trx->items->count() > 1) {
+                        $productName .= ' +' . ($trx->items->count() - 1) . ' lainnya';
+                    }
+
+                    return [
+                        'id'             => $trx->id,
+                        'invoice_number' => $trx->invoice_number,
+                        'product_name'   => $productName,
+                        'total_amount'   => $trx->total_amount,
+                        'status'         => strtolower($trx->payment_status) === 'lunas'
+                            ? 'success'
+                            : 'pending',
+                        'created_at'     => $trx->created_at->toISOString(),
+                    ];
+                });
+
+            return response()->json([
+                'status' => true,
+                'data'   => $transactions,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+
+    /**
+     * API: Statistik transaksi hari ini
+     * GET /api/v1/transactions/today-stats
+     */
+    public function todayStats()
+    {
+        try {
+            $today            = now()->toDateString();
+            $totalTransaksi   = Transaction::whereDate('created_at', $today)->count();
+            $totalPendapatan  = Transaction::whereDate('created_at', $today)->sum('total_amount');
+            $totalItem        = TransactionItem::whereHas('transaction', function ($q) use ($today) {
+                $q->whereDate('created_at', $today);
+            })->sum('qty');
+
+            return response()->json([
+                'status' => true,
+                'data'   => [
+                    'total_transaksi'  => $totalTransaksi,
+                    'total_pendapatan' => $totalPendapatan,
+                    'total_item'       => $totalItem,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Show the form for creating a new transaction.
      */
     public function create()
@@ -682,7 +753,6 @@ class TransactionController extends Controller
                     }
                 }
             }
-
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi transaksi: ' . $e->getMessage());
         }
@@ -727,7 +797,6 @@ class TransactionController extends Controller
                 'user_id' => $currentUser->id,
                 'invoice' => $transaction->invoice_number
             ]);
-
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi update transaksi: ' . $e->getMessage());
         }
@@ -771,7 +840,6 @@ class TransactionController extends Controller
                 'user_id' => $deletedBy->id,
                 'invoice' => $invoiceNumber
             ]);
-
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi hapus transaksi: ' . $e->getMessage());
         }
