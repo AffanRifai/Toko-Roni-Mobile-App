@@ -1,166 +1,132 @@
 <div align="center">
-  <h1>🛒 Toko Roni - Core Engine & API Backend</h1>
-  <p>
-    <strong>Sistem Manajemen Toko Terpadu & Backend API untuk Aplikasi Mobile Toko Roni</strong>
+  <img src="https://readme-typing-svg.herokuapp.com?font=Fira+Code&weight=600&size=30&pause=1000&color=2563EB&center=true&vCenter=true&width=800&lines=Toko+Roni+-+Point+of+Sales;Toko+Roni+-+Logistics+API;Toko+Roni+-+Face+Recognition+Engine;Toko+Roni+-+Real-time+Dashboard" alt="Typing SVG" />
+  
+  <p align="center">
+    <strong>Sistem Manajemen Retail, Logistik, dan API Backend Berstandar Produksi</strong>
+  </p>
+
+  <p align="center">
+    <img src="https://img.shields.io/badge/Laravel-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" alt="Laravel"/>
+    <img src="https://img.shields.io/badge/PHP-777BB4?style=for-the-badge&logo=php&logoColor=white" alt="PHP"/>
+    <img src="https://img.shields.io/badge/MySQL-4479A1?style=for-the-badge&logo=mysql&logoColor=white" alt="MySQL"/>
+    <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind"/>
+    <img src="https://img.shields.io/badge/FaceAPI.js-FFB020?style=for-the-badge&logo=javascript&logoColor=white" alt="FaceAPI"/>
   </p>
 </div>
 
 ---
 
-## 📋 Deskripsi Aplikasi
+## 📖 Tentang Toko Roni
 
-**Toko Roni Core** merupakan jantung operasional (Backend & Web Dashboard) dari ekosistem Point of Sales (POS) dan Supply Chain Toko Roni. Dibangun dengan framework **Laravel 11**, sistem ini tidak hanya melayani operasional manajemen toko berbasis web, melainkan bertindak sebagai *API Gateway* tingkat produksi (Production-Grade) yang mentenagai Aplikasi Mobile Toko Roni. 
+**Toko Roni Core** adalah lebih dari sekadar aplikasi *Point of Sales* kasir biasa. Sistem ini merupakan sebuah arsitektur hibrida (*hybrid architecture*) yang menggabungkan kemudahan manajemen *Web Dashboard* monolitik untuk back-office, sekaligus berfungsi sebagai **API Gateway** level-produksi (Production-Grade) bertenaga tinggi yang menyuplai data secara asinkron ke Aplikasi Mobile Toko Roni (Frontend Android/iOS).
 
-Aplikasi ini dilengkapi dengan fitur **Manajemen Pengiriman (Logistik)**, **Sistem Notifikasi Real-time**, serta mekanisme keamanan **Biometrik Face Recognition Login** terintegrasi menggunakan FaceAPI.js.
-
-## 🚀 Fitur Unggulan
-
-### 1. **Production-Grade API Gateway**
-Sistem telah dirancang standar industri untuk mensuplai data aplikasi Mobile:
-- **Global Error Handling**: Pencegahan tumpahan HTML trace, seluruh *Exception* (404, 401, 500, 422) diformat 100% menggunakan `JSON`.
-- **Standarisasi Respons**: Konfigurasi Trait seragam `{ success, message, data }` pada seluruh *endpoint*.
-- **Anti-DDoS & Throttling**: Proteksi *Rate-Limiter* ketat (60 *request/minute* untuk API Global, 5 *request/minute* untuk Autentikasi).
-- **Sanctum Authentication**: Manajemen token sesi aman untuk berbagai *device*.
-
-### 2. **RBAC & Multi-Level Workspace**
-Dukungan *Role-Based Access Control* (RBAC) yang spesifik pada struktur hierarki retail:
-- **Owner**: Laporan komprehensif, finansial, dan audit operasional.
-- **Admin**: Manajemen konfigurasi produk, kategori, serta pengaturan pengguna.
-- **Kasir**: Modul *Point of Sales* terpadu dengan sinkronisasi inventori.
-- **Kepala Gudang**: *Stock tracking* dan pengadaan barang (*supply*).
-- **Logistik**: Manajemen armada kendaraan, penjadwalan, dan penugasan kiriman.
-- **Kurir/Driver**: Dedicated *"My Deliveries"* dashboard untuk *update* status *real-time* ke sistem pusat.
-
-### 3. **Smart Security & Biometrics**
-- **Face Recognition**: Algoritma AI *FaceAPI.js* terintegrasi secara asinkron di klien untuk *Scan and Go*.
-- Penilaian *Threshold* pengenalan wajah jarak 0.6 dengan enkripsi JSON Matrix.
-
-### 4. **Asynchronous Notification System**
-- Interval *polling* pintar (*Back-end Server Polling*).
-- Antarmuka *Global Toast UI Widget* otomatis muncul di dashboard tanpa *reload*.
+Selain fungsi inti penjualan, aplikasi ini dibekali **Sistem Biometrik AI (Face Recognition)** yang memungkinkan otentikasi sentuhan-nol (*zero-touch authentication*) untuk mempercepat transaksi kasir dan login harian. Fitur supply chain canggih memungkinkan armada kurir memantau status kiriman logistik menggunakan perangkat seluler mereka masing-masing secara real-time.
 
 ---
 
-## 🛠️ Tech Stack & Ekosistem
+## 🔥 Fitur Utama & Kapabilitas Sistem
 
-| Lapisan | Teknologi | Peran |
-|-------------|-----------|-------|
-| **Backend** | Laravel 11 (PHP 8.2+) | Engine Utama & API Server |
-| **Database** | MySQL 8.x | RDBMS Penyimpanan Utama |
-| **Frontend** | Blade, TailwindCSS 3 | UI/UX Rendering Web Cepat |
-| **Integrasi** | jQuery, FaceAPI.js, Chart.js| DOM Asynchronous, AI Klien, Analitik |
-| **Keamanan**| Sanctum, RateLimiter, WebRTC | Autentikasi Token API & Kamera |
+<img align="right" width="300" src="https://raw.githubusercontent.com/ABSphreak/ABSphreak/master/gifs/code.gif" alt="Coding Animation">
 
----
+### 1. **Production-Grade API Gateway (Mobile Backbone)**
+Arsitektur API telah dikalibrasi untuk stabilitas produksi:
+- **Global Data Standardization**: Melalui `ApiResponseTrait`, setiap pengiriman data dari web ke aplikasi mobile dijamin berstruktur baku: `{ "success": boolean, "message": string, "data": [] }`.
+- **Bulletproof Exception Handling**: Bebas kebocoran *HTML Stack Trace*. Jika sistem rontok (500), salah otentikasi (401), form tidak valid (422), atau halaman tidak ditemukan (404), sistem memaksakan respons JSON 100% menggunakan middleware `ForceJsonResponse`.
+- **DDoS Mitigation & Rate Limiting**: Limitasi eksekusi cerdas—maksimum **60 request/menit** untuk rute data global, dan perlindungan ekstra ketat **5 request/menit**  pada jalur autentikasi untuk memblokir aktivitas *brute-force*.
 
-## 📁 Struktur Inti Arsitektur
+### 2. **Artificial Intelligence & Keamanan Biometrik**
+- **FaceAPI.js Real-time Scan**: Pemodelan AI untuk konversi *Face Descriptor*. Sistem sanggup membedakan struktur tulang wajah jarak dekat untuk proses autentikasi.
+- Tingkat perhitungan akurasi euclidean distance dikunci dengan threshold **0.60** di dalam skema enkripsi matriks JSON.
 
-```text
-tokoroni-app/
-├── app/
-│   ├── Http/
-│   │   ├── Controllers/
-│   │   │   ├── Api/          # Controller API Mobile App
-│   │   │   └── Web/          # Controller Web Dashboard
-│   │   ├── Middleware/       # Keamanan (Role, ForceJsonResponse)
-│   ├── Models/               # Skema Relasional ORM
-│   ├── Traits/               # ApiResponseTrait (Keseragaman Data)
-├── database/
-│   ├── migrations/           # Skema Basis Data DDL
-│   ├── seeders/              # Seeder Integrasi (Data Dummy Realistis)
-├── public/
-│   └── models/               # Weighted Data Model FaceAPI
-├── routes/
-│   ├── api.php               # Rute Endpoints Mobile Auth & Fitur
-│   └── web.php               # Rute Web Dashboard Monolitik
-```
+### 3. **Hierarki Bebasis Peran (RBAC) Canggih**
+Birokrasi manajemen disokong *Role-Based Access Control* berlapis:
+- 👑 **Owner**: Analitik dashboard penuh, agregat penjualan bulanan, dan histori modal.
+- 👨‍💻 **Admin**: Manajemen data master, registrasi inventori/kategori, dan konfigurasi profil user.
+- 🛒 **Kasir**: Modul *Point of Sales*, struk penjualan komprehensif.
+- 📦 **Kepala Gudang**: *Supply management* pengadaan barang (*in-bound logistics*).
+- 🚚 **Logistik**: Penjadwalan, kontrol armada kendaraan operasional.
+- 🏍️ **Kurir/Driver**: Dedicated portal **My Deliveries** yang memberikan perintah pengiriman satu arah agar supir tahu kemana paket dialokasikan.
+
+### 4. **Asynchronous Notification Ecosystem**
+Sistem menolak konsep *page refresh* (F5).
+- Web Dashboard secara konsisten melakukan *background polling* untuk menarik notifikasi perintah terbaru (AJAX).
+- Notifikasi akan terpotret di layar via **Animated Global Toast UI** layaknya OS modern.
+
 
 ---
 
-## 🔧 Panduan Instalasi (Development)
+## 🛠 Panduan Instalasi (Development)
 
-Proses perancangan ekosistem secara lokal:
+Proses deployment server di mode rekayasa lokal:
 
-### 1. Kebutuhan Sistem Terkini
-- **PHP** versi `^8.2`
-- **Composer** `v2`
-- **Node.js** & NPM
-- **MySQL** versi `>= 5.7`
+### Minimum Requirements
+*   PHP `^8.2`
+*   Composer `v2`
+*   Node.js (NPM)
+*   MySQL `^5.7` / `8.x`
 
-### 2. Kloning & Dependensi
+### Setup Langkah demi Langkah
+
+**1. Kloning Repositori**
 ```bash
 git clone https://github.com/AffanRifai/Toko-Roni-Mobile-App.git
 cd tokoroni-app
+```
 
+**2. Instalasi Paket Ekosistem**
+```bash
 composer install
 npm install
 npm run build
 ```
 
-### 3. Konfigurasi Sistem
-Duplikasi environment konfigurasi dan siapkan *Key*:
+**3. Inisialisasi Environment**
 ```bash
 cp .env.example .env
 php artisan key:generate
 ```
-Sesuaikan parameter koneksi PDO (MySQL) Anda pada berkas `.env`.
+*(Ingatlah untuk mensinergikan koneksi PDO `DB_DATABASE`, dll pada file `.env`)*
 
-### 4. Migrasi & Seeding Data Realistis
-Proyek ini berisi *Seeder* canggih untuk simulasi data pasar riil (sembako, pengguna, kendaraan).
+**4. Migrasi & Injeksi Data Rekayasa (Seeding)**
+Kami telah mendesain spesifikasi data riil pasar Indonesia (daftar sembako asli, profil kurir lokal fiktif, varian armada) demi kelancaran testing UI.
 ```bash
 php artisan migrate:fresh --seed
 ```
 
-### 5. Setup FaceAPI Models
-Engine biometrik memerlukan parameter model AI awal.
-```bash
-mkdir -p public/models
-# Silakan unduh manifest FaceAPI ke direktori ini secara manual jika fitur biometrik digunakan.
-```
+**5. AI Face Models**
+Untuk fungsi login wajah WebRTC, pastikan Anda menarik bobot *neural network weights* standar FaceAPI.js:
+*(simpan di dalam `/public/models/`)*
 
-### 6. Jalankan Server
+**6. Aktivasi Server**
 ```bash
 php artisan serve
 ```
-
-Akses sistem di `http://localhost:8000`.
-
----
-
-## 📡 Daftar Endpoint API
-
-Semua rute bernaung di bawah awalan versi `/api/v1/`.
-
-| Grup | Endpoint Utama | Metrik Throttle | Fungsi |
-|------|---------------|----------------|--------|
-| **Auth** | `POST /auth/login` | *Strict* (5/min) | Login Kredensial & Terbitkan Token |
-| **Auth** | `POST /auth/face-login` | *Strict* (5/min) | Autentikasi berbasis AI |
-| **Dashboard**| `GET /dashboard/` | *Global* (60/min) | Analitik Beranda Global |
-| **Logistik** | `GET /deliveries/my-deliveries`| *Global* (60/min) | Pekerjaan Kurir Aktif |
-| **Products** | `GET /products/` | *Global* (60/min) | Katalog Barang dan Stok |
-
-*(Impor koleksi di dalam proyek ini ke **Postman** untuk menjelajahi fungsionalitas Payload lebih dalam).*
+Jelajahi keagungan sistem di: `http://localhost:8000`
 
 ---
 
-## 👥 Pengujian *Role Access* Default
+## 🔐 Kredensial Sampel Cepat (Data Dummy)
+Karena *database* telah disuntik data, Anda bisa menggunakan pintasan otentikasi berikut (*Password semua akun adalah:* `password`):
 
-Data telah digenerate (via seeder) dengan rincian login untuk kemudahan pengujian:
-- **Owner**: `owner@tokoroni.com` | `password`
-- **Admin**: `admin@tokoroni.com` | `password`
-- **Kasir**: `kasir@tokoroni.com` | `password`
-- **Gudang**: `gudang@tokoroni.com` | `password`
-- **Logistik**: `logistik@tokoroni.com` | `password`
-- **Kurir**: `kurir_budi@tokoroni.com` | `password`
-- **Driver**: `driver_agus@tokoroni.com` | `password`
+| Peran | Kredensial Email | Fokus Pengujian UI |
+|-------|-----------------|--------------------|
+| **Owner** | `owner@tokoroni.com` | Cek Grafik Omset Bulanan & Notifikasi Global |
+| **Kasir** | `kasir@tokoroni.com` | Pembuatan Transaksi POS Real-time |
+| **Logistik** | `logistik@tokoroni.com` | Penugasan Pengiriman ke Armada Kurir |
+| **Kurir** | `kurir_budi@tokoroni.com` | Cek Daftar Penugasan di *My Deliveries* |
 
 ---
 
-## 👨‍💻 Kontributor
+## 👨‍💻 Tim Pengembang Inti
 
-- **Affan Rifaiz** - UI/UX Designer & Mobile App Engineer
-- **Faiz J** - Lead Back-end Engineer
-- **Tio R** - Full-stack Developer
-- **Fadhlan M R** - Front-End Engineer
+Dalam dedikasinya meracik kapabilitas Toko Roni, berikut orkestrator repositori terkait:
 
-🚀 **Toko Roni Framework** - Copyright © 2024 All Rights Reserved.
+- 🎨 **Affan Rifaiz** — *UI/UX Designer & Mobile App Engineer*
+- ⚙️ **Faiz J** — *Lead Back-end Engineer*
+- 🌐 **Tio R** — *Full-stack Developer*
+- 🖌️ **Fadhlan M R** — *Front-End Engineer*
+
+<div align="center">
+  <br>
+  <i><b>Toko Roni Framework</b> — Dikembangkan dan direncanakan penuh semangat untuk industri modern.</i>
+</div>
