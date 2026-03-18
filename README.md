@@ -1,366 +1,166 @@
-# Toko Roni - Face Recognition Login System
+<div align="center">
+  <h1>🛒 Toko Roni - Core Engine & API Backend</h1>
+  <p>
+    <strong>Sistem Manajemen Toko Terpadu & Backend API untuk Aplikasi Mobile Toko Roni</strong>
+  </p>
+</div>
+
+---
 
 ## 📋 Deskripsi Aplikasi
-Toko Roni adalah sistem manajemen toko yang dilengkapi dengan fitur **Face Recognition Login** (login dengan pengenalan wajah) untuk meningkatkan keamanan dan kenyamanan akses. Aplikasi ini dibangun dengan Laravel dan menggunakan FaceAPI.js untuk pengenalan wajah real-time.
 
-## 🚀 Fitur Utama
+**Toko Roni Core** merupakan jantung operasional (Backend & Web Dashboard) dari ekosistem Point of Sales (POS) dan Supply Chain Toko Roni. Dibangun dengan framework **Laravel 11**, sistem ini tidak hanya melayani operasional manajemen toko berbasis web, melainkan bertindak sebagai *API Gateway* tingkat produksi (Production-Grade) yang mentenagai Aplikasi Mobile Toko Roni. 
 
-### 1. **Sistem Autentikasi**
-- Login dengan password (konvensional)
-- Login dengan Face Recognition (pengenalan wajah)
-- Multi-level user roles (Owner, Admin, Kasir, Gudang, Logistik, Kurir)
-- Registrasi wajah untuk user (khusus admin/owner)
+Aplikasi ini dilengkapi dengan fitur **Manajemen Pengiriman (Logistik)**, **Sistem Notifikasi Real-time**, serta mekanisme keamanan **Biometrik Face Recognition Login** terintegrasi menggunakan FaceAPI.js.
 
-### 2. **Dashboard Berbasis Role**
-- **Owner**: Laporan penjualan, manajemen user, laporan keuangan
-- **Admin**: Manajemen produk, kategori, user
-- **Kasir**: Transaksi penjualan, cetak struk
-- **Kepala Gudang**: Manajemen stok, produk
-- **Logistik**: Manajemen pengiriman, kendaraan
-- **Kurir**: Tracking pengiriman, update status
+## 🚀 Fitur Unggulan
 
-### 3. **Manajemen Data**
-- Produk & Kategori
-- Transaksi
-- Member & Piutang
-- Kendaraan
-- Pengiriman
-- Laporan (PDF/Excel)
+### 1. **Production-Grade API Gateway**
+Sistem telah dirancang standar industri untuk mensuplai data aplikasi Mobile:
+- **Global Error Handling**: Pencegahan tumpahan HTML trace, seluruh *Exception* (404, 401, 500, 422) diformat 100% menggunakan `JSON`.
+- **Standarisasi Respons**: Konfigurasi Trait seragam `{ success, message, data }` pada seluruh *endpoint*.
+- **Anti-DDoS & Throttling**: Proteksi *Rate-Limiter* ketat (60 *request/minute* untuk API Global, 5 *request/minute* untuk Autentikasi).
+- **Sanctum Authentication**: Manajemen token sesi aman untuk berbagai *device*.
 
-## 🛠️ Teknologi yang Digunakan
+### 2. **RBAC & Multi-Level Workspace**
+Dukungan *Role-Based Access Control* (RBAC) yang spesifik pada struktur hierarki retail:
+- **Owner**: Laporan komprehensif, finansial, dan audit operasional.
+- **Admin**: Manajemen konfigurasi produk, kategori, serta pengaturan pengguna.
+- **Kasir**: Modul *Point of Sales* terpadu dengan sinkronisasi inventori.
+- **Kepala Gudang**: *Stock tracking* dan pengadaan barang (*supply*).
+- **Logistik**: Manajemen armada kendaraan, penjadwalan, dan penugasan kiriman.
+- **Kurir/Driver**: Dedicated *"My Deliveries"* dashboard untuk *update* status *real-time* ke sistem pusat.
 
-### Backend
-- **Laravel 11** - PHP Framework
-- **MySQL** - Database
-- **FaceAPI.js** - Face recognition library
-- **SweetAlert2** - Notifikasi interaktif
+### 3. **Smart Security & Biometrics**
+- **Face Recognition**: Algoritma AI *FaceAPI.js* terintegrasi secara asinkron di klien untuk *Scan and Go*.
+- Penilaian *Threshold* pengenalan wajah jarak 0.6 dengan enkripsi JSON Matrix.
 
-### Frontend
-- **TailwindCSS** - Styling
-- **Font Awesome** - Icons
-- **Chart.js** - Grafik dashboard
-- **jQuery** - DOM manipulation
+### 4. **Asynchronous Notification System**
+- Interval *polling* pintar (*Back-end Server Polling*).
+- Antarmuka *Global Toast UI Widget* otomatis muncul di dashboard tanpa *reload*.
 
-### Infrastructure
-- **Cloudflare** - CDN & Security
-- **Postman** - API Testing
+---
 
-## 📁 Struktur Direktori
+## 🛠️ Tech Stack & Ekosistem
 
-```
-tokoroni/
+| Lapisan | Teknologi | Peran |
+|-------------|-----------|-------|
+| **Backend** | Laravel 11 (PHP 8.2+) | Engine Utama & API Server |
+| **Database** | MySQL 8.x | RDBMS Penyimpanan Utama |
+| **Frontend** | Blade, TailwindCSS 3 | UI/UX Rendering Web Cepat |
+| **Integrasi** | jQuery, FaceAPI.js, Chart.js| DOM Asynchronous, AI Klien, Analitik |
+| **Keamanan**| Sanctum, RateLimiter, WebRTC | Autentikasi Token API & Kamera |
+
+---
+
+## 📁 Struktur Inti Arsitektur
+
+```text
+tokoroni-app/
 ├── app/
 │   ├── Http/
 │   │   ├── Controllers/
-│   │   │   ├── Auth/
-│   │   │   │   └── AuthenticatedSessionController.php
-│   │   │   ├── DashboardController.php
-│   │   │   ├── ProductController.php
-│   │   │   ├── TransactionController.php
-│   │   │   └── ...
-│   │   └── Middleware/
-│   │       ├── RoleMiddleware.php
-│   │       └── VerifyCsrfToken.php
-│   └── Models/
-│       ├── User.php
-│       ├── Product.php
-│       ├── Transaction.php
-│       └── ...
-├── bootstrap/
-│   └── app.php
-├── config/
+│   │   │   ├── Api/          # Controller API Mobile App
+│   │   │   └── Web/          # Controller Web Dashboard
+│   │   ├── Middleware/       # Keamanan (Role, ForceJsonResponse)
+│   ├── Models/               # Skema Relasional ORM
+│   ├── Traits/               # ApiResponseTrait (Keseragaman Data)
 ├── database/
-│   └── migrations/
+│   ├── migrations/           # Skema Basis Data DDL
+│   ├── seeders/              # Seeder Integrasi (Data Dummy Realistis)
 ├── public/
-│   └── models/ (face-api models)
-├── resources/
-│   └── views/
-│       └── auth/
-│           └── login.blade.php
+│   └── models/               # Weighted Data Model FaceAPI
 ├── routes/
-│   └── web.php
-└── .env
+│   ├── api.php               # Rute Endpoints Mobile Auth & Fitur
+│   └── web.php               # Rute Web Dashboard Monolitik
 ```
 
-## 🔧 Instalasi
+---
 
-### Prerequisites
-- PHP 8.2 atau lebih tinggi
-- Composer
-- MySQL 5.7 atau lebih tinggi
-- Node.js & NPM (opsional)
-- Web browser dengan dukungan WebRTC (Chrome, Firefox, Edge)
+## 🔧 Panduan Instalasi (Development)
 
-### Langkah Instalasi
+Proses perancangan ekosistem secara lokal:
 
-1. **Clone Repository**
+### 1. Kebutuhan Sistem Terkini
+- **PHP** versi `^8.2`
+- **Composer** `v2`
+- **Node.js** & NPM
+- **MySQL** versi `>= 5.7`
+
+### 2. Kloning & Dependensi
 ```bash
-git clone https://github.com/yourusername/tokoroni.git
-cd tokoroni
-```
+git clone https://github.com/AffanRifai/Toko-Roni-Mobile-App.git
+cd tokoroni-app
 
-2. **Install Dependencies**
-```bash
 composer install
 npm install
+npm run build
 ```
 
-3. **Copy Environment File**
+### 3. Konfigurasi Sistem
+Duplikasi environment konfigurasi dan siapkan *Key*:
 ```bash
 cp .env.example .env
-```
-
-4. **Generate Application Key**
-```bash
 php artisan key:generate
 ```
+Sesuaikan parameter koneksi PDO (MySQL) Anda pada berkas `.env`.
 
-5. **Konfigurasi Database**
-Edit file `.env`:
-```env
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=tokoroni
-DB_USERNAME=root
-DB_PASSWORD=
-
-# Untuk Cloudflare (production)
-SESSION_DOMAIN=.yourdomain.com
-SESSION_SECURE_COOKIE=true
-SESSION_SAME_SITE=lax
-TRUSTED_PROXIES=**
+### 4. Migrasi & Seeding Data Realistis
+Proyek ini berisi *Seeder* canggih untuk simulasi data pasar riil (sembako, pengguna, kendaraan).
+```bash
+php artisan migrate:fresh --seed
 ```
 
-6. **Migrate Database**
+### 5. Setup FaceAPI Models
+Engine biometrik memerlukan parameter model AI awal.
 ```bash
-php artisan migrate --seed
-```
-
-7. **Download FaceAPI Models**
-```bash
-# Buat direktori models di public
 mkdir -p public/models
-
-# Download model dari repository face-api.js
-# Atau jalankan script download:
-php artisan face:download-models
+# Silakan unduh manifest FaceAPI ke direktori ini secara manual jika fitur biometrik digunakan.
 ```
 
-8. **Jalankan Aplikasi**
+### 6. Jalankan Server
 ```bash
 php artisan serve
 ```
 
-9. **Akses Aplikasi**
-Buka browser: `http://localhost:8000`
-
-## 🎯 Konfigurasi Face Recognition
-
-### 1. **Setup di Local Development**
-```javascript
-// Di resources/views/auth/login.blade.php
-const MODEL_PATH = '/models'; // Model sudah didownload
-```
-
-### 2. **Setup di Production (Cloudflare)**
-```php
-// Di .env
-SESSION_DOMAIN=.yourdomain.com
-SESSION_SECURE_COOKIE=true
-TRUSTED_PROXIES=**
-```
-
-```php
-// Di app/Http/Middleware/TrustProxies.php
-protected $proxies = '*'; // Trust Cloudflare
-```
-
-### 3. **Konfigurasi Route**
-```php
-// routes/web.php
-Route::post('/face-login', [AuthenticatedSessionController::class, 'faceLogin'])
-    ->name('face.login.direct')
-    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
-```
-
-## 👥 User Roles & Credentials
-
-| Role | Email | Password | Akses |
-|------|-------|----------|-------|
-| Owner | owner@tokoroni.com | password123 | Full akses |
-| Admin | admin@tokoroni.com | password123 | Manajemen user, produk |
-| Kasir | kasir@tokoroni.com | password123 | Transaksi |
-| Kepala Gudang | gudang@tokoroni.com | password123 | Stok produk |
-| Logistik | logistik@tokoroni.com | password123 | Pengiriman |
-| Kurir | kurir@tokoroni.com | password123 | Update pengiriman |
-
-## 📡 API Endpoints
-
-### Public Endpoints (No Auth Required)
-```
-POST   /face-login           - Login dengan face recognition
-POST   /face-compare         - Membandingkan face descriptor
-GET    /registered-faces     - Mendapatkan semua wajah terdaftar
-GET    /csrf-token           - Refresh CSRF token
-```
-
-### Protected Endpoints (Auth Required)
-```
-POST   /face-register        - Registrasi wajah baru (admin/owner)
-GET    /face-status          - Cek status face recognition
-GET    /face-users           - Daftar user untuk registrasi
-GET    /users                - Manajemen user (owner)
-POST   /users                - Create user (owner)
-PUT    /users/{id}           - Update user (owner)
-DELETE /users/{id}           - Delete user (owner)
-```
-
-## 🔐 Keamanan
-
-### CSRF Protection
-- Semua form menggunakan CSRF token
-- Route face-login dikecualikan dari CSRF untuk kompatibilitas
-- Token refresh otomatis setiap 30 menit
-
-### Face Recognition Security
-- Descriptor wajah disimpan dalam bentuk encrypted JSON
-- Threshold distance: 0.6 untuk validasi
-- Minimal face score: 0.5 untuk registrasi
-
-### Session Security
-- Session lifetime: 120 menit
-- Regenerate session setelah login
-- Secure cookie di production
-
-## 🐛 Troubleshooting
-
-### 1. **Error 419 (Page Expired)**
-**Penyebab**: CSRF token mismatch
-**Solusi**:
-- Pastikan route face-login di-exclude dari CSRF
-- Jalankan `php artisan config:clear`
-- Cek session configuration di `.env`
-
-### 2. **Face Recognition Tidak Jalan**
-**Penyebab**: Model face-api tidak terdownload
-**Solusi**:
-```bash
-# Download model manually
-cd public
-mkdir -p models
-cd models
-wget https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights/tiny_face_detector_model-weights_manifest.json
-wget https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights/face_landmark_68_model-weights_manifest.json
-# ... download semua model
-```
-
-### 3. **Kamera Tidak Terdeteksi**
-**Penyebab**: Browser tidak memiliki izin kamera
-**Solusi**: 
-- Izinkan akses kamera di browser
-- Cek di pengaturan browser > Privacy & Security > Camera
-
-### 4. **Error di Cloudflare**
-**Penyebab**: Cloudflare caching
-**Solusi**:
-- Tambahkan Page Rule untuk bypass cache
-- Set SSL/TLS ke "Full (strict)"
-- Konfigurasi Trusted Proxies
-
-## 📊 Testing dengan Postman
-
-Import file `Toko Roni API.postman_collection.json` ke Postman.
-
-### Environment Variables
-```
-base_url: https://yourdomain.com (atau http://localhost:8000)
-csrf_token: (didapat dari /csrf-token)
-auth_token: (didapat setelah login)
-user_id: 1
-```
-
-## 🚀 Deployment ke Production
-
-### 1. **Server Requirements**
-- PHP 8.2+
-- MySQL 5.7+
-- Composer
-- SSL Certificate
-
-### 2. **Langkah Deployment**
-```bash
-# Set environment
-cp .env.example .env
-php artisan key:generate
-
-# Optimize
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-
-# Migrate database
-php artisan migrate --force
-
-# Set permissions
-chmod -R 755 storage
-chmod -R 755 bootstrap/cache
-```
-
-### 3. **Konfigurasi Nginx**
-```nginx
-server {
-    listen 80;
-    server_name yourdomain.com;
-    return 301 https://$server_name$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name yourdomain.com;
-
-    root /var/www/tokoroni/public;
-    index index.php;
-
-    ssl_certificate /etc/nginx/ssl/yourdomain.com.crt;
-    ssl_certificate_key /etc/nginx/ssl/yourdomain.com.key;
-
-    # Cloudflare
-    set_real_ip_from 103.21.244.0/22;
-    set_real_ip_from 103.22.200.0/22;
-    # ... tambah semua IP Cloudflare
-    real_ip_header CF-Connecting-IP;
-
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-        include fastcgi_params;
-    }
-
-    location ~ /\.ht {
-        deny all;
-    }
-}
-```
-
-## 📝 Lisensi
-Hak Cipta © 2024 Toko Roni. All rights reserved.
-
-## 👨‍💻 Kontributor
-- **Back-end Dev** - [Faiz J]
-- **Full-stack Dev** - [Tio R]
-- **Front-End Dev** - [Fadhlan M R]
-- **UI/UX Designer & Mobile Dev** - [Affan Rifaiz]
-
-## 📞 Kontak & Dukungan
-- Email: faizalba74@gmail.com
-- GitHub: https://github.com/AffanRifai/tokoroni
+Akses sistem di `http://localhost:8000`.
 
 ---
 
-**Catatan**: Aplikasi ini masih dalam pengembangan. Untuk laporan bug atau saran fitur, silakan buat issue di repository GitHub.
+## 📡 Daftar Endpoint API
+
+Semua rute bernaung di bawah awalan versi `/api/v1/`.
+
+| Grup | Endpoint Utama | Metrik Throttle | Fungsi |
+|------|---------------|----------------|--------|
+| **Auth** | `POST /auth/login` | *Strict* (5/min) | Login Kredensial & Terbitkan Token |
+| **Auth** | `POST /auth/face-login` | *Strict* (5/min) | Autentikasi berbasis AI |
+| **Dashboard**| `GET /dashboard/` | *Global* (60/min) | Analitik Beranda Global |
+| **Logistik** | `GET /deliveries/my-deliveries`| *Global* (60/min) | Pekerjaan Kurir Aktif |
+| **Products** | `GET /products/` | *Global* (60/min) | Katalog Barang dan Stok |
+
+*(Impor koleksi di dalam proyek ini ke **Postman** untuk menjelajahi fungsionalitas Payload lebih dalam).*
+
+---
+
+## 👥 Pengujian *Role Access* Default
+
+Data telah digenerate (via seeder) dengan rincian login untuk kemudahan pengujian:
+- **Owner**: `owner@tokoroni.com` | `password`
+- **Admin**: `admin@tokoroni.com` | `password`
+- **Kasir**: `kasir@tokoroni.com` | `password`
+- **Gudang**: `gudang@tokoroni.com` | `password`
+- **Logistik**: `logistik@tokoroni.com` | `password`
+- **Kurir**: `kurir_budi@tokoroni.com` | `password`
+- **Driver**: `driver_agus@tokoroni.com` | `password`
+
+---
+
+## 👨‍💻 Kontributor
+
+- **Affan Rifaiz** - UI/UX Designer & Mobile App Engineer
+- **Faiz J** - Lead Back-end Engineer
+- **Tio R** - Full-stack Developer
+- **Fadhlan M R** - Front-End Engineer
+
+🚀 **Toko Roni Framework** - Copyright © 2024 All Rights Reserved.
