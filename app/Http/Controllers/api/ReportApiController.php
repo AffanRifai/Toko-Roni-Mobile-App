@@ -1,136 +1,190 @@
 <?php
-// app/Http/Controllers/Api/ReportApiController.php
-// Add these methods to your existing ReportController
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use App\Models\Product;
 use App\Models\Member;
+use App\Models\Receivable;
+use App\Models\ReceivablePayment;
+use App\Models\Delivery;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
-class ReportController extends Controller
+class ReportApiController extends Controller
 {
     /**
-     * Get sales chart data
+     * DASHBOARD LAPORAN UTAMA (Summary)
      */
-    public function getSalesChartData(Request $request)
+    public function salesSummary(Request $request)
     {
         try {
-            $period = $request->get('period', 'month'); // week, month, year
-            $type = $request->get('type', 'amount'); // amount, count
-            $year = $request->get('year', now()->year);
+            $startDate = $request->get('start_date', Carbon::now()->startOfMonth());
+            $endDate = $request->get('end_date', Carbon::now()->endOfMonth());
 
-            $chartData = [];
+            $transactions = Transaction::whereBetween('created_at', [$startDate, $endDate])->get();
 
-            switch ($period) {
-                case 'week':
-                    // Daily for last 7 days
-                    for ($i = 6; $i >= 0; $i--) {
-                        $date = now()->subDays($i)->format('Y-m-d');
-                        $chartData['labels'][] = now()->subDays($i)->format('l');
+            $summary = [
+                'total_revenue' => $transactions->sum('total_amount'),
+                'total_count' => $transactions->count(),
+                'average_transaction' => $transactions->avg('total_amount') ?? 0,
+            ];
 
-                        if ($type === 'amount') {
-                            $chartData['data'][] = (float) Transaction::whereDate('created_at', $date)
-                                ->where('status', 'completed')
-                                ->sum('total_amount');
-                        } else {
-                            $chartData['data'][] = Transaction::whereDate('created_at', $date)
-                                ->where('status', 'completed')
-                                ->count();
-                        }
-                    }
-                    break;
-
-                case 'month':
-                    // Daily for current month
-                    $daysInMonth = now()->daysInMonth;
-                    for ($i = 1; $i <= $daysInMonth; $i++) {
-                        $date = now()->setDay($i)->format('Y-m-d');
-                        $chartData['labels'][] = $i;
-
-                        if ($type === 'amount') {
-                            $chartData['data'][] = (float) Transaction::whereDate('created_at', $date)
-                                ->where('status', 'completed')
-                                ->sum('total_amount');
-                        } else {
-                            $chartData['data'][] = Transaction::whereDate('created_at', $date)
-                                ->where('status', 'completed')
-                                ->count();
-                        }
-                    }
-                    break;
-
-                case 'year':
-                    // Monthly for selected year
-                    for ($i = 1; $i <= 12; $i++) {
-                        $month = now()->setYear($year)->setMonth($i);
-                        $startOfMonth = $month->copy()->startOfMonth()->format('Y-m-d');
-                        $endOfMonth = $month->copy()->endOfMonth()->format('Y-m-d');
-
-                        $chartData['labels'][] = $month->format('M');
-
-                        if ($type === 'amount') {
-                            $chartData['data'][] = (float) Transaction::whereBetween('created_at', [$startOfMonth, $endOfMonth])
-                                ->where('status', 'completed')
-                                ->sum('total_amount');
-                        } else {
-                            $chartData['data'][] = Transaction::whereBetween('created_at', [$startOfMonth, $endOfMonth])
-                                ->where('status', 'completed')
-                                ->count();
-                        }
-                    }
-                    break;
-
-                case 'custom':
-                    // Custom date range
-                    $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
-                    $endDate = $request->get('end_date', now()->format('Y-m-d'));
-
-                    $transactions = Transaction::whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-                        ->where('status', 'completed')
-                        ->select(
-                            DB::raw('DATE(created_at) as date'),
-                            DB::raw('SUM(total_amount) as total'),
-                            DB::raw('COUNT(*) as count')
-                        )
-                        ->groupBy('date')
-                        ->orderBy('date')
-                        ->get();
-
-                    foreach ($transactions as $transaction) {
-                        $chartData['labels'][] = \Carbon\Carbon::parse($transaction->date)->format('d/m');
-                        $chartData['data'][] = $type === 'amount' ? (float) $transaction->total : $transaction->count;
-                    }
-                    break;
-            }
-
-            // Add additional data for comparison
-            if ($type === 'amount') {
-                $chartData['total'] = array_sum($chartData['data']);
-                $chartData['average'] = count($chartData['data']) > 0 ? array_sum($chartData['data']) / count($chartData['data']) : 0;
-                $chartData['formatted_total'] = 'Rp ' . number_format($chartData['total'], 0, ',', '.');
-                $chartData['formatted_average'] = 'Rp ' . number_format($chartData['average'], 0, ',', '.');
-            } else {
-                $chartData['total'] = array_sum($chartData['data']);
-                $chartData['average'] = count($chartData['data']) > 0 ? round(array_sum($chartData['data']) / count($chartData['data']), 2) : 0;
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Sales chart data retrieved successfully',
-                'data' => $chartData
-            ], 200);
+            return response()->json(['success' => true, 'data' => $summary], 200);
         } catch (\Exception $e) {
-            Log::error('Sales chart data error: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get sales chart data',
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
         }
+    }
+
+    /**
+     * Daily sales
+     */
+    public function dailySales()
+    {
+        try {
+            $today = Carbon::today();
+            $revenue = Transaction::whereDate('created_at', $today)->sum('total_amount');
+            return response()->json(['success' => true, 'data' => ['revenue' => $revenue]], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Monthly sales
+     */
+    public function monthlySales()
+    {
+        try {
+            $month = Carbon::now()->month;
+            $revenue = Transaction::whereMonth('created_at', $month)->sum('total_amount');
+            return response()->json(['success' => true, 'data' => ['revenue' => $revenue]], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Yearly sales
+     */
+    public function yearlySales()
+    {
+        try {
+            $year = Carbon::now()->year;
+            $revenue = Transaction::whereYear('created_at', $year)->sum('total_amount');
+            return response()->json(['success' => true, 'data' => ['revenue' => $revenue]], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Sales by payment method
+     */
+    public function salesByPayment()
+    {
+        try {
+            $data = Transaction::select('payment_method', DB::raw('SUM(total_amount) as total'))
+                ->groupBy('payment_method')
+                ->get();
+            return response()->json(['success' => true, 'data' => $data], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Best selling products
+     */
+    public function bestSelling()
+    {
+        try {
+            $products = DB::table('transaction_items')
+                ->select('product_id', DB::raw('SUM(qty) as total_sold'))
+                ->groupBy('product_id')
+                ->orderByDesc('total_sold')
+                ->limit(10)
+                ->get();
+            return response()->json(['success' => true, 'data' => $products], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Stock report
+     */
+    public function stockReport()
+    {
+        try {
+            $lowStock = Product::where('stock', '<=', 10)->get();
+            return response()->json(['success' => true, 'data' => $lowStock], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Top spenders
+     */
+    public function topSpenders()
+    {
+        try {
+            $members = Member::withSum('transactions', 'total_amount')
+                ->orderByDesc('transactions_sum_total_amount')
+                ->limit(10)
+                ->get();
+            return response()->json(['success' => true, 'data' => $members], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Piutang report
+     */
+    public function piutangReport()
+    {
+        try {
+            $totalPiutang = Receivable::where('status', 'BELUM LUNAS')->sum('sisa_piutang');
+            return response()->json(['success' => true, 'data' => ['total_piutang' => $totalPiutang]], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Delivery performance
+     */
+    public function deliveryPerformance()
+    {
+        try {
+            $stats = [
+                'total' => Delivery::count(),
+                'delivered' => Delivery::where('status', 'delivered')->count(),
+            ];
+            return response()->json(['success' => true, 'data' => $stats], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Export PDF (Mock)
+     */
+    public function exportPdf()
+    {
+        return response()->json(['success' => true, 'message' => 'PDF being generated'], 200);
+    }
+
+    /**
+     * Export Excel (Mock)
+     */
+    public function exportExcel()
+    {
+        return response()->json(['success' => true, 'message' => 'Excel being generated'], 200);
     }
 }

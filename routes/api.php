@@ -33,7 +33,7 @@ Route::prefix('v1')->name('api.')->group(function () {
     // =========================================================================
     // PUBLIC API (No Authentication Required)
     // =========================================================================
-    Route::prefix('auth')->name('auth.')->group(function () {
+    Route::prefix('auth')->name('auth.')->middleware('throttle:auth')->group(function () {
         Route::post('/login', [AuthApiController::class, 'login'])->name('login');
         Route::post('/face-login', [AuthApiController::class, 'faceLogin'])->name('face-login');
     });
@@ -205,7 +205,6 @@ Route::prefix('v1')->name('api.')->group(function () {
         // DELIVERIES API
         // ---------------------------------------------------------------------
         Route::prefix('deliveries')->name('deliveries.')->group(function () {
-            // Custom endpoints
             Route::get('/today-stats', [DeliveryApiController::class, 'todayStats'])->name('today-stats');
             Route::get('/my-deliveries', [DeliveryApiController::class, 'myDeliveries'])->name('my-deliveries');
             Route::get('/available-drivers', [DeliveryApiController::class, 'availableDrivers'])->name('available-drivers');

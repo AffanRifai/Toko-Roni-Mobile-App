@@ -18,11 +18,11 @@ use Illuminate\Support\Facades\Validator;
 class MemberApiController extends Controller
 {
     /**
-     * Constructor with authentication middleware
+     * Constructor
      */
     public function __construct()
     {
-        $this->middleware('auth:sanctum');
+        // Middleware handled in routes/api.php
     }
 
     /**

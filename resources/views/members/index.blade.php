@@ -56,7 +56,7 @@
             <div class="stat-card-content">
                 <p class="text-sm text-gray-500">Member Aktif</p>
                 <h3 class="text-2xl font-bold text-green-600">{{ $stats['active'] }}</h3>
-                <p class="text-xs text-gray-400 mt-1">{{ round(($stats['active']/$stats['total'])*100) }}% dari total</p>
+                <p class="text-xs text-gray-400 mt-1">{{ $stats['total'] > 0 ? round(($stats['active']/$stats['total'])*100) : 0 }}% dari total</p>
             </div>
         </div>
 
@@ -163,7 +163,7 @@
                         <td class="px-6 py-4">
                             @php
                                 $sisa = $member->limit_kredit - $member->total_piutang;
-                                $percentage = $member->limit_kredit > 0 ? ($sisa / $member->limit_kredit) * 100 : 0;
+                                $percentage = ($member->limit_kredit > 0) ? ($sisa / $member->limit_kredit) * 100 : 0;
                             @endphp
                             <div class="flex items-center gap-2">
                                 <span class="text-sm font-medium {{ $sisa > 0 ? 'text-green-600' : 'text-red-600' }}">

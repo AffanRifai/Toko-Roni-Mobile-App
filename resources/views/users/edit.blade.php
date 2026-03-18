@@ -121,8 +121,14 @@
                                                     Checker Barang
                                                 </option>
                                                 <option value="manager_toko_eceran"
-                                                    {{ old('role') == 'manager_toko_eceran' ? 'selected' : '' }}>
+                                                    {{ (old('role', $user->role) == 'manager_toko_eceran') ? 'selected' : '' }}>
                                                     Manager Toko Eceran
+                                                </option>
+                                                <option value="kurir" {{ (old('role', $user->role) == 'kurir') ? 'selected' : '' }}>
+                                                    Kurir
+                                                </option>
+                                                <option value="driver" {{ (old('role', $user->role) == 'driver') ? 'selected' : '' }}>
+                                                    Driver
                                                 </option>
                                             </select>
                                             @error('role')

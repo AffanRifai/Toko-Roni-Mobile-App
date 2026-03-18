@@ -480,8 +480,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'name'       => 'required|string|max:255',
             'email'      => 'required|email|unique:users,email',
-            'password'   => 'required|min:8|confirmed',
-            'role'       => 'required|in:owner,kasir,gudang,logistik,checker_barang',
+            'role'       => 'required|in:owner,kasir,gudang,logistik,checker_barang,kurir,driver',
             'jenis_toko' => 'required|in:grosir,eceran',
             'phone'      => 'nullable|string|max:20',
             'address'    => 'nullable|string|max:500',
@@ -569,7 +568,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'name'       => 'required|string|max:255',
             'email'      => ['required', 'email', Rule::unique('users')->ignore($user->id)],
-            'role'       => 'required|in:owner,kasir,gudang,logistik,checker_barang',
+            'role'       => 'required|in:owner,kasir,gudang,logistik,checker_barang,kurir,driver',
             'jenis_toko' => 'required|in:grosir,eceran',
             'password'   => 'nullable|min:8|confirmed',
             'phone'      => 'nullable|string|max:20',

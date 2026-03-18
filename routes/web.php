@@ -30,7 +30,24 @@ use App\Http\Controllers\NotificationController;
 |--------------------------------------------------------------------------
 */
 Route::get('/', function () {
-    return view('welcome');
+    $stats = [
+        'products' => \App\Models\Product::count(),
+        'categories' => \App\Models\Category::count(),
+        'members' => \App\Models\Member::count(),
+        'transactions' => \App\Models\Transaction::count(),
+    ];
+    
+    $featuredProducts = \App\Models\Product::with('category')
+        ->where('is_active', true)
+        ->latest()
+        ->take(8)
+        ->get();
+        
+    $categories = \App\Models\Category::withCount('products')
+        ->where('is_active', true)
+        ->get();
+
+    return view('welcome', compact('stats', 'featuredProducts', 'categories'));
 });
 
 Route::get('/login', function () {
@@ -225,6 +242,15 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     Route::prefix('delivery')->name('delivery.')->group(function () {
         Route::get('/dashboard', [DeliveryController::class, 'dashboard'])->name('dashboard');
 
+        // Courier-specific routes (Must be before wildcard routes)
+        Route::middleware('role:kurir,driver,logistik,owner,admin')->group(function () {
+            Route::get('/staff-dashboard', [DeliveryController::class, 'staffDashboard'])->name('staff.dashboard');
+            Route::get('/my-deliveries', [DeliveryController::class, 'myDeliveries'])->name('my-deliveries');
+            Route::post('/location/update', [DeliveryController::class, 'updateStaffLocation'])->name('location');
+            Route::post('/{delivery}/accept', [DeliveryController::class, 'acceptDelivery'])->name('accept');
+        });
+
+
         // ===== ROUTES KHUSUS UNTUK TAMBAH KURIR DAN KENDARAAN =====
         Route::post('/kurir/store', [DeliveryController::class, 'storeKurir'])
             ->name('kurir.store')
@@ -240,7 +266,6 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
             Route::get('/', [DeliveryController::class, 'index'])->name('index');
             Route::get('/create', [DeliveryController::class, 'create'])->name('create');
             Route::post('/', [DeliveryController::class, 'store'])->name('store');
-            Route::get('/{delivery}', [DeliveryController::class, 'show'])->name('show');
             Route::get('/{delivery}/edit', [DeliveryController::class, 'edit'])->name('edit');
             Route::put('/{delivery}', [DeliveryController::class, 'update'])->name('update');
             Route::delete('/{delivery}', [DeliveryController::class, 'destroy'])->name('destroy');
@@ -255,8 +280,9 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
             Route::get('/export', [DeliveryController::class, 'export'])->name('export');
         });
 
-        // Delivery actions (owner, admin, logistik, kurir)
-        Route::middleware('role:owner,admin,logistik,kurir')->group(function () {
+        // Delivery actions (owner, admin, logistik, kurir, driver)
+        Route::middleware('role:owner,admin,logistik,kurir,driver')->group(function () {
+            Route::get('/{delivery}', [DeliveryController::class, 'show'])->name('show');
             Route::post('/{delivery}/assign', [DeliveryController::class, 'assign'])->name('assign');
             Route::post('/{delivery}/pickup', [DeliveryController::class, 'pickup'])->name('pickup');
             Route::post('/{delivery}/start', [DeliveryController::class, 'startDelivery'])->name('start');
@@ -267,13 +293,6 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
             Route::get('/{delivery}/details', [DeliveryController::class, 'getDeliveryDetails'])->name('details');
         });
 
-        // Courier-specific routes
-        Route::middleware('role:kurir,logistik,owner,admin')->group(function () {
-            Route::get('/staff-dashboard', [DeliveryController::class, 'staffDashboard'])->name('staff.dashboard');
-            Route::get('/my-deliveries', [DeliveryController::class, 'myDeliveries'])->name('my-deliveries');
-            Route::post('/location/update', [DeliveryController::class, 'updateStaffLocation'])->name('location');
-            Route::post('/{delivery}/accept', [DeliveryController::class, 'acceptDelivery'])->name('accept');
-        });
 
         // Print routes (semua role bisa akses)
         Route::get('/{delivery}/print/note', [DeliveryController::class, 'printDeliveryNote'])->name('print.note');
@@ -326,7 +345,7 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     | USER MANAGEMENT ROUTES (OWNER ONLY)
     |--------------------------------------------------------------------------
     */
-    Route::middleware('role:owner')->prefix('users')->name('users.')->group(function () {
+    Route::group(['middleware' => 'role:owner', 'prefix' => 'users', 'as' => 'users.'], function () {
         // Basic CRUD
         Route::get('/', [UserController::class, 'index'])->name('index');
         Route::get('/create', [UserController::class, 'create'])->name('create');
@@ -350,8 +369,10 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     |--------------------------------------------------------------------------
     | PROFILE SETTINGS ROUTES
     |--------------------------------------------------------------------------
+    | Routes for managing user profile settings.
+    |--------------------------------------------------------------------------
     */
-    Route::prefix('profile')->name('profile.')->group(function () {
+    Route::group(['prefix' => 'profile', 'as' => 'profile.'], function () {
         Route::get('/settings', [UserController::class, 'profile'])->name('settings');
         Route::put('/update', [UserController::class, 'updateProfile'])->name('update');
     });
@@ -363,9 +384,17 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     */
     Route::prefix('notifications')->name('notifications.')->group(function () {
         Route::get('/', [App\Http\Controllers\NotificationController::class, 'index'])->name('index');
+        Route::get('/recent', [App\Http\Controllers\NotificationController::class, 'getRecent'])->name('recent');
+        Route::get('/unread-count', [App\Http\Controllers\NotificationController::class, 'getUnreadCount'])->name('unread-count');
         Route::post('/{id}/mark-as-read', [App\Http\Controllers\NotificationController::class, 'markAsRead'])->name('mark-as-read');
         Route::post('/mark-all-as-read', [App\Http\Controllers\NotificationController::class, 'markAllAsRead'])->name('mark-all-as-read');
         Route::delete('/{id}', [App\Http\Controllers\NotificationController::class, 'destroy'])->name('destroy');
         Route::delete('/clear-all', [App\Http\Controllers\NotificationController::class, 'clearAll'])->name('clear-all');
+    });
+    
+    // AI Forecast Routes
+    Route::prefix('forecast')->name('forecast.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\ForecastController::class, 'index'])->name('index');
+        Route::get('/api-data', [\App\Http\Controllers\ForecastController::class, 'getApiData'])->name('api-data');
     });
 });

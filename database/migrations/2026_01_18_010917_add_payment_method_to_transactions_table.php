@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('transactions', function (Blueprint $table) {
-            //
-        });
+        if (!Schema::hasColumn('transactions', 'payment_method')) {
+            Schema::table('transactions', function (Blueprint $table) {
+                $table->string('payment_method')->default('tunai')->after('total');
+            });
+        }
     }
 
     /**

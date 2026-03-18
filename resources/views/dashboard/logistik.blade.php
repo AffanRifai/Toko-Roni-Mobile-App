@@ -1,4 +1,5 @@
 {{-- resources/views/dashboard/logistik.blade.php --}}
+
 @extends('layouts.app')
 
 @section('title', 'Dashboard Logistik')

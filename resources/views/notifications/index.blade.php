@@ -1,202 +1,204 @@
-{{-- resources/views/notifications/index.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'Semua Notifikasi')
+@section('title', 'Notifikasi')
 
 @section('content')
-<div class="container mx-auto px-4 py-6">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+<div class="max-w-4xl mx-auto" x-data="{
+    notifications: @js($notifications->items()),
+    unreadCount: {{ $unreadCount }},
+    
+    markAsRead(id) {
+        fetch(`/notifications/${id}/mark-as-read`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                location.reload(); // Sederhananya reload untuk index karena banyak grouping
+            }
+        });
+    },
+    
+    deleteNotif(id) {
+        if (!confirm('Hapus notifikasi ini?')) return;
+        
+        fetch(`/notifications/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            }
+        });
+    }
+}">
+    <!-- Header Page -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Semua Notifikasi</h1>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Riwayat semua notifikasi Anda
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
+                <i class="fas fa-bell mr-3 text-indigo-500"></i>
+                Notifikasi
+            </h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Kelola semua aktivitas dan pemberitahuan sistem
             </p>
         </div>
         
         <div class="flex items-center gap-2">
-            <form action="{{ route('notifications.mark-all-as-read') }}" method="POST">
+            @if($unreadCount > 0)
+                <form action="{{ route('notifications.mark-all-as-read') }}" method="POST">
+                    @csrf
+                    <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-xl text-sm font-semibold transition-all">
+                        <i class="fas fa-check-double mr-2"></i>
+                        Tandai Semua Dibaca
+                    </button>
+                </form>
+            @endif
+            
+            <form action="{{ route('notifications.clear-all') }}" method="POST" onsubmit="return confirm('Hapus semua notifikasi?')">
                 @csrf
-                <button type="submit" 
-                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2">
-                    <i class="fas fa-check-double"></i>
-                    <span>Tandai Semua Dibaca</span>
+                @method('DELETE')
+                <button type="submit" class="inline-flex items-center px-4 py-2 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 rounded-xl text-sm font-semibold transition-all">
+                    <i class="fas fa-trash-alt mr-2"></i>
+                    Bersihkan Semua
                 </button>
             </form>
         </div>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border border-gray-200 dark:border-gray-700">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Total Notifikasi</p>
-                    <p class="text-2xl font-bold text-gray-800 dark:text-white">{{ $notifications->total() }}</p>
-                </div>
-                <div class="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                    <i class="fas fa-bell text-blue-600 dark:text-blue-400"></i>
-                </div>
+    <!-- Stats Boxes -->
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                <i class="fas fa-envelope-open text-indigo-600 dark:text-indigo-400"></i>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 font-medium">Belum Dibaca</p>
+                <p class="text-xl font-bold text-gray-900 dark:text-white">{{ $unreadCount }}</p>
             </div>
         </div>
-
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border border-gray-200 dark:border-gray-700">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Belum Dibaca</p>
-                    <p class="text-2xl font-bold text-gray-800 dark:text-white">{{ auth()->user()->unreadNotifications->count() }}</p>
-                </div>
-                <div class="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-                    <i class="fas fa-circle text-yellow-500"></i>
-                </div>
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <i class="fas fa-list text-blue-600 dark:text-blue-400"></i>
             </div>
-        </div>
-
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border border-gray-200 dark:border-gray-700">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Sudah Dibaca</p>
-                    <p class="text-2xl font-bold text-gray-800 dark:text-white">{{ $notifications->total() - auth()->user()->unreadNotifications->count() }}</p>
-                </div>
-                <div class="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                    <i class="fas fa-check-circle text-green-600 dark:text-green-400"></i>
-                </div>
+            <div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 font-medium">Total Notifikasi</p>
+                <p class="text-xl font-bold text-gray-900 dark:text-white">{{ $totalCount }}</p>
             </div>
         </div>
     </div>
 
-    <!-- Notifications List -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-hidden">
-        @forelse($notifications as $notification)
-            @php
-                $data = $notification->data;
-                $isUnread = is_null($notification->read_at);
-                $message = $data['message'] ?? 'Notifikasi baru';
-                $time = $notification->created_at->diffForHumans();
-                $type = $data['type'] ?? 'default';
-                
-                $iconClass = match($type) {
-                    'user_created' => 'fas fa-user-plus text-green-500',
-                    'user_updated' => 'fas fa-user-edit text-blue-500',
-                    default => 'fas fa-bell text-gray-400'
-                };
-                
-                $bgClass = $isUnread ? 'bg-blue-50 dark:bg-blue-900/20' : '';
-            @endphp
-            
-            <div class="p-4 border-b border-gray-100 dark:border-gray-700 {{ $bgClass }} hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                <div class="flex items-start gap-4">
-                    <!-- Icon -->
-                    <div class="flex-shrink-0 mt-1">
-                        <i class="{{ $iconClass }} text-lg"></i>
-                    </div>
+    @if($notifications->count() > 0)
+        <!-- Grouped Notifications List -->
+        <div class="space-y-8">
+            @foreach($groupedNotifications as $date => $notifs)
+                <div>
+                    <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest flex items-center mb-4">
+                        <span class="mr-3">{{ $date }}</span>
+                        <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
+                    </h3>
+                    
+                    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                        <div class="divide-y divide-gray-50 dark:divide-gray-700">
+                            @foreach($notifs as $notification)
+                                @php
+                                    $data = $notification->data;
+                                    $isUnread = is_null($notification->read_at);
+                                    $color = $data['color'] ?? 'blue';
+                                    $icon = $data['icon'] ?? 'fas fa-bell';
+                                    $message = $data['message'] ?? 'Pemberitahuan sistem';
+                                    $url = $data['url'] ?? '#';
+                                @endphp
+                                
+                                <div class="p-5 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-all group relative {{ $isUnread ? 'bg-indigo-50/20 dark:bg-indigo-900/10' : '' }}">
+                                    <div class="flex items-start gap-4">
+                                        <!-- Icon -->
+                                        <div class="flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm bg-{{ $color }}-100 dark:bg-{{ $color }}-900/30 text-{{ $color }}-600 dark:text-{{ $color }}-400">
+                                            <i class="{{ $icon }} text-lg"></i>
+                                        </div>
 
-                    <!-- Content -->
-                    <div class="flex-1">
-                        <p class="text-gray-900 dark:text-white font-medium">
-                            {{ $message }}
-                        </p>
-                        
-                        @if(isset($data['user_name']))
-                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                User: {{ $data['user_name'] }} 
-                                @if(isset($data['user_role']))
-                                    ({{ str_replace('_', ' ', $data['user_role']) }})
-                                @endif
-                            </p>
-                        @endif
+                                        <!-- Content -->
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center justify-between mb-1">
+                                                <span class="text-[10px] font-bold uppercase tracking-wider text-{{ $color }}-600 bg-{{ $color }}-50 dark:bg-{{ $color }}-900/20 px-2 py-0.5 rounded-lg whitespace-nowrap">
+                                                    {{ str_replace('_', ' ', $data['type'] ?? 'UMUM') }}
+                                                </span>
+                                                <span class="text-[11px] text-gray-400 dark:text-gray-500 font-medium whitespace-nowrap">
+                                                    {{ $notification->created_at->format('H:i') }}
+                                                </span>
+                                            </div>
+                                            
+                                            <a href="{{ $url }}" class="block {{ $isUnread ? 'font-bold' : '' }} text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors leading-relaxed">
+                                                {{ $message }}
+                                            </a>
+                                            
+                                            @if(isset($data['user_name']))
+                                                <div class="mt-2 flex items-center gap-2">
+                                                    <span class="text-[11px] text-gray-500 dark:text-gray-400 flex items-center">
+                                                        <i class="fas fa-user-circle mr-1 opacity-70"></i>
+                                                        {{ $data['user_name'] }}
+                                                    </span>
+                                                    <span class="w-1 h-1 bg-gray-300 rounded-full"></span>
+                                                    <span class="text-[11px] text-gray-500 dark:text-gray-400">
+                                                        {{ $data['user_role'] ?? '' }}
+                                                    </span>
+                                                </div>
+                                            @endif
+                                        </div>
 
-                        @if(isset($data['updated_by']))
-                            <p class="text-sm text-gray-600 dark:text-gray-400">
-                                Diperbarui oleh: {{ $data['updated_by'] }}
-                            </p>
-                        @endif
-
-                        @if(isset($data['created_by']))
-                            <p class="text-sm text-gray-600 dark:text-gray-400">
-                                Dibuat oleh: {{ $data['created_by'] }}
-                            </p>
-                        @endif
-
-                        @if(isset($data['changed_fields']) && !empty($data['changed_fields']))
-                            <div class="mt-2 flex flex-wrap gap-2">
-                                @foreach($data['changed_fields'] as $field)
-                                    <span class="inline-flex items-center px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs text-gray-700 dark:text-gray-300">
-                                        <i class="fas fa-edit mr-1 text-blue-500"></i>
-                                        {{ $field }}
-                                    </span>
-                                @endforeach
-                            </div>
-                        @endif
-
-                        <div class="flex items-center gap-4 mt-2">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">
-                                <i class="far fa-clock mr-1"></i>
-                                {{ $notification->created_at->format('d M Y H:i') }}
-                            </span>
-                            <span class="text-xs text-gray-500 dark:text-gray-400">
-                                {{ $time }}
-                            </span>
-                            @if($notification->read_at)
-                                <span class="text-xs text-green-600 dark:text-green-400">
-                                    <i class="fas fa-check-circle mr-1"></i>
-                                    Dibaca {{ $notification->read_at->diffForHumans() }}
-                                </span>
-                            @endif
+                                        <!-- Actions -->
+                                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            @if($isUnread)
+                                                <button @click="markAsRead('{{ $notification->id }}')" 
+                                                        class="p-2 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                                                        title="Tandai dibaca">
+                                                    <i class="fas fa-check-circle"></i>
+                                                </button>
+                                            @endif
+                                            <button @click="deleteNotif('{{ $notification->id }}')"
+                                                    class="p-2 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                                                    title="Hapus">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    @if($isUnread)
+                                        <!-- Unread Indicator -->
+                                        <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-indigo-500 rounded-r-full"></div>
+                                    @endif
+                                </div>
+                            @endforeach
                         </div>
                     </div>
-
-                    <!-- Actions -->
-                    <div class="flex items-center gap-2">
-                        @if($isUnread)
-                            <form action="{{ route('notifications.mark-as-read', $notification->id) }}" method="POST">
-                                @csrf
-                                <button type="submit" 
-                                        class="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                                        title="Tandai dibaca">
-                                    <i class="fas fa-check-circle"></i>
-                                </button>
-                            </form>
-                        @endif
-                        
-                        <form action="{{ route('notifications.destroy', $notification->id) }}" method="POST">
-                            @csrf
-                            @method('DELETE')
-                            <button type="submit" 
-                                    class="p-2 text-red-600 hover:text-red-800 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                                    title="Hapus"
-                                    onclick="return confirm('Hapus notifikasi ini?')">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </form>
-                    </div>
                 </div>
-            </div>
-        @empty
-            <div class="p-12 text-center">
-                <div class="mb-4">
-                    <i class="fas fa-bell-slash text-5xl text-gray-300 dark:text-gray-600"></i>
-                </div>
-                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">Belum ada notifikasi</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                    Notifikasi akan muncul di sini ketika ada aktivitas yang memerlukan perhatian Anda
-                </p>
-            </div>
-        @endforelse
+            @endforeach
+        </div>
 
         <!-- Pagination -->
-        @if($notifications->hasPages())
-            <div class="p-4 border-t border-gray-100 dark:border-gray-700">
-                {{ $notifications->links() }}
+        <div class="mt-10 mb-20">
+            {{ $notifications->links() }}
+        </div>
+    @else
+        <!-- Empty State -->
+        <div class="bg-white dark:bg-gray-800 rounded-[40px] shadow-sm border border-gray-100 dark:border-gray-700 p-20 text-center">
+            <div class="w-24 h-24 bg-gray-50 dark:bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i class="fas fa-bell-slash text-4xl text-gray-300"></i>
             </div>
-        @endif
-    </div>
-
-    <!-- Back Button -->
-    <div class="mt-6">
-        <a href="{{ url()->previous() }}" class="text-blue-600 hover:text-blue-800 dark:text-blue-400">
-            <i class="fas fa-arrow-left mr-1"></i> Kembali
-        </a>
-    </div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Tidak ada notifikasi</h3>
+            <p class="text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
+                Anda sudah up to date! Saat ini belum ada pemberitahuan baru untuk Anda.
+            </p>
+        </div>
+    @endif
 </div>
 @endsection
