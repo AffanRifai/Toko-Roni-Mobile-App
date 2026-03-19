@@ -121,9 +121,9 @@ Karena *database* telah disuntik data, Anda bisa menggunakan pintasan otentikasi
 
 Dalam dedikasinya meracik kapabilitas Toko Roni, berikut orkestrator repositori terkait:
 
-- 🎨 **Affan Rifaiz** — *UI/UX Designer & Mobile App Engineer*
-- ⚙️ **Faiz J** — *Lead Back-end Engineer*
-- 🌐 **Tio R** — *Full-stack Developer*
+- 🎨 **Affan Rifa'i** — *UI/UX Designer & Mobile App Engineer*
+- ⚙️ **TIO R** — *Lead Back-end Engineer*
+- 🌐 **FAIZ J A** — *Full-stack Developer*
 - 🖌️ **Fadhlan M R** — *Front-End Engineer*
 
 <div align="center">
