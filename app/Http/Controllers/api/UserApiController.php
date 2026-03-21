@@ -19,11 +19,11 @@ use Illuminate\Support\Facades\DB;
 class UserApiController extends Controller
 {
     /**
-     * Constructor with authentication middleware
+     * Constructor
      */
     public function __construct()
     {
-        $this->middleware('auth:sanctum');
+        // Middleware handled in routes/api.php
     }
 
     /* =======================
@@ -398,9 +398,9 @@ class UserApiController extends Controller
      * ======================= */
 
     /**
-     * Get all users for face registration dropdown
+     * Get all users for face registration (faceRegistration route)
      */
-    public function getUsersForFaceRegistration()
+    public function faceRegistration()
     {
         try {
             $users = User::where('is_active', true)
@@ -577,9 +577,9 @@ class UserApiController extends Controller
     }
 
     /**
-     * Delete face registration
+     * Delete face registration (deleteFace route)
      */
-    public function deleteFaceRegistration($id)
+    public function deleteFace($id)
     {
         try {
             $user = User::findOrFail($id);

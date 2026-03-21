@@ -11,7 +11,11 @@ return new class extends Migration
     {
         Schema::table('transactions', function (Blueprint $table) {
             // Ubah enum payment_method jika perlu
-            $table->string('payment_method')->default('tunai')->change();
+            if (Schema::hasColumn('transactions', 'payment_method')) {
+                $table->string('payment_method')->default('tunai')->change();
+            } else {
+                $table->string('payment_method')->default('tunai');
+            }
 
             // Tambah kolom baru
             $table->unsignedBigInteger('member_id')->nullable()->after('user_id');

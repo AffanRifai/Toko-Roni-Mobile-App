@@ -5,12 +5,13 @@ namespace App\Notifications;
 
 use App\Models\Product;
 use App\Models\User;
+use App\Traits\InAppNotificationTrait;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 
 class ProductStockNotification extends Notification
 {
-    use Queueable;
+    use Queueable, InAppNotificationTrait;
 
     protected $product;
     protected $type; // 'low_stock', 'out_of_stock', 'restock'
@@ -35,9 +36,9 @@ class ProductStockNotification extends Notification
         ];
 
         $icons = [
-            'low_stock' => 'fa-solid fa-exclamation-triangle',
-            'out_of_stock' => 'fa-solid fa-times-circle',
-            'restock' => 'fa-solid fa-arrow-up',
+            'low_stock' => 'fas fa-exclamation-triangle',
+            'out_of_stock' => 'fas fa-times-circle',
+            'restock' => 'fas fa-arrow-up',
         ];
 
         $colors = [
@@ -46,19 +47,21 @@ class ProductStockNotification extends Notification
             'restock' => 'green',
         ];
 
-        return [
-            'type' => 'product_stock_' . $this->type,
-            'product_id' => $this->product->id,
-            'product_name' => $this->product->name,
-            'product_code' => $this->product->code,
-            'product_stock' => $this->product->stock,
-            'product_unit' => $this->product->unit,
-            'min_stock' => $this->product->min_stock,
-            'category_name' => $this->product->category?->name,
-            'message' => $messages[$this->type] ?? 'Notifikasi stok produk',
-            'icon' => $icons[$this->type] ?? 'fa-solid fa-box',
-            'color' => $colors[$this->type] ?? 'blue',
-            'time' => now()->toDateTimeString()
-        ];
+        return $this->getInAppPayload(
+            'product_stock_' . $this->type,
+            $messages[$this->type] ?? 'Notifikasi stok produk',
+            $icons[$this->type] ?? 'fas fa-box',
+            $colors[$this->type] ?? 'blue',
+            route('products.index'), // URL ke halaman produk
+            [
+                'product_id' => $this->product->id,
+                'product_name' => $this->product->name,
+                'product_code' => $this->product->code,
+                'product_stock' => $this->product->stock,
+                'product_unit' => $this->product->unit,
+                'min_stock' => $this->product->min_stock,
+                'category_name' => $this->product->category?->name,
+            ]
+        );
     }
 }

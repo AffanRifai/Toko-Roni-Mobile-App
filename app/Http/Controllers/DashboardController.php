@@ -28,6 +28,9 @@ class DashboardController extends Controller
                 return $this->gudangDashboard();
             case 'logistik':
                 return $this->logistikDashboard();
+            case 'kurir':
+            case 'driver':
+                return redirect()->route('delivery.my-deliveries');
             default:
                 return $this->ownerDashboard();
         }
@@ -365,16 +368,16 @@ class DashboardController extends Controller
         $yesterday = now()->subDay()->toDateString();
 
         // STATISTIK HARI INI
-        $todayTransactions = Transaction::where('cashier_id', $user->id)
+        $todayTransactions = Transaction::where('user_id', $user->id)
             ->whereDate('created_at', $today)
             ->count();
 
-        $todayRevenue = Transaction::where('cashier_id', $user->id)
+        $todayRevenue = Transaction::where('user_id', $user->id)
             ->whereDate('created_at', $today)
             ->sum('total_amount');
 
         $todayItemsSold = TransactionItem::whereHas('transaction', function ($query) use ($user, $today) {
-            $query->where('cashier_id', $user->id)
+            $query->where('user_id', $user->id)
                 ->whereDate('created_at', $today);
         })
             ->sum('qty');
@@ -383,11 +386,11 @@ class DashboardController extends Controller
         $avgTransaction = $todayTransactions > 0 ? $todayRevenue / $todayTransactions : 0;
 
         // PERBANDINGAN DENGAN KEMARIN
-        $yesterdayTransactions = Transaction::where('cashier_id', $user->id)
+        $yesterdayTransactions = Transaction::where('user_id', $user->id)
             ->whereDate('created_at', $yesterday)
             ->count();
 
-        $yesterdayRevenue = Transaction::where('cashier_id', $user->id)
+        $yesterdayRevenue = Transaction::where('user_id', $user->id)
             ->whereDate('created_at', $yesterday)
             ->sum('total_amount');
 
@@ -401,7 +404,7 @@ class DashboardController extends Controller
                 $query->from('transaction_items')
                     ->join('transactions', 'transactions.id', '=', 'transaction_items.transaction_id')
                     ->whereColumn('transaction_items.product_id', 'products.id')
-                    ->where('transactions.cashier_id', $user->id)
+                    ->where('transactions.user_id', $user->id)
                     ->whereDate('transactions.created_at', $today)
                     ->select(DB::raw('COALESCE(SUM(transaction_items.qty), 0)'));
             }, 'sold_today')
@@ -410,7 +413,7 @@ class DashboardController extends Controller
             ->get();
 
         // TRANSAKSI TERAKHIR
-        $recentTransactions = Transaction::where('cashier_id', $user->id)
+        $recentTransactions = Transaction::where('user_id', $user->id)
             ->with(['items.product'])
             ->select('id', 'invoice_number', 'customer_name', 'total_amount', 'created_at')
             ->latest()

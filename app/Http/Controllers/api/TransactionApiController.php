@@ -15,33 +15,38 @@ use Illuminate\Support\Facades\Log;
 class TransactionApiController extends Controller
 {
     /**
-     * GET /api/v1/transactions
+     * Display a listing of transactions.
      */
     public function index(Request $request)
     {
         try {
-            $query = Transaction::with(['user', 'member'])->latest();
+            $query = Transaction::with(['member', 'user', 'items.product'])->latest();
 
             if ($request->filled('search')) {
-                $s = $request->search;
-                $query->where(function ($q) use ($s) {
-                    $q->where('invoice_number', 'like', "%{$s}%")
-                        ->orWhere('customer_name', 'like', "%{$s}%");
-                });
+                $search = $request->search;
+                $query->where('invoice_number', 'LIKE', "%{$search}%")
+                      ->orWhere('customer_name', 'LIKE', "%{$search}%");
             }
+
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+
+            $perPage = $request->get('per_page', 20);
+            $transactions = $query->paginate($perPage);
 
             return response()->json([
                 'success' => true,
-                'data'    => $query->paginate($request->get('per_page', 20)),
-            ]);
+                'message' => 'Transactions retrieved successfully',
+                'data' => $transactions
+            ], 200);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to retrieve transactions: ' . $e->getMessage()], 500);
         }
     }
 
     /**
-     * GET /api/v1/transactions/recent
-     * ⚠️ Method harus bernama recent sesuai route api.php
+     * Get recent transactions
      */
     public function recent(Request $request)
     {
@@ -78,37 +83,49 @@ class TransactionApiController extends Controller
                     ];
                 });
 
-            return response()->json(['success' => true, 'data' => $transactions]);
+            return response()->json([
+                'success' => true, 
+                'message' => 'Recent transactions retrieved successfully',
+                'data' => $transactions
+            ]);
         } catch (\Exception $e) {
             Log::error('Recent transactions error: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to get recent transactions: ' . $e->getMessage()], 500);
         }
     }
 
     /**
      * GET /api/v1/transactions/today-stats
      */
-    public function todayStats(Request $request)
+    public function todayStats()
     {
         try {
-            $today = now()->toDateString();
+            $today = now()->format('Y-m-d');
+
+            $stats = [
+                'total_transactions' => Transaction::whereDate('created_at', $today)->count(),
+                'total_amount' => (float) Transaction::whereDate('created_at', $today)->sum('total_amount'),
+                'by_payment_method' => [
+                    'cash' => Transaction::whereDate('created_at', $today)->where('payment_method', 'cash')->count(),
+                    'credit' => Transaction::whereDate('created_at', $today)->where('payment_method', 'credit')->count(),
+                    'transfer' => Transaction::whereDate('created_at', $today)->where('payment_method', 'transfer')->count(),
+                ],
+                'average_transaction' => (float) Transaction::whereDate('created_at', $today)->avg('total_amount'),
+                'highest' => (float) Transaction::whereDate('created_at', $today)->max('total_amount'),
+            ];
 
             return response()->json([
                 'success' => true,
-                'data'    => [
-                    'total_transactions' => Transaction::whereDate('created_at', $today)->count(),
-                    'total_amount'       => (float) Transaction::whereDate('created_at', $today)->sum('total_amount'),
-                    'average'            => (float) Transaction::whereDate('created_at', $today)->avg('total_amount'),
-                    'highest'            => (float) Transaction::whereDate('created_at', $today)->max('total_amount'),
-                ],
-            ]);
+                'message' => 'Today stats retrieved successfully',
+                'data' => $stats
+            ], 200);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to get today stats'], 500);
         }
     }
 
     /**
-     * GET /api/v1/transactions/statistics
+     * Get transaction statistics
      */
     public function getStatistics(Request $request)
     {
@@ -119,6 +136,7 @@ class TransactionApiController extends Controller
 
             return response()->json([
                 'success' => true,
+                'message' => 'Statistics retrieved successfully',
                 'data'    => [
                     'today' => [
                         'count'  => Transaction::whereDate('created_at', $today)->count(),
@@ -129,10 +147,12 @@ class TransactionApiController extends Controller
                         'amount' => (float) Transaction::whereBetween('created_at', [$startOfMonth, $endOfMonth])->sum('total_amount'),
                     ],
                     'total' => Transaction::count(),
+                    'completed_count' => Transaction::where('status', 'completed')->count(),
+                    'pending_count' => Transaction::where('status', 'pending')->count(),
                 ],
             ]);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to retrieve statistics'], 500);
         }
     }
 
@@ -172,17 +192,19 @@ class TransactionApiController extends Controller
     /**
      * POST /api/v1/transactions/{transaction}/complete
      */
-    public function complete(Transaction $transaction)
+    public function complete(Request $request, Transaction $transaction)
     {
-        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+        $transaction->update(['status' => 'completed']);
+        return response()->json(['success' => true, 'message' => 'Transaction marked as completed', 'data' => $transaction]);
     }
 
     /**
      * POST /api/v1/transactions/{transaction}/cancel
      */
-    public function cancel(Transaction $transaction)
+    public function cancel(Request $request, Transaction $transaction)
     {
-        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+        $transaction->update(['status' => 'cancelled']);
+        return response()->json(['success' => true, 'message' => 'Transaction cancelled', 'data' => $transaction]);
     }
 
     /**
@@ -199,14 +221,13 @@ class TransactionApiController extends Controller
      */
     public function getReceipt(Transaction $transaction)
     {
-        $transaction->load(['user', 'member', 'items.product']);
-        return response()->json(['success' => true, 'data' => $transaction]);
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
     }
 
     /**
-     * GET /api/v1/transactions/export/csv
+     * GET /api/v1/transactions/export/csv 
      */
-    public function export()
+    public function export(Request $request)
     {
         return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
     }

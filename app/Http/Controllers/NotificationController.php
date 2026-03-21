@@ -16,9 +16,18 @@ class NotificationController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
+        
         $notifications = $user->notifications()->paginate(20);
         
-        return view('notifications.index', compact('notifications'));
+        // Group notifications by date
+        $groupedNotifications = $notifications->groupBy(function($notification) {
+            return $notification->created_at->isoFormat('D MMMM Y');
+        });
+
+        $unreadCount = $user->unreadNotifications->count();
+        $totalCount = $notifications->total();
+        
+        return view('notifications.index', compact('notifications', 'groupedNotifications', 'unreadCount', 'totalCount'));
     }
 
     /**
@@ -32,7 +41,11 @@ class NotificationController extends Controller
         $notification->markAsRead();
 
         if (request()->wantsJson()) {
-            return response()->json(['success' => true]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Notifikasi ditandai sebagai dibaca',
+                'unread_count' => $user->unreadNotifications->count()
+            ]);
         }
 
         return back()->with('success', 'Notifikasi ditandai sebagai dibaca');
@@ -48,36 +61,56 @@ class NotificationController extends Controller
         $user->unreadNotifications->markAsRead();
 
         if (request()->wantsJson()) {
-            return response()->json(['success' => true]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Semua notifikasi ditandai sebagai dibaca',
+                'unread_count' => 0
+            ]);
         }
 
         return back()->with('success', 'Semua notifikasi ditandai sebagai dibaca');
     }
 
     /**
- * Delete a specific notification.
- */
-public function destroy($id)
-{
-    /** @var \App\Models\User $user */
-    $user = Auth::user();
-    $notification = $user->notifications()->findOrFail($id);
-    $notification->delete();
+     * Delete a specific notification.
+     */
+    public function destroy($id)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $notification = $user->notifications()->findOrFail($id);
+        $notification->delete();
 
-    return back()->with('success', 'Notifikasi berhasil dihapus');
-}
+        if (request()->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Notifikasi berhasil dihapus',
+                'unread_count' => $user->unreadNotifications->count()
+            ]);
+        }
 
-/**
- * Delete all notifications.
- */
-public function clearAll()
-{
-    /** @var \App\Models\User $user */
-    $user = Auth::user();
-    $user->notifications()->delete();
-    
-    return back()->with('success', 'Semua notifikasi berhasil dihapus');
-}
+        return back()->with('success', 'Notifikasi berhasil dihapus');
+    }
+
+    /**
+     * Delete all notifications.
+     */
+    public function clearAll()
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $user->notifications()->delete();
+
+        if (request()->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Semua notifikasi berhasil dihapus',
+                'unread_count' => 0
+            ]);
+        }
+        
+        return back()->with('success', 'Semua notifikasi berhasil dihapus');
+    }
 
     /**
      * Get unread notifications count (for AJAX polling).
@@ -107,13 +140,16 @@ public function clearAll()
             ->take(5)
             ->get()
             ->map(function ($notification) {
+                $data = $notification->data;
                 return [
                     'id' => $notification->id,
-                    'message' => $notification->data['message'] ?? 'Notifikasi baru',
-                    'type' => $notification->data['type'] ?? 'default',
+                    'message' => $data['message'] ?? 'Notifikasi baru',
+                    'icon' => $data['icon'] ?? 'fas fa-bell',
+                    'color' => $data['color'] ?? 'blue',
+                    'url' => $data['url'] ?? '#',
                     'time' => $notification->created_at->diffForHumans(),
-                    'read_at' => $notification->read_at,
-                    'data' => $notification->data
+                    'is_unread' => is_null($notification->read_at),
+                    'type' => $data['type'] ?? 'default'
                 ];
             });
 

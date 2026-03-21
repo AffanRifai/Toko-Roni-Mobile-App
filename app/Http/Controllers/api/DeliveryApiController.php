@@ -1,94 +1,171 @@
 <?php
-// app/Http/Controllers/Api/DeliveryApiController.php
-// Add these methods to your existing DeliveryController
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Controller;
 use App\Models\Delivery;
+use App\Models\User;
+use App\Models\Vehicle;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
-class DeliveryController extends Controller
+class DeliveryApiController extends Controller
 {
     /**
      * Get today's delivery statistics
      */
-    public function getTodayStats(Request $request)
+    public function todayStats()
     {
         try {
             $today = now()->format('Y-m-d');
-
             $stats = [
                 'total' => Delivery::whereDate('created_at', $today)->count(),
                 'pending' => Delivery::whereDate('created_at', $today)->where('status', 'pending')->count(),
-                'assigned' => Delivery::whereDate('created_at', $today)->where('status', 'assigned')->count(),
-                'picked_up' => Delivery::whereDate('created_at', $today)->where('status', 'picked_up')->count(),
-                'on_delivery' => Delivery::whereDate('created_at', $today)->where('status', 'on_delivery')->count(),
                 'delivered' => Delivery::whereDate('created_at', $today)->where('status', 'delivered')->count(),
-                'delivered_today' => Delivery::whereDate('delivered_at', $today)->count(),
-                'failed' => Delivery::whereDate('created_at', $today)->where('status', 'failed')->count(),
-                'cancelled' => Delivery::whereDate('created_at', $today)->where('status', 'cancelled')->count(),
             ];
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Today delivery stats retrieved successfully',
-                'data' => $stats
-            ], 200);
+            return response()->json(['success' => true, 'data' => $stats], 200);
         } catch (\Exception $e) {
-            Log::error('Delivery today stats error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get delivery stats',
-                'error' => $e->getMessage()
-            ], 500);
+    /**
+     * Get my deliveries
+     */
+    public function myDeliveries()
+    {
+        try {
+            $deliveries = Delivery::where('user_id', auth()->id())->latest()->get();
+            return response()->json(['success' => true, 'data' => $deliveries], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
         }
     }
 
     /**
      * Get recent deliveries
      */
-    public function getRecentDeliveries(Request $request)
+    public function recent(Request $request)
     {
         try {
             $limit = $request->get('limit', 10);
-
-            $deliveries = Delivery::with(['user', 'vehicle', 'transaction'])
-                ->latest()
-                ->limit($limit)
-                ->get()
-                ->map(function ($delivery) {
-                    return [
-                        'id' => $delivery->id,
-                        'delivery_code' => $delivery->delivery_code,
-                        'origin' => $delivery->origin,
-                        'destination' => $delivery->destination,
-                        'status' => $delivery->status,
-                        'status_badge' => $delivery->getStatusBadgeClass(),
-                        'status_icon' => $delivery->getStatusIcon(),
-                        'driver' => $delivery->user->name ?? 'Not assigned',
-                        'vehicle' => $delivery->vehicle->name ?? 'Not assigned',
-                        'total_items' => $delivery->total_items,
-                        'estimated_time' => $delivery->estimated_delivery_time ? $delivery->estimated_delivery_time->format('d/m/Y H:i') : null,
-                        'created_at' => $delivery->created_at->format('d/m/Y H:i'),
-                        'transaction_invoice' => $delivery->transaction->invoice_number ?? null,
-                    ];
-                });
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Recent deliveries retrieved successfully',
-                'data' => $deliveries
-            ], 200);
+            $deliveries = Delivery::with(['user', 'vehicle', 'transaction'])->latest()->limit($limit)->get();
+            return response()->json(['success' => true, 'data' => $deliveries], 200);
         } catch (\Exception $e) {
-            Log::error('Recent deliveries error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get recent deliveries',
-                'error' => $e->getMessage()
-            ], 500);aaaa
+    /**
+     * Display a listing of deliveries.
+     */
+    public function index(Request $request)
+    {
+        try {
+            $perPage = $request->get('per_page', 20);
+            $deliveries = Delivery::with(['user', 'vehicle', 'transaction'])->latest()->paginate($perPage);
+            return response()->json(['success' => true, 'data' => $deliveries], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Get statistics
+     */
+    public function getStatistics()
+    {
+        try {
+            $stats = [
+                'total' => Delivery::count(),
+                'delivered' => Delivery::where('status', 'delivered')->count(),
+                'pending' => Delivery::where('status', 'pending')->count(),
+            ];
+            return response()->json(['success' => true, 'data' => $stats], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Show delivery
+     */
+    public function show($id)
+    {
+        try {
+            $delivery = Delivery::with(['user', 'vehicle', 'transaction'])->findOrFail($id);
+            return response()->json(['success' => true, 'data' => $delivery], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Not found'], 404);
+        }
+    }
+
+    /**
+     * Update delivery
+     */
+    public function update(Request $request, $id)
+    {
+        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+    }
+
+    /**
+     * Assign delivery
+     */
+    public function assign(Request $request, $id)
+    {
+        $request->validate(['user_id' => 'required|exists:users,id']);
+        try {
+            $delivery = Delivery::findOrFail($id);
+            $delivery->update(['user_id' => $request->user_id, 'status' => 'assigned']);
+            return response()->json(['success' => true, 'message' => 'Assigned'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Update status
+     */
+    public function updateStatus(Request $request, $id)
+    {
+        $request->validate(['status' => 'required']);
+        try {
+            $delivery = Delivery::findOrFail($id);
+            $delivery->update(['status' => $request->status]);
+            return response()->json(['success' => true, 'message' => 'Status updated'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error'], 500);
+        }
+    }
+
+    /**
+     * Available drivers
+     */
+    public function availableDrivers()
+    {
+        $drivers = User::where('role', 'kurir')->get();
+        return response()->json(['success' => true, 'data' => $drivers], 200);
+    }
+
+    /**
+     * Available vehicles
+     */
+    public function availableVehicles()
+    {
+        $vehicles = Vehicle::where('status', 'available')->get();
+        return response()->json(['success' => true, 'data' => $vehicles], 200);
+    }
+
+    /**
+     * Track delivery
+     */
+    public function trackDelivery($code)
+    {
+        try {
+            $delivery = Delivery::where('delivery_code', $code)->with(['user', 'vehicle'])->firstOrFail();
+            return response()->json(['success' => true, 'data' => $delivery], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Not found'], 404);
         }
     }
 }

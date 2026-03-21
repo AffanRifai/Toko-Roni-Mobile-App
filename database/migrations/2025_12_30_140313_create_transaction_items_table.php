@@ -11,13 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('transaction_items', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('transaction_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('product_id')->constrained()->cascadeOnDelete();
-            $table->integer('qty');
-            $table->integer('price');
-        });
+        if (!Schema::hasTable('transaction_items')) {
+            Schema::create('transaction_items', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('transaction_id')->constrained()->cascadeOnDelete();
+                $table->foreignId('product_id')->constrained()->cascadeOnDelete();
+                $table->integer('qty');
+                $table->integer('price');
+            });
+        }
     }
 
     /**

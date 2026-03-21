@@ -226,6 +226,12 @@
                                                     {{ old('role') == 'manager_toko_eceran' ? 'selected' : '' }}>
                                                     Manager Toko Eceran
                                                 </option>
+                                                <option value="kurir" {{ old('role') == 'kurir' ? 'selected' : '' }}>
+                                                    Kurir
+                                                </option>
+                                                <option value="driver" {{ old('role') == 'driver' ? 'selected' : '' }}>
+                                                    Driver
+                                                </option>
                                             </select>
                                             @error('role')
                                                 <div class="invalid-feedback">
@@ -439,6 +445,24 @@
                                         Mengelola operasional toko eceran, staff, dan laporan penjualan.
                                     </p>
                                 </div>
+
+                                <div class="mb-3">
+                                    <h6 class="fw-semibold mb-2 text-primary">
+                                        <i class="fas fa-motorcycle me-1"></i> Kurir
+                                    </h6>
+                                    <p class="text-muted small mb-0">
+                                        Fokus pada pengiriman pesanan menggunakan sepeda motor.
+                                    </p>
+                                </div>
+
+                                <div class="mb-3">
+                                    <h6 class="fw-semibold mb-2 text-primary">
+                                        <i class="fas fa-truck me-1"></i> Driver
+                                    </h6>
+                                    <p class="text-muted small mb-0">
+                                        Fokus pada pengiriman pesanan menggunakan mobil atau truk.
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
@@ -632,7 +656,7 @@
                                 option.value);
                         } else if (storeType === 'grosir') {
                             option.hidden = !['owner', 'kasir', 'kepala_gudang', 'logistik',
-                                'checker_barang'
+                                'checker_barang', 'kurir', 'driver'
                             ].includes(option.value);
                         } else {
                             option.hidden = false;

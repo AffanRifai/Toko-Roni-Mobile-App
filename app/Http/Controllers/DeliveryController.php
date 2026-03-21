@@ -60,8 +60,8 @@ class DeliveryController extends Controller
 
         $deliveries = $query->paginate(20)->withQueryString();
 
-        // Get drivers from users table with role 'logistik'
-        $drivers = User::where('role', 'logistik')->get();
+        // Get drivers from users table with role 'kurir' or 'driver'
+        $drivers = User::whereIn('role', ['kurir', 'driver'])->get();
 
         // Get available vehicles
         $vehicles = Vehicle::where('status', 'available')->get();
@@ -170,7 +170,7 @@ class DeliveryController extends Controller
         $delivery->load(['transaction', 'user', 'vehicle']);
 
         // Get available drivers and vehicles for assignment
-        $availableDrivers = User::where('role', 'logistik')
+        $availableDrivers = User::whereIn('role', ['kurir', 'driver'])
             ->whereDoesntHave('deliveries', function ($q) {
                 $q->whereIn('status', ['assigned', 'picked_up', 'on_delivery']);
             })
@@ -187,7 +187,7 @@ class DeliveryController extends Controller
     public function edit(Delivery $delivery)
     {
         $delivery->load(['transaction', 'user', 'vehicle']);
-        $drivers = User::where('role', 'logistik')->get();
+        $drivers = User::whereIn('role', ['kurir', 'driver'])->get();
         $vehicles = Vehicle::all();
 
         return view('delivery.edit', compact('delivery', 'drivers', 'vehicles'));
