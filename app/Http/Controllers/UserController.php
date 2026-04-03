@@ -1,4 +1,5 @@
 <?php
+
 /** @noinspection PhpUndefinedMethodInspection */
 /** @noinspection PhpUndefinedVariableInspection */
 
@@ -246,7 +247,6 @@ class UserController extends Controller
                 'best_distance' => $bestDistance,
                 'threshold' => $threshold
             ], 401);
-
         } catch (\Exception $e) {
             Log::error('Face login error: ' . $e->getMessage());
 
@@ -282,7 +282,7 @@ class UserController extends Controller
      */
     private function getRedirectUrl($role): string
     {
-        return match($role) {
+        return match ($role) {
             'owner' => route('dashboard'),
             'kasir' => route('pos.index'),
             'gudang' => route('inventory.index'),
@@ -361,7 +361,6 @@ class UserController extends Controller
                 'score' => $score,
                 'registered_at' => $user->face_registered_at->format('d/m/Y H:i:s')
             ]);
-
         } catch (\Exception $e) {
             Log::error('Face registration error: ' . $e->getMessage());
 
@@ -398,7 +397,6 @@ class UserController extends Controller
             User::where('id', $userId)->update(['image' => $path]);
 
             Log::info('Face image saved', ['user_id' => $userId, 'path' => $path]);
-
         } catch (\Exception $e) {
             Log::error('Error saving face image: ' . $e->getMessage());
         }
@@ -453,7 +451,6 @@ class UserController extends Controller
                 'success' => true,
                 'message' => 'Face registration deleted successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error deleting face registration: ' . $e->getMessage());
 
@@ -485,7 +482,7 @@ class UserController extends Controller
             'phone'      => 'nullable|string|max:20',
             'address'    => 'nullable|string|max:500',
             'is_active'  => 'nullable|boolean',
-            'image'      => 'nullable|image|max:2048'
+            'image'      => 'nullable|image|max:2048',
         ]);
 
         // Validasi logic role x jenis toko
@@ -501,49 +498,48 @@ class UserController extends Controller
         if ($request->hasFile('image')) {
             $validated['image'] = $request->file('image')->store('users', 'public');
         }
-        
+
         // Buat user baru
         $user = User::create($validated);
 
         // KIRIM NOTIFIKASI
-    try {
-        // 1. Kirim ke semua user dengan role owner
-        $owners = User::where('role', 'owner')->where('id', '!=', auth()->id())->get();
-        
-        foreach ($owners as $owner) {
-            $owner->notify(new UserCreatedNotification($user, auth()->user()));
-            Log::info('Notifikasi terkirim ke owner:', [
-                'owner_id' => $owner->id,
-                'user_id' => $user->id
+        try {
+            // 1. Kirim ke semua user dengan role owner
+            $owners = User::where('role', 'owner')->where('id', '!=', auth()->id())->get();
+
+            foreach ($owners as $owner) {
+                $owner->notify(new UserCreatedNotification($user, auth()->user()));
+                Log::info('Notifikasi terkirim ke owner:', [
+                    'owner_id' => $owner->id,
+                    'user_id' => $user->id
+                ]);
+            }
+
+            // 2. Kirim ke user yang baru dibuat (jika aktif)
+            if ($user->is_active) {
+                $user->notify(new UserCreatedNotification($user, auth()->user()));
+                Log::info('Notifikasi terkirim ke user baru:', ['user_id' => $user->id]);
+            }
+
+            // 3. KIRIM KE DIRI SENDIRI (USER YANG SEDANG LOGIN)
+            // INI YANG PALING PENTING - UNTUK NOTIFIKASI KE PEMBUAT
+            $currentUser = auth()->user();
+
+            // Kirim notifikasi ke diri sendiri
+            $currentUser->notify(new UserCreatedNotification($user, $currentUser));
+            Log::info('Notifikasi terkirim ke diri sendiri:', [
+                'user_id' => $currentUser->id,
+                'user_name' => $currentUser->name,
+                'action' => 'membuat user baru',
+                'new_user_id' => $user->id
             ]);
+        } catch (\Exception $e) {
+            Log::error('Gagal mengirim notifikasi: ' . $e->getMessage());
         }
-        
-        // 2. Kirim ke user yang baru dibuat (jika aktif)
-        if ($user->is_active) {
-            $user->notify(new UserCreatedNotification($user, auth()->user()));
-            Log::info('Notifikasi terkirim ke user baru:', ['user_id' => $user->id]);
-        }
-        
-        // 3. KIRIM KE DIRI SENDIRI (USER YANG SEDANG LOGIN)
-        // INI YANG PALING PENTING - UNTUK NOTIFIKASI KE PEMBUAT
-        $currentUser = auth()->user();
-        
-        // Kirim notifikasi ke diri sendiri
-        $currentUser->notify(new UserCreatedNotification($user, $currentUser));
-        Log::info('Notifikasi terkirim ke diri sendiri:', [
-            'user_id' => $currentUser->id,
-            'user_name' => $currentUser->name,
-            'action' => 'membuat user baru',
-            'new_user_id' => $user->id
-        ]);
-        
-    } catch (\Exception $e) {
-        Log::error('Gagal mengirim notifikasi: ' . $e->getMessage());
+
+        return redirect()->route('users.index')->with('success', 'User berhasil ditambahkan');
     }
 
-    return redirect()->route('users.index')->with('success', 'User berhasil ditambahkan');
-}
-    
     /* =======================
      * SHOW
      * ======================= */
@@ -574,7 +570,7 @@ class UserController extends Controller
             'phone'      => 'nullable|string|max:20',
             'address'    => 'nullable|string|max:500',
             'is_active'  => 'nullable|boolean',
-            'image'      => 'nullable|image|max:2048'
+            'image'      => 'nullable|image|max:2048',
         ]);
 
         if ($validated['role'] === 'gudang' && $validated['jenis_toko'] === 'eceran') {
@@ -598,10 +594,10 @@ class UserController extends Controller
             $validated['image'] = $request->file('image')->store('users', 'public');
         }
 
-         // Catat perubahan sebelum update
+        // Catat perubahan sebelum update
         $oldData = $user->toArray();
         $changes = [];
-        
+
         foreach ($validated as $key => $value) {
             if ($key != 'password' && isset($oldData[$key]) && $oldData[$key] != $value) {
                 $changes[$key] = [
@@ -612,14 +608,14 @@ class UserController extends Controller
         }
 
         $user->update($validated);
-        
+
         // Kirim notifikasi jika ada perubahan
         if (!empty($changes)) {
             // 1. Kirim ke semua owner
             $owners = User::where('role', 'owner')
                 ->where('id', '!=', auth()->id())
                 ->get();
-            
+
             foreach ($owners as $owner) {
                 $owner->notify(new UserUpdatedNotification($user, auth()->user(), $changes));
                 Log::info('Notifikasi update terkirim ke owner:', [
@@ -633,10 +629,10 @@ class UserController extends Controller
                 $user->notify(new UserUpdatedNotification($user, auth()->user(), $changes));
                 Log::info('Notifikasi update terkirim ke user yang diupdate:', ['user_id' => $user->id]);
             }
-            
+
             // 3. KIRIM KE DIRI SENDIRI (USER YANG SEDANG LOGIN MELAKUKAN UPDATE)
             $currentUser = auth()->user();
-            
+
             // Kirim notifikasi ke diri sendiri (pembuat update)
             $currentUser->notify(new UserUpdatedNotification($user, $currentUser, $changes));
             Log::info('Notifikasi update terkirim ke diri sendiri:', [
@@ -750,7 +746,6 @@ class UserController extends Controller
                 'score' => $score,
                 'registered_at' => $user->face_registered_at->format('d/m/Y H:i')
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error storing face data: ' . $e->getMessage());
             return response()->json([
@@ -778,7 +773,6 @@ class UserController extends Controller
                 'success' => true,
                 'message' => 'Registrasi wajah berhasil direset'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error destroying face data: ' . $e->getMessage());
             return response()->json([

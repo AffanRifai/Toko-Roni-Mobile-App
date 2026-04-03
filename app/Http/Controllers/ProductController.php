@@ -957,4 +957,7 @@ class ProductController extends Controller
             Log::error('Gagal mengirim notifikasi hapus produk: ' . $e->getMessage());
         }
     }
+
+
 }
+

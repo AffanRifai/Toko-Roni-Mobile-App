@@ -403,6 +403,28 @@
             class="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden hidden transition-opacity duration-300">
         </div>
 
+        <!-- Global Toast Container -->
+        <?php if (isset($component)) { $__componentOriginal7cfab914afdd05940201ca0b2cbc009b = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal7cfab914afdd05940201ca0b2cbc009b = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.toast','data' => []] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('toast'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes([]); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal7cfab914afdd05940201ca0b2cbc009b)): ?>
+<?php $attributes = $__attributesOriginal7cfab914afdd05940201ca0b2cbc009b; ?>
+<?php unset($__attributesOriginal7cfab914afdd05940201ca0b2cbc009b); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal7cfab914afdd05940201ca0b2cbc009b)): ?>
+<?php $component = $__componentOriginal7cfab914afdd05940201ca0b2cbc009b; ?>
+<?php unset($__componentOriginal7cfab914afdd05940201ca0b2cbc009b); ?>
+<?php endif; ?>
+
         <!-- Sidebar -->
         <aside id="sidebar" class="flex flex-col bg-white dark:bg-gray-800 shadow-xl">
             <!-- Logo -->
@@ -494,6 +516,15 @@
                             <span class="sidebar-hide text-sm font-medium">Reports</span>
                         </a>
 
+                        <a href="<?php echo e(route('forecast.index')); ?>"
+                            class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 <?php echo e(request()->routeIs('forecast.*') ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50'); ?>"
+                            data-tooltip="AI Forecast">
+                            <div class="sidebar-menu-icon w-5 h-5 flex items-center justify-center mr-3">
+                                <i class="fas fa-robot text-sm"></i>
+                            </div>
+                            <span class="sidebar-hide text-sm font-medium">AI Forecast</span>
+                        </a>
+
                         <a href="<?php echo e(route('transactions.index')); ?>"
                             class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 <?php echo e(request()->routeIs('transactions.index') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50'); ?>"
                             data-tooltip="Transaction History">
@@ -560,22 +591,43 @@
                         </a>
                     <?php endif; ?>
 
-                    <!-- Delivery Section -->
-                    <?php if(in_array(Auth::user()->role, ['owner', 'logistik','admin'])): ?>
+                    <!-- Logistics Management Section -->
+                    <?php if(in_array(Auth::user()->role, ['owner', 'logistik', 'admin'])): ?>
                     <div class="sidebar-hide pt-3 mt-2 border-t border-gray-100 dark:border-gray-700">
                         <div class="px-3 mb-1">
-                            <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Delivery
+                            <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Logistics
                             </div>
                         </div>
                     </div>
 
                     <a href="<?php echo e(route('delivery.index')); ?>"
-                        class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 <?php echo e(request()->routeIs('delivery.*') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50'); ?>"
-                        data-tooltip="Delivery">
+                        class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 <?php echo e(request()->routeIs('delivery.index') || request()->routeIs('delivery.show') || request()->routeIs('delivery.edit') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50'); ?>"
+                        data-tooltip="Management">
                         <div class="sidebar-menu-icon w-5 h-5 flex items-center justify-center mr-3">
-                            <i class="fas fa-truck text-sm"></i>
+                            <i class="fas fa-tasks text-sm"></i>
                         </div>
-                        <span class="sidebar-hide text-sm font-medium">Delivery</span>
+                        <span class="sidebar-hide text-sm font-medium">Management</span>
+                    </a>
+                    <?php endif; ?>
+
+                    <!-- Courier Section -->
+                    <?php if(in_array(Auth::user()->role, ['kurir', 'driver', 'logistik', 'owner'])): ?>
+                    <?php if(Auth::user()->role === 'kurir' || Auth::user()->role === 'driver'): ?>
+                    <div class="sidebar-hide pt-3 mt-2 border-t border-gray-100 dark:border-gray-700">
+                        <div class="px-3 mb-1">
+                            <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">My Tasks
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <a href="<?php echo e(route('delivery.my-deliveries')); ?>"
+                        class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 <?php echo e(request()->routeIs('delivery.my-deliveries') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50'); ?>"
+                        data-tooltip="My Deliveries">
+                        <div class="sidebar-menu-icon w-5 h-5 flex items-center justify-center mr-3">
+                            <i class="fas fa-truck-loading text-sm"></i>
+                        </div>
+                        <span class="sidebar-hide text-sm font-medium">My Deliveries</span>
                     </a>
                     <?php endif; ?>
 
@@ -816,7 +868,35 @@
             </main>
 
             <!-- Footer -->
-            <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-3">
+            <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-3" 
+                    x-data="{ 
+                        lastChecked: '<?php echo e(now()->toDateTimeString()); ?>',
+                        
+                        init() {
+                            // Polling for live toast notifications every 15 seconds
+                            setInterval(() => this.checkNewNotifications(), 15000);
+                        },
+                        
+                        checkNewNotifications() {
+                            fetch(`/notifications/recent?since=${this.lastChecked}`)
+                                .then(res => res.json())
+                                .then(data => {
+                                    if (data.success && data.data.length > 0) {
+                                        // Dispatch event for toast
+                                        const newNotif = data.data[0]; 
+                                        if (newNotif.is_unread) {
+                                            window.dispatchEvent(new CustomEvent('notify', {
+                                                detail: { 
+                                                    message: newNotif.message, 
+                                                    type: 'info' 
+                                                }
+                                            }));
+                                        }
+                                        this.lastChecked = new Date().toISOString().slice(0, 19).replace('T', ' ');
+                                    }
+                                });
+                        }
+                    }">
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between">
                     <div class="text-xs text-gray-600 dark:text-gray-400">
                         <div class="flex items-center space-x-2">

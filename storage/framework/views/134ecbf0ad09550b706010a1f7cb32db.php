@@ -46,4 +46,4 @@ class="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 max-w-sm w-full">
         </div>
     </template>
 </div>
-<?php /**PATH D:\PROJECT3\Toko-Roni-Mobile-App\tokoroni-app\resources\views/components/toast.blade.php ENDPATH**/ ?>
+<?php /**PATH D:\laravel project 3\Toko-Roni-Mobile-App\resources\views/components/toast.blade.php ENDPATH**/ ?>
