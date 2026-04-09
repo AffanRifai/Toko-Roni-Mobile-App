@@ -36,7 +36,7 @@ class UserCreatedNotification extends Notification
     public function toArray($notifiable)
     {
         return [
-            'type' => 'user_created',
+            'type' => 'create',
             'user_id' => $this->user->id,
             'user_name' => $this->user->name,
             'user_email' => $this->user->email,

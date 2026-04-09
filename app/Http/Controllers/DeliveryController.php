@@ -20,25 +20,34 @@ use Illuminate\Support\Facades\Hash;
 
 class DeliveryController extends Controller
 {
-    /**
+   /**
      * Display a listing of deliveries.
      */
     public function index(Request $request)
     {
         $query = Delivery::with(['transaction', 'user', 'vehicle'])->latest();
 
+        // Filter berdasarkan role staff logistik
+        $userRole = auth()->user()->role;
+        $isStaffLogistik = in_array($userRole, ['logistik', 'staff_logistik']);
+        
+        // Jika user adalah staff logistik, filter berdasarkan user_id mereka
+        if ($isStaffLogistik) {
+            $query->where('user_id', auth()->id());
+        }
+
         // Filter by status
-        if ($request->has('status') && $request->status !== 'all') {
+        if ($request->filled('status') && $request->status !== 'all') {
             $query->where('status', $request->status);
         }
 
-        // Filter by driver
-        if ($request->has('driver_id') && $request->driver_id !== 'all') {
+        // Filter by driver - HANYA untuk role yang memiliki akses
+        if (!$isStaffLogistik && $request->filled('driver_id') && $request->driver_id !== 'all') {
             $query->where('user_id', $request->driver_id);
         }
 
         // Filter by date range
-        if ($request->has('start_date') && $request->has('end_date')) {
+        if ($request->filled('start_date') && $request->filled('end_date')) {
             $query->whereBetween('created_at', [
                 $request->start_date . ' 00:00:00',
                 $request->end_date . ' 23:59:59'
@@ -46,7 +55,7 @@ class DeliveryController extends Controller
         }
 
         // Search by delivery code or transaction
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('delivery_code', 'like', "%{$search}%")
@@ -60,22 +69,42 @@ class DeliveryController extends Controller
 
         $deliveries = $query->paginate(20)->withQueryString();
 
-        // Get drivers from users table with role 'kurir' or 'driver'
-        $drivers = User::whereIn('role', ['kurir', 'driver'])->get();
+        // Get drivers from users table with role 'logistik' atau 'staff_logistik'
+        $drivers = User::whereIn('role', ['logistik', 'staff_logistik'])->get();
 
         // Get available vehicles
         $vehicles = Vehicle::where('status', 'available')->get();
 
-        // Statistics
-        $stats = [
-            'total' => Delivery::count(),
-            'pending' => Delivery::where('status', 'pending')->count(),
-            'on_delivery' => Delivery::whereIn('status', ['assigned', 'picked_up', 'on_delivery'])->count(),
-            'delivered' => Delivery::where('status', 'delivered')->count(),
-            'failed' => Delivery::where('status', 'failed')->count(),
-        ];
+        // ========== PERBAIKAN STATISTIK ==========
+        // Untuk staff logistik, hitung hanya pengiriman mereka sendiri
+        if ($isStaffLogistik) {
+            $userId = auth()->id();
+            
+            $stats = [
+                'total' => Delivery::where('user_id', $userId)->count(),
+                'pending' => Delivery::where('user_id', $userId)->where('status', 'pending')->count(),
+                // GAGAL: gabungan status 'failed' dan 'cancelled'
+                'failed' => Delivery::where('user_id', $userId)->whereIn('status', ['failed', 'cancelled'])->count(),
+                // ON_DELIVERY: pengiriman dalam proses (assigned, picked_up, on_delivery)
+                'on_delivery' => Delivery::where('user_id', $userId)->whereIn('status', ['assigned', 'picked_up', 'on_delivery'])->count(),
+                // DELIVERED: pengiriman selesai
+                'delivered' => Delivery::where('user_id', $userId)->where('status', 'delivered')->count(),
+            ];
+        } else {
+            // Untuk owner/manager, hitung semua pengiriman
+            $stats = [
+                'total' => Delivery::count(),
+                'pending' => Delivery::where('status', 'pending')->count(),
+                // GAGAL: gabungan status 'failed' dan 'cancelled'
+                'failed' => Delivery::whereIn('status', ['failed', 'cancelled'])->count(),
+                // ON_DELIVERY: pengiriman dalam proses (assigned, picked_up, on_delivery)
+                'on_delivery' => Delivery::whereIn('status', ['assigned', 'picked_up', 'on_delivery'])->count(),
+                // DELIVERED: pengiriman selesai
+                'delivered' => Delivery::where('status', 'delivered')->count(),
+            ];
+        }
 
-        return view('delivery.index', compact('deliveries', 'drivers', 'vehicles', 'stats'));
+        return view('delivery.index', compact('deliveries', 'drivers', 'vehicles', 'stats', 'isStaffLogistik'));
     }
 
     /**
@@ -147,7 +176,8 @@ class DeliveryController extends Controller
 
             Log::info('Delivery created:', [
                 'delivery_code' => $delivery->delivery_code,
-                'transaction_id' => $request->transaction_id
+                'transaction_id' => $request->transaction_id,
+                'invoice_number' => $delivery->transaction->invoice_number ?? 'N/A'
             ]);
 
             return redirect()->route('delivery.show', $delivery)
@@ -170,7 +200,7 @@ class DeliveryController extends Controller
         $delivery->load(['transaction', 'user', 'vehicle']);
 
         // Get available drivers and vehicles for assignment
-        $availableDrivers = User::whereIn('role', ['kurir', 'driver'])
+        $availableDrivers = User::whereIn('role', ['logistik', 'staff_logistik'])
             ->whereDoesntHave('deliveries', function ($q) {
                 $q->whereIn('status', ['assigned', 'picked_up', 'on_delivery']);
             })
@@ -187,7 +217,7 @@ class DeliveryController extends Controller
     public function edit(Delivery $delivery)
     {
         $delivery->load(['transaction', 'user', 'vehicle']);
-        $drivers = User::whereIn('role', ['kurir', 'driver'])->get();
+        $drivers = User::whereIn('role', ['logistik', 'staff_logistik'])->get();
         $vehicles = Vehicle::all();
 
         return view('delivery.edit', compact('delivery', 'drivers', 'vehicles'));
@@ -377,6 +407,7 @@ class DeliveryController extends Controller
                 'user_id' => $request->driver_id,
                 'vehicle_id' => $request->vehicle_id,
                 'status' => 'assigned',
+                'assigned_at' => now(), // Tambahkan ini
             ]);
 
             // Update vehicle status
@@ -548,6 +579,7 @@ class DeliveryController extends Controller
             $delivery->update([
                 'status' => 'cancelled',
                 'notes' => $notes,
+                'cancelled_at' => now(), // Tambahkan ini
             ]);
 
             // Update vehicle status back to available if assigned
@@ -574,22 +606,30 @@ class DeliveryController extends Controller
      */
     public function requestDelivery(Request $request, Transaction $transaction)
     {
+        // Log untuk debugging
+        \Log::info('Delivery request received:', $request->all());
+
+        // Validasi input
         $validator = Validator::make($request->all(), [
             'need_delivery' => 'required|in:yes,no',
-            'recipient_name' => 'required_if:need_delivery,yes|string|max:255',
+            'recipient_name' => 'required_if:need_delivery,yes|string|max:255|nullable',
             'recipient_phone' => 'nullable|string|max:20',
-            'delivery_address' => 'required_if:need_delivery,yes|string|max:500',
-            'vehicle_type' => 'required_if:need_delivery,yes|in:motor,mobil,truck',
+            'delivery_address' => 'required_if:need_delivery,yes|string|max:500|nullable',
+            'vehicle_type' => 'required_if:need_delivery,yes|in:truck,van,motorcycle,pickup|nullable',
             'estimated_weight' => 'nullable|numeric|min:0',
             'estimated_time' => 'nullable|integer|min:1',
             'delivery_fee' => 'nullable|numeric|min:0',
             'delivery_notes' => 'nullable|string',
+            'items_to_deliver' => 'nullable|array',
         ]);
 
         if ($validator->fails()) {
+            \Log::error('Validation failed:', $validator->errors()->toArray());
+            
             return redirect()->back()
                 ->withErrors($validator)
-                ->withInput();
+                ->withInput()
+                ->with('error', 'Validasi gagal. Periksa kembali form Anda.');
         }
 
         if ($request->need_delivery === 'no') {
@@ -618,7 +658,7 @@ class DeliveryController extends Controller
             $delivery = Delivery::create([
                 'delivery_code' => Delivery::generateDeliveryCode(),
                 'transaction_id' => $transaction->id,
-                'origin' => $request->origin ?? 'Toko Roni Juntinyuat',
+                'origin' => 'Toko Roni Juntinyuat',
                 'destination' => $request->delivery_address,
                 'total_items' => $totalItems,
                 'total_weight' => $request->estimated_weight ?? 0,
@@ -632,18 +672,14 @@ class DeliveryController extends Controller
                 'delivery_address' => $request->delivery_address,
             ]);
 
-            // Kirim notifikasi
-            $this->sendDeliveryCreatedNotifications($delivery);
+            // Update transaction need_delivery flag
+            $transaction->update(['need_delivery' => true]);
 
             DB::commit();
 
-            Log::info('Delivery requested:', [
-                'delivery_code' => $delivery->delivery_code,
-                'transaction_id' => $transaction->id
-            ]);
-
             return redirect()->route('delivery.show', $delivery)
                 ->with('success', 'Permintaan pengiriman berhasil dibuat dengan kode: ' . $delivery->delivery_code);
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Delivery request failed: ' . $e->getMessage());
@@ -902,8 +938,75 @@ class DeliveryController extends Controller
         return view('delivery.staff-dashboard', compact('myDeliveries', 'stats'));
     }
 
+   /**
+     * Store new vehicle (kendaraan) dari modal delivery
+     * MENGGABUNGKAN DENGAN FITUR DARI KODE (2)
+     */
+    public function storeKendaraan(Request $request)
+    {
+        // Validasi input - GABUNGAN dari kedua versi
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'license_plate' => 'required|string|max:20|unique:vehicles,license_plate',
+            'type' => 'required|in:truck,van,motorcycle,pickup',
+            'brand' => 'nullable|string|max:100', // Dari kode (2)
+            'year' => 'nullable|integer|min:2000|max:' . date('Y'), // Dari kode (2)
+            'capacity_weight' => 'nullable|numeric|min:0', // Dari kode (1)
+            'capacity_volume' => 'nullable|numeric|min:0', // Dari kode (1)
+            'status' => 'nullable|in:available,in_use,maintenance',
+            'last_maintenance' => 'nullable|date', // Dari kode (1)
+            'notes' => 'nullable|string', // Dari kode (1)
+        ]);
+
+        if ($validator->fails()) {
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput()
+                ->with('error', 'Validasi gagal. Periksa kembali form Anda.');
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Buat kendaraan baru - GABUNGAN field dari kedua versi
+            $vehicle = Vehicle::create([
+                'name' => $request->name,
+                'license_plate' => strtoupper($request->license_plate),
+                'type' => $request->type,
+                'brand' => $request->brand, // Dari kode (2)
+                'year' => $request->year, // Dari kode (2)
+                'capacity_weight' => $request->capacity_weight ?? 0, // Dari kode (1)
+                'capacity_volume' => $request->capacity_volume ?? 0, // Dari kode (1)
+                'status' => $request->status ?? 'available',
+                'last_maintenance' => $request->last_maintenance, // Dari kode (1)
+                'notes' => $request->notes, // Dari kode (1)
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('delivery.index')
+                ->with('success', 'Kendaraan ' . $vehicle->name . ' (' . $vehicle->license_plate . ') berhasil ditambahkan!');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Gagal menambah kendaraan: ' . $e->getMessage());
+
+            return redirect()->back()
+                ->with('error', 'Gagal menambahkan kendaraan: ' . $e->getMessage())
+                ->withInput();
+        }
+    }
+
     /**
-     * Store new courier (kurir).
+     * Store new courier (kurir) - MEMBUAT USER BARU DENGAN ROLE LOGISTIK
+     * MENGGABUNGKAN DENGAN FITUR DARI KODE (2)
      */
     public function storeKurir(Request $request)
     {
@@ -926,6 +1029,7 @@ class DeliveryController extends Controller
         DB::beginTransaction();
 
         try {
+            // Buat user baru dengan role 'logistik'
             $user = User::create([
                 'name' => $request->name,
                 'email' => $request->email,
@@ -935,12 +1039,13 @@ class DeliveryController extends Controller
                 'address' => $request->address,
                 'is_active' => true,
                 'email_verified_at' => now(),
+                'jenis_toko' => 'grosir', // Dari kode (1)
             ]);
 
             DB::commit();
 
             return redirect()->route('delivery.index')
-                ->with('success', 'Kurir ' . $user->name . ' berhasil ditambahkan!');
+                ->with('success', 'Kurir ' . $user->name . ' berhasil ditambahkan sebagai Staff Logistik!');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -948,56 +1053,6 @@ class DeliveryController extends Controller
 
             return redirect()->back()
                 ->with('error', 'Gagal menambahkan kurir: ' . $e->getMessage())
-                ->withInput();
-        }
-    }
-
-    /**
-     * Store new vehicle (kendaraan).
-     */
-    public function storeKendaraan(Request $request)
-    {
-        // Validasi input
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'license_plate' => 'required|string|max:20|unique:vehicles,license_plate',
-            'type' => 'required|in:motor,mobil,truck',
-            'brand' => 'nullable|string|max:100',
-            'year' => 'nullable|integer|min:2000|max:' . date('Y'),
-            'status' => 'nullable|in:available,in_use,maintenance',
-        ]);
-
-        if ($validator->fails()) {
-            return redirect()->back()
-                ->withErrors($validator)
-                ->withInput()
-                ->with('error', 'Validasi gagal. Periksa kembali form Anda.');
-        }
-
-        DB::beginTransaction();
-
-        try {
-            // Buat kendaraan baru
-            $vehicle = Vehicle::create([
-                'name' => $request->name,
-                'license_plate' => strtoupper($request->license_plate),
-                'type' => $request->type,
-                'brand' => $request->brand,
-                'year' => $request->year,
-                'status' => $request->status ?? 'available',
-            ]);
-
-            DB::commit();
-
-            return redirect()->route('delivery.index')
-                ->with('success', 'Kendaraan ' . $vehicle->name . ' (' . $vehicle->license_plate . ') berhasil ditambahkan!');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Gagal menambah kendaraan: ' . $e->getMessage());
-
-            return redirect()->back()
-                ->with('error', 'Gagal menambahkan kendaraan: ' . $e->getMessage())
                 ->withInput();
         }
     }

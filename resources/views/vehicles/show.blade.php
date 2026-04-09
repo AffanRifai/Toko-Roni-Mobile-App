@@ -98,10 +98,12 @@
                                     <div class="flex justify-between py-2 border-b border-gray-100">
                                         <span class="text-gray-600">Jenis Kendaraan</span>
                                         <span class="font-medium text-gray-900">
-                                            @if ($vehicle->type == 'motor')
+                                            @if ($vehicle->type == 'motorcycle')
                                                 🏍️ Motor
-                                            @elseif($vehicle->type == 'mobil')
-                                                🚗 Mobil
+                                            @elseif($vehicle->type == 'pickup')
+                                                🚗 Pickup
+                                            @elseif($vehicle->type == 'van')
+                                                🚗 Van
                                             @else
                                                 🚛 Truck
                                             @endif
@@ -109,13 +111,23 @@
                                     </div>
                                     <div class="flex justify-between py-2 border-b border-gray-100">
                                         <span class="text-gray-600">Kapasitas Berat</span>
-                                        <span
-                                            class="font-medium text-gray-900">{{ $vehicle->capacity_weight_formatted }}</span>
+                                        <span class="font-medium text-gray-900">
+                                            @if($vehicle->capacity_weight)
+                                                {{ number_format($vehicle->capacity_weight, 0) }} kg
+                                            @else
+                                                Tidak ditentukan
+                                            @endif
+                                        </span>
                                     </div>
                                     <div class="flex justify-between py-2 border-b border-gray-100">
                                         <span class="text-gray-600">Kapasitas Volume</span>
-                                        <span
-                                            class="font-medium text-gray-900">{{ $vehicle->capacity_volume_formatted }}</span>
+                                        <span class="font-medium text-gray-900">
+                                            @if($vehicle->capacity_volume)
+                                                {{ number_format($vehicle->capacity_volume, 1) }} m³
+                                            @else
+                                                Tidak ditentukan
+                                            @endif
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -129,35 +141,42 @@
                                 <div class="space-y-3">
                                     <div class="flex justify-between py-2 border-b border-gray-100">
                                         <span class="text-gray-600">Terakhir Servis</span>
-                                        <span
-                                            class="font-medium text-gray-900">{{ $vehicle->last_maintenance_formatted }}</span>
+                                        <span class="font-medium text-gray-900">
+                                            @if($vehicle->last_maintenance)
+                                                {{ \Carbon\Carbon::parse($vehicle->last_maintenance)->format('d/m/Y') }}
+                                            @else
+                                                Belum pernah
+                                            @endif
+                                        </span>
                                     </div>
-                                    @php
-                                        $daysSince = $vehicle->days_since_maintenance;
-                                    @endphp
-                                    @if ($daysSince)
+                                    
+                                    @if($vehicle->days_since_maintenance !== null)
                                         <div class="flex justify-between py-2 border-b border-gray-100">
                                             <span class="text-gray-600">Hari Sejak Servis</span>
-                                            <span
-                                                class="font-medium {{ $daysSince > 30 ? 'text-red-600' : 'text-gray-900' }}">
-                                                {{ $daysSince }} hari
-                                                @if ($daysSince > 30)
-                                                    <i class="fas fa-exclamation-triangle text-red-500 ml-1"
-                                                        title="Perlu maintenance"></i>
+                                            <span class="font-medium {{ $vehicle->days_since_maintenance > 30 ? 'text-red-600' : ($vehicle->days_since_maintenance == 0 ? 'text-green-600' : 'text-gray-900') }}">
+                                                @if($vehicle->days_since_maintenance == 0)
+                                                    Hari ini
+                                                @else
+                                                    {{ $vehicle->days_since_maintenance }} hari
+                                                @endif
+                                                @if ($vehicle->needs_maintenance)
+                                                    <i class="fas fa-exclamation-triangle text-red-500 ml-1" title="Perlu maintenance"></i>
+                                                @endif
+                                            </span>
+                                        </div>
+                                        <div class="flex justify-between py-2">
+                                            <span class="text-gray-600">Kebutuhan Servis</span>
+                                            <span class="font-medium">
+                                                @if ($vehicle->needs_maintenance)
+                                                    <span class="text-red-600 font-semibold">⚠️ Perlu servis segera</span>
+                                                @elseif($vehicle->needs_maintenance_soon)
+                                                    <span class="text-orange-600">Segera servis</span>
+                                                @else
+                                                    <span class="text-green-600">Baik</span>
                                                 @endif
                                             </span>
                                         </div>
                                     @endif
-                                    <div class="flex justify-between py-2">
-                                        <span class="text-gray-600">Kebutuhan Servis</span>
-                                        <span class="font-medium">
-                                            @if ($vehicle->needs_maintenance)
-                                                <span class="text-red-600">Perlu servis</span>
-                                            @else
-                                                <span class="text-green-600">Baik</span>
-                                            @endif
-                                        </span>
-                                    </div>
                                 </div>
                             </div>
                         </div>

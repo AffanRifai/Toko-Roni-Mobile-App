@@ -19,8 +19,8 @@ class ReportController extends Controller
      */
     public function index(Request $request)
     {
-        // Validasi role
-        if (!in_array(auth()->user()->role, ['owner', 'manager', 'admin'])) {
+        // Validasi role - TAMBAHKAN kepala_gudang
+        if (!in_array(auth()->user()->role, ['owner', 'manager', 'kasir', 'kepala_gudang'])) {
             abort(403, 'Anda tidak memiliki akses ke halaman laporan');
         }
 
@@ -133,12 +133,10 @@ class ReportController extends Controller
     /**
      * LAPORAN PENJUALAN DETAIL
      */
-    /**
-     * LAPORAN PENJUALAN DETAIL
-     */
     public function salesReport(Request $request)
     {
-        if (!in_array(auth()->user()->role, ['owner', 'manager', 'admin'])) {
+        // Validasi role - TAMBAHKAN kepala_gudang
+        if (!in_array(auth()->user()->role, ['owner', 'manager', 'kasir', 'kepala_gudang'])) {
             abort(403, 'Anda tidak memiliki akses ke halaman laporan');
         }
 
@@ -215,12 +213,12 @@ class ReportController extends Controller
         $transactions = $transactionsQuery->paginate(30);
         $allTransactions = $summaryQuery->get();
 
-        // Ringkasan - SESUAIKAN DENGAN VIEW
+        // Ringkasan
         $total = $allTransactions->sum('total_amount');
-        $totalCount = $allTransactions->count(); // Nama variabel sesuai view
+        $totalCount = $allTransactions->count();
         $averageTransaction = $totalCount > 0 ? $total / $totalCount : 0;
-        $maxTransaction = $allTransactions->max('total_amount'); // Nama variabel sesuai view
-        $minTransaction = $allTransactions->min('total_amount'); // Nama variabel sesuai view
+        $maxTransaction = $allTransactions->max('total_amount');
+        $minTransaction = $allTransactions->min('total_amount');
 
         // Tentukan periode untuk ditampilkan
         $period = 'Bulan Ini'; // default
@@ -237,16 +235,15 @@ class ReportController extends Controller
         // Kasir List untuk filter
         $cashiers = User::whereIn('role', ['admin', 'kasir', 'owner'])->get();
 
-        // Sesuaikan nama variabel dengan view
         return view('reports.sales', compact(
             'transactions',
             'cashiers',
             'period',
-            'total',          // Nama sesuai view
-            'totalCount',     // Nama sesuai view
+            'total',
+            'totalCount',
             'averageTransaction',
-            'maxTransaction', // Nama sesuai view
-            'minTransaction'  // Nama sesuai view
+            'maxTransaction',
+            'minTransaction'
         ));
     }
 
@@ -255,7 +252,8 @@ class ReportController extends Controller
      */
     public function inventoryReport(Request $request)
     {
-        if (!in_array(auth()->user()->role, ['owner', 'manager', 'admin'])) {
+        // Validasi role - TAMBAHKAN kepala_gudang
+        if (!in_array(auth()->user()->role, ['owner', 'manager', 'kasir', 'kepala_gudang'])) {
             abort(403, 'Anda tidak memiliki akses ke halaman laporan');
         }
 
@@ -379,7 +377,8 @@ class ReportController extends Controller
      */
     public function bestSellingProducts(Request $request)
     {
-        if (!in_array(auth()->user()->role, ['owner', 'manager', 'admin'])) {
+        // Validasi role - TAMBAHKAN kepala_gudang
+        if (!in_array(auth()->user()->role, ['owner', 'manager', 'kepala_gudang'])) {
             abort(403, 'Anda tidak memiliki akses ke halaman laporan');
         }
 
@@ -431,67 +430,126 @@ class ReportController extends Controller
     }
 
     /**
-     * EXPORT PDF
+     * EXPORT INVENTORY PDF (GET)
+     * Method baru untuk export inventory dengan data transaction items
+     * DARI KODE (1)
      */
-    public function exportPDF(Request $request)
+    public function exportInventoryPDF(Request $request)
     {
-        if (!in_array(auth()->user()->role, ['owner', 'manager', 'admin'])) {
+        // Validasi akses
+        if (!in_array(auth()->user()->role, ['owner', 'manager', 'kepala_gudang'])) {
             abort(403, 'Anda tidak memiliki akses ke halaman laporan');
         }
 
-        $type = $request->get('type', 'sales');
+        // Ambil semua produk dengan kategori
+        $products = Product::with('category')->get();
+        
+        // Ambil semua transaction items dengan relasi lengkap
+        $transactionItems = TransactionItem::with([
+            'product', 
+            'transaction.user', 
+            'transaction.member'
+        ])
+        ->orderBy('created_at', 'desc')
+        ->get();
+
+        $pdf = Pdf::loadView('reports.exports.inventory-pdf', compact('products', 'transactionItems'))
+            ->setPaper('A4', 'landscape'); // Landscape karena tabelnya lebar
+
+        $filename = 'laporan-inventory-' . now()->format('YmdHis') . '.pdf';
+
+        return $pdf->download($filename);
+    }
+
+    /**
+     * EXPORT PDF (POST)
+     * DARI KODE (1) - lebih lengkap dengan penanganan error
+     */
+    public function exportPDF(Request $request)
+    {
+        // Validasi akses
+        if (!in_array(auth()->user()->role, ['owner', 'manager', 'kepala_gudang', 'kasir'])) {
+            abort(403, 'Anda tidak memiliki akses ke halaman laporan');
+        }
+
+        // Validasi request
+        $request->validate([
+            'type' => 'required|in:sales,inventory'
+        ]);
+
+        $type = $request->type;
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->format('Y-m-d'));
 
-        $data = [];
+        try {
+            switch ($type) {
+                case 'sales':
+                    $transactions = Transaction::with(['user', 'items.product'])
+                        ->whereBetween('created_at', [
+                            Carbon::parse($startDate)->startOfDay(),
+                            Carbon::parse($endDate)->endOfDay()
+                        ])
+                        ->orderBy('created_at', 'desc')
+                        ->get();
 
-        switch ($type) {
-            case 'sales':
-                $transactions = Transaction::with(['user', 'items.product'])
-                    ->whereBetween('created_at', [
-                        Carbon::parse($startDate)->startOfDay(),
-                        Carbon::parse($endDate)->endOfDay()
+                    $summary = [
+                        'total_transactions' => $transactions->count(),
+                        'total_revenue' => $transactions->sum('total_amount') ?? 0,
+                        'total_items' => TransactionItem::whereIn('transaction_id', $transactions->pluck('id'))->sum('qty') ?? 0,
+                        'average_transaction' => $transactions->count() > 0 ? $transactions->avg('total_amount') : 0,
+                    ];
+
+                    $data = compact('transactions', 'summary', 'startDate', 'endDate');
+                    $view = 'reports.exports.sales-pdf';
+                    break;
+
+                case 'inventory':
+                    $products = Product::with('category')->get();
+                    
+                    // Ambil transaction items untuk ditampilkan di PDF
+                    $transactionItems = TransactionItem::with([
+                        'product', 
+                        'transaction.user', 
+                        'transaction.member'
                     ])
                     ->orderBy('created_at', 'desc')
+                    ->limit(100) // Batasi untuk performa
                     ->get();
+                    
+                    $summary = [
+                        'total_products' => $products->count(),
+                        'total_stock' => $products->sum('stock') ?? 0,
+                        'total_value' => $products->sum(function ($p) {
+                            return ($p->price ?? 0) * ($p->stock ?? 0);
+                        }) ?? 0,
+                        'low_stock' => $products->where('stock', '<=', 10)->where('stock', '>', 0)->count(),
+                        'out_of_stock' => $products->where('stock', '<=', 0)->count(),
+                    ];
 
-                $summary = [
-                    'total_transactions' => $transactions->count(),
-                    'total_revenue' => $transactions->sum('total_amount') ?? 0,
-                    'total_items' => TransactionItem::whereIn('transaction_id', $transactions->pluck('id'))->sum('qty') ?? 0,
-                    'average_transaction' => $transactions->avg('total_amount') ?? 0,
-                ];
+                    $data = compact('products', 'transactionItems', 'summary');
+                    $view = 'reports.exports.inventory-pdf';
+                    break;
 
-                $data = compact('transactions', 'summary', 'startDate', 'endDate');
-                $view = 'reports.exports.sales-pdf';
-                break;
+                default:
+                    return response()->json(['error' => 'Jenis laporan tidak valid'], 400);
+            }
 
-            case 'inventory':
-                $products = Product::with('category')->get();
-                $summary = [
-                    'total_products' => $products->count(),
-                    'total_stock' => $products->sum('stock') ?? 0,
-                    'total_value' => $products->sum(function ($p) {
-                        return ($p->price ?? 0) * ($p->stock ?? 0);
-                    }) ?? 0,
-                    'low_stock' => $products->where('stock', '<=', 10)->where('stock', '>', 0)->count(),
-                    'out_of_stock' => $products->where('stock', '<=', 0)->count(),
-                ];
+            $pdf = Pdf::loadView($view, $data)
+                ->setPaper('A4', $type == 'sales' ? 'landscape' : 'landscape');
 
-                $data = compact('products', 'summary');
-                $view = 'reports.exports.inventory-pdf';
-                break;
+            $filename = "laporan-{$type}-" . Carbon::now()->format('YmdHis') . '.pdf';
 
-            default:
-                abort(400, 'Jenis laporan tidak valid');
+            return $pdf->download($filename);
+            
+        } catch (\Exception $e) {
+            // Log error
+            \Log::error('Export PDF Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'error' => 'Terjadi kesalahan saat generate PDF: ' . $e->getMessage()
+            ], 500);
         }
-
-        $pdf = Pdf::loadView($view, $data)
-            ->setPaper('A4', $type == 'sales' ? 'landscape' : 'portrait');
-
-        $filename = "laporan-{$type}-" . Carbon::now()->format('YmdHis') . '.pdf';
-
-        return $pdf->download($filename);
     }
 
     /**
@@ -499,7 +557,8 @@ class ReportController extends Controller
      */
     public function exportSalesPDF(Request $request)
     {
-        if (!in_array(auth()->user()->role, ['owner', 'manager', 'admin'])) {
+        // Validasi role - TAMBAHKAN kepala_gudang
+        if (!in_array(auth()->user()->role, ['owner', 'manager', 'kepala_gudang', 'kasir'])) {
             abort(403, 'Anda tidak memiliki akses ke halaman laporan');
         }
 
@@ -598,7 +657,8 @@ class ReportController extends Controller
      */
     public function getSalesChartData(Request $request)
     {
-        if (!in_array(auth()->user()->role, ['owner', 'manager', 'admin'])) {
+        // Validasi role - TAMBAHKAN kepala_gudang
+        if (!in_array(auth()->user()->role, ['owner', 'manager', 'kepala_gudang'])) {
             abort(403, 'Anda tidak memiliki akses ke halaman laporan');
         }
 

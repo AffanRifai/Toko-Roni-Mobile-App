@@ -1,3 +1,4 @@
+{{-- resources/views/delivery/show.blade.php --}}
 @extends('layouts.app')
 
 @section('title', 'Detail Pengiriman #' . $delivery->delivery_code)
@@ -5,6 +6,12 @@
 @section('page-subtitle', 'Informasi lengkap pengiriman barang')
 
 @section('content')
+@php
+    $userRole = Auth::user()->role;
+    $canManage = in_array($userRole, ['owner', 'manager', 'admin', 'kepala_gudang']);
+    $isStaffLogistik = in_array($userRole, ['logistik', 'staff_logistik']);
+@endphp
+
 <div class="min-h-screen bg-gradient-to-br from-blue-50/50 to-purple-50/30 p-4 md:p-6">
 
     <!-- Header -->
@@ -40,11 +47,46 @@
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div class="flex items-center gap-3">
                 <span class="text-gray-600">Status:</span>
-                <span class="badge {{ $delivery->getStatusBadgeClass() }} text-sm px-3 py-1.5">
-                    <i class="fas {{ $delivery->getStatusIcon() }} mr-2"></i>
-                    {{ ucfirst(str_replace('_', ' ', $delivery->status)) }}
+                @php
+                    $statusBadge = [
+                        'pending' => 'bg-yellow-100 text-yellow-800',
+                        'processing' => 'bg-blue-100 text-blue-800',
+                        'assigned' => 'bg-purple-100 text-purple-800',
+                        'picked_up' => 'bg-indigo-100 text-indigo-800',
+                        'on_delivery' => 'bg-orange-100 text-orange-800',
+                        'delivered' => 'bg-green-100 text-green-800',
+                        'failed' => 'bg-red-100 text-red-800',
+                        'cancelled' => 'bg-gray-100 text-gray-800'
+                    ];
+                    $statusIcon = [
+                        'pending' => 'fa-clock',
+                        'processing' => 'fa-cog fa-spin',
+                        'assigned' => 'fa-user-check',
+                        'picked_up' => 'fa-box-open',
+                        'on_delivery' => 'fa-truck',
+                        'delivered' => 'fa-check-circle',
+                        'failed' => 'fa-exclamation-circle',
+                        'cancelled' => 'fa-times-circle'
+                    ];
+                    $statusText = [
+                        'pending' => 'Pending',
+                        'processing' => 'Processing',
+                        'assigned' => 'Assigned',
+                        'picked_up' => 'Picked Up',
+                        'on_delivery' => 'On Delivery',
+                        'delivered' => 'Delivered',
+                        'failed' => 'Failed',
+                        'cancelled' => 'Cancelled'
+                    ];
+                @endphp
+                <span class="badge {{ $statusBadge[$delivery->status] ?? 'bg-gray-100 text-gray-800' }} text-sm px-3 py-1.5">
+                    <i class="fas {{ $statusIcon[$delivery->status] ?? 'fa-question-circle' }} mr-2"></i>
+                    {{ $statusText[$delivery->status] ?? ucfirst(str_replace('_', ' ', $delivery->status)) }}
                 </span>
             </div>
+            
+            <!-- Tombol Aksi - Hanya untuk role yang memiliki akses -->
+            @if($canManage)
             <div class="flex gap-3">
                 @if(in_array($delivery->status, ['pending', 'processing']))
                 <button onclick="openAssignModal()"
@@ -52,30 +94,32 @@
                     <i class="fas fa-user-plus mr-2"></i>Assign Kurir
                 </button>
                 @endif
+                
                 @if($delivery->status === 'assigned')
                 <form action="{{ route('delivery.pickup', $delivery) }}" method="POST" class="inline">
                     @csrf
-                    @method('POST')
                     <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
                         <i class="fas fa-box-open mr-2"></i>Paket Diambil
                     </button>
                 </form>
                 @endif
+                
                 @if($delivery->status === 'picked_up')
                 <form action="{{ route('delivery.start', $delivery) }}" method="POST" class="inline">
                     @csrf
-                    @method('POST')
                     <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
                         <i class="fas fa-truck mr-2"></i>Mulai Pengiriman
                     </button>
                 </form>
                 @endif
+                
                 @if(in_array($delivery->status, ['on_delivery', 'picked_up', 'assigned']))
                 <button onclick="openCompleteModal()"
                         class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                     <i class="fas fa-check-circle mr-2"></i>Selesaikan
                 </button>
                 @endif
+                
                 @if(in_array($delivery->status, ['pending', 'processing', 'assigned']))
                 <button onclick="openCancelModal()"
                         class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
@@ -83,6 +127,13 @@
                 </button>
                 @endif
             </div>
+            @elseif($isStaffLogistik)
+            <!-- Untuk staff logistik, tampilkan info bahwa mereka hanya bisa melihat -->
+            <div class="bg-gray-100 rounded-lg px-4 py-2 text-sm text-gray-600">
+                <i class="fas fa-info-circle mr-2 text-blue-500"></i>
+                Mode Lihat Saja - Anda tidak dapat mengubah status pengiriman
+            </div>
+            @endif
         </div>
     </div>
 
@@ -101,19 +152,19 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <p class="text-sm text-gray-600">No. Invoice</p>
-                            <p class="font-semibold text-gray-900">{{ $delivery->transaction->invoice_number }}</p>
+                            <p class="font-semibold text-gray-900">{{ $delivery->transaction->invoice_number ?? '-' }}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Tanggal Transaksi</p>
-                            <p class="font-semibold text-gray-900">{{ $delivery->transaction->created_at->format('d/m/Y H:i') }}</p>
+                            <p class="font-semibold text-gray-900">{{ $delivery->transaction->created_at ? \Carbon\Carbon::parse($delivery->transaction->created_at)->format('d/m/Y H:i') : '-' }}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Customer</p>
-                            <p class="font-semibold text-gray-900">{{ $delivery->transaction->customer_name }}</p>
+                            <p class="font-semibold text-gray-900">{{ $delivery->transaction->customer_name ?? 'Pelanggan Umum' }}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Total Belanja</p>
-                            <p class="font-semibold text-green-600">Rp {{ number_format($delivery->transaction->total_amount, 0, ',', '.') }}</p>
+                            <p class="font-semibold text-green-600">Rp {{ number_format($delivery->transaction->total_amount ?? 0, 0, ',', '.') }}</p>
                         </div>
                     </div>
                 </div>
@@ -138,7 +189,7 @@
                             </div>
                             <div class="ml-4 flex-1">
                                 <h4 class="font-semibold text-gray-900">Pengiriman Dibuat</h4>
-                                <p class="text-sm text-gray-600">{{ $delivery->created_at->format('d/m/Y H:i') }}</p>
+                                <p class="text-sm text-gray-600">{{ $delivery->created_at ? \Carbon\Carbon::parse($delivery->created_at)->format('d/m/Y H:i') : '-' }}</p>
                             </div>
                         </div>
 
@@ -150,21 +201,24 @@
                             <div class="ml-4 flex-1">
                                 <h4 class="font-semibold text-gray-900">Diproses Logistik</h4>
                                 @if(!in_array($delivery->status, ['pending']))
-                                    <p class="text-sm text-gray-600">{{ $delivery->updated_at->format('d/m/Y H:i') }}</p>
+                                    <p class="text-sm text-gray-600">{{ $delivery->updated_at ? \Carbon\Carbon::parse($delivery->updated_at)->format('d/m/Y H:i') : '-' }}</p>
                                 @endif
                             </div>
                         </div>
 
                         <!-- Ditugaskan ke Kurir -->
                         <div class="flex items-start mb-6 relative">
-                            <div class="w-8 h-8 rounded-full {{ $delivery->driver_id ? 'bg-green-500' : 'bg-gray-300' }} flex items-center justify-center text-white z-10">
-                                <i class="fas {{ $delivery->driver_id ? 'fa-check' : 'fa-user' }} text-sm"></i>
+                            <div class="w-8 h-8 rounded-full {{ $delivery->user_id ? 'bg-green-500' : 'bg-gray-300' }} flex items-center justify-center text-white z-10">
+                                <i class="fas {{ $delivery->user_id ? 'fa-check' : 'fa-user' }} text-sm"></i>
                             </div>
                             <div class="ml-4 flex-1">
                                 <h4 class="font-semibold text-gray-900">Ditugaskan ke Kurir</h4>
-                                @if($delivery->driver)
-                                    <p class="text-sm font-medium text-gray-900">{{ $delivery->driver->name }}</p>
-                                    <p class="text-xs text-gray-500">{{ $delivery->driver->phone ?? '-' }}</p>
+                                @if($delivery->user)
+                                    <p class="text-sm font-medium text-gray-900">{{ $delivery->user->name }}</p>
+                                    <p class="text-xs text-gray-500">{{ $delivery->user->phone ?? '-' }}</p>
+                                    @if($delivery->assigned_at)
+                                        <p class="text-xs text-gray-500 mt-1">{{ \Carbon\Carbon::parse($delivery->assigned_at)->format('d/m/Y H:i') }}</p>
+                                    @endif
                                 @endif
                             </div>
                         </div>
@@ -177,7 +231,7 @@
                             <div class="ml-4 flex-1">
                                 <h4 class="font-semibold text-gray-900">Paket Diambil Kurir</h4>
                                 @if($delivery->pickup_time)
-                                    <p class="text-sm text-gray-600">{{ $delivery->pickup_time->format('d/m/Y H:i') }}</p>
+                                    <p class="text-sm text-gray-600">{{ \Carbon\Carbon::parse($delivery->pickup_time)->format('d/m/Y H:i') }}</p>
                                 @endif
                             </div>
                         </div>
@@ -190,7 +244,7 @@
                             <div class="ml-4 flex-1">
                                 <h4 class="font-semibold text-gray-900">Dalam Perjalanan</h4>
                                 @if($delivery->start_delivery_time)
-                                    <p class="text-sm text-gray-600">{{ $delivery->start_delivery_time->format('d/m/Y H:i') }}</p>
+                                    <p class="text-sm text-gray-600">{{ \Carbon\Carbon::parse($delivery->start_delivery_time)->format('d/m/Y H:i') }}</p>
                                 @endif
                             </div>
                         </div>
@@ -203,7 +257,7 @@
                             <div class="ml-4 flex-1">
                                 <h4 class="font-semibold text-gray-900">Terkirim</h4>
                                 @if($delivery->delivered_at)
-                                    <p class="text-sm text-gray-600">{{ $delivery->delivered_at->format('d/m/Y H:i') }}</p>
+                                    <p class="text-sm text-gray-600">{{ \Carbon\Carbon::parse($delivery->delivered_at)->format('d/m/Y H:i') }}</p>
                                 @endif
                             </div>
                         </div>
@@ -226,7 +280,7 @@
                     <div class="space-y-3">
                         <div>
                             <p class="text-sm text-gray-600 mb-1">Asal</p>
-                            <p class="font-medium text-gray-900 bg-gray-50 p-2 rounded">{{ $delivery->origin }}</p>
+                            <p class="font-medium text-gray-900 bg-gray-50 p-2 rounded">{{ $delivery->origin ?? 'Toko Roni Juntinyuat' }}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600 mb-1">Tujuan</p>
@@ -235,7 +289,7 @@
                         @if($delivery->estimated_delivery_time)
                         <div>
                             <p class="text-sm text-gray-600 mb-1">Estimasi Tiba</p>
-                            <p class="font-medium text-gray-900">{{ $delivery->estimated_delivery_time->format('d/m/Y H:i') }}</p>
+                            <p class="font-medium text-gray-900">{{ \Carbon\Carbon::parse($delivery->estimated_delivery_time)->format('d/m/Y H:i') }}</p>
                         </div>
                         @endif
                     </div>
@@ -259,13 +313,13 @@
                         @if($delivery->total_weight > 0)
                         <div class="flex justify-between">
                             <span class="text-gray-600">Total Berat</span>
-                            <span class="font-medium text-gray-900">{{ $delivery->total_weight }} kg</span>
+                            <span class="font-medium text-gray-900">{{ number_format($delivery->total_weight, 2) }} kg</span>
                         </div>
                         @endif
                         @if($delivery->total_volume > 0)
                         <div class="flex justify-between">
                             <span class="text-gray-600">Total Volume</span>
-                            <span class="font-medium text-gray-900">{{ $delivery->total_volume }} m³</span>
+                            <span class="font-medium text-gray-900">{{ number_format($delivery->total_volume, 2) }} m³</span>
                         </div>
                         @endif
                         @if($delivery->delivery_fee > 0)
@@ -302,7 +356,7 @@
         <h3 class="text-xl font-bold text-gray-900 mb-4">Assign Kurir & Kendaraan</h3>
         <form action="{{ route('delivery.assign', $delivery) }}" method="POST">
             @csrf
-            @method('POST')
+            @method('PUT')
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -323,7 +377,7 @@
                     <select name="vehicle_id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                         <option value="">-- Pilih Kendaraan --</option>
                         @foreach($availableVehicles ?? [] as $vehicle)
-                            <option value="{{ $vehicle->id }}">{{ $vehicle->name }} - {{ $vehicle->plate_number }} ({{ $vehicle->type }})</option>
+                            <option value="{{ $vehicle->id }}">{{ $vehicle->name }} - {{ $vehicle->license_plate ?? $vehicle->plate_number }} ({{ $vehicle->type }})</option>
                         @endforeach
                     </select>
                 </div>

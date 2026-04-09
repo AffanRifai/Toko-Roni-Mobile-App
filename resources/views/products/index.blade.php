@@ -24,6 +24,11 @@
                         <p class="text-sm md:text-base text-gray-600 mt-1">Kelola semua produk dalam satu dashboard</p>
                     </div>
                 </div>
+                 @php
+                    $userRole = Auth::user()->role;
+                    $canManage = in_array($userRole, ['owner', 'manager', 'kepala_gudang']);
+                @endphp
+                @if($canManage)
                 <div class="flex flex-wrap gap-3">
                     <!-- Tambah Kategori Button -->
                     <button onclick="showAddCategoryModal()"
@@ -38,8 +43,10 @@
                         <span class="font-medium">Tambah Produk</span>
                     </a>
                 </div>
+                @endif
             </div>
         </div>
+
 
         <!-- Advanced Stats Cards -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
@@ -100,6 +107,11 @@
             @endforeach
         </div>
 
+        @php
+            $userRole = Auth::user()->role;
+            $canManage = in_array($userRole, ['owner', 'manager', 'kepala_gudang', 'checker_barang']);
+        @endphp
+        @if($canManage)
         <!-- Expired & Expiring Products Section -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6">
             <!-- Expiring Soon Products -->
@@ -287,6 +299,7 @@
                 </button>
             </div>
         </div>
+        @endif
 
         <!-- Products Grid -->
         @php
@@ -335,6 +348,11 @@
                                     title="Quick View">
                                     <i class="fas fa-eye"></i>
                                 </button>
+                                 @php
+                                    $userRole = Auth::user()->role;
+                                    $canManage = in_array($userRole, ['owner', 'manager', 'kepala_gudang']);
+                                @endphp
+                                @if($canManage)
                                 <a href="{{ route('products.edit', $product->id) }}"
                                     class="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center text-amber-600 hover:bg-amber-600 hover:text-white transition-all transform hover:scale-110"
                                     title="Edit">
@@ -345,6 +363,7 @@
                                     title="Delete">
                                     <i class="fas fa-trash"></i>
                                 </button>
+                                @endif
                             </div>
                         </div>
 
@@ -449,6 +468,11 @@
             </div>
         @endif
 
+        @php
+            $userRole = Auth::user()->role;
+            $canManage = in_array($userRole, ['owner', 'manager', 'kepala_gudang']);
+        @endphp
+        @if($canManage)
         <!-- Categories Section -->
         <div class="mt-8">
             <div class="glass-effect rounded-3xl p-6">
@@ -524,6 +548,7 @@
                 @endif
             </div>
         </div>
+        @endif
     </div>
 
     <!-- Quick View Modal -->
@@ -540,7 +565,6 @@
             </div>
         </div>
     </div>
-
     <!-- Delete Product Modal -->
     <div id="deleteModal" class="modal hidden">
         <div class="modal-content max-w-md">
@@ -573,44 +597,51 @@
     </div>
 
     <!-- Add/Edit Category Modal -->
-    <div id="categoryModal" class="modal hidden">
-        <div class="modal-content max-w-md">
-            <div class="modal-header">
+    <div id="categoryModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-white rounded-2xl max-w-md w-full mx-4 shadow-2xl">
+            <div class="flex justify-between items-center p-6 border-b">
                 <h3 class="text-xl font-bold text-gray-800" id="categoryModalTitle">Tambah Kategori</h3>
-                <button onclick="closeModal('categoryModal')" class="modal-close">
-                    <i class="fas fa-times"></i>
+                <button onclick="closeModal('categoryModal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
                 </button>
             </div>
-            <div class="modal-body p-6">
+            
+            <div class="p-6">
                 <form id="categoryForm" method="POST" action="{{ route('categories.store') }}" class="space-y-4">
                     @csrf
                     <input type="hidden" id="categoryId" name="category_id" value="">
-
+                    
                     <div>
-                        <label for="categoryName" class="block text-sm font-medium text-gray-700 mb-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
                             Nama Kategori <span class="text-red-500">*</span>
                         </label>
                         <input type="text" id="categoryName" name="name" required
-                            class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                             placeholder="Contoh: Makanan, Minuman, Elektronik">
                     </div>
-
+                    
                     <div>
-                        <label for="categoryDescription" class="block text-sm font-medium text-gray-700 mb-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
                             Deskripsi
                         </label>
                         <textarea id="categoryDescription" name="description" rows="3"
-                            class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                             placeholder="Deskripsi kategori..."></textarea>
                     </div>
-
-                    <div class="flex gap-3 pt-4 border-t border-gray-200">
+                    
+                    <div class="flex items-center">
+                        <input type="checkbox" id="categoryIsActive" name="is_active" value="1" 
+                            class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" checked>
+                        <label for="categoryIsActive" class="ml-2 text-sm text-gray-700">Aktifkan kategori</label>
+                    </div>
+                    
+                    <div class="flex gap-3 pt-4 border-t">
                         <button type="button" onclick="closeModal('categoryModal')"
-                            class="flex-1 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-medium">
+                            class="flex-1 px-4 py-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors font-medium">
                             Batal
                         </button>
                         <button type="submit"
-                            class="flex-1 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-lg transition-all font-medium">
+                            class="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-lg transition-all font-medium">
                             <i class="fas fa-save mr-2"></i>
                             Simpan
                         </button>
@@ -653,51 +684,170 @@
     </div>
 
     <script>
-        // Modal functions
+        // ========== CATEGORY MODAL FUNCTIONS ==========
+
         function showModal(id) {
-            document.getElementById(id).classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
+            const modal = document.getElementById(id);
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                document.body.style.overflow = 'hidden';
+            }
         }
 
         function closeModal(id) {
-            document.getElementById(id).classList.add('hidden');
-            document.body.style.overflow = 'auto';
+            const modal = document.getElementById(id);
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                document.body.style.overflow = 'auto';
+            }
         }
 
-        // Category CRUD
         function showAddCategoryModal() {
-            document.getElementById('categoryModalTitle').textContent = 'Tambah Kategori';
-            document.getElementById('categoryForm').action = "{{ route('categories.store') }}";
-            document.getElementById('categoryId').value = '';
-            document.getElementById('categoryName').value = '';
-            document.getElementById('categoryDescription').value = '';
-
-            // Reset method
+            const modalTitle = document.getElementById('categoryModalTitle');
             const form = document.getElementById('categoryForm');
-            const methodInput = form.querySelector('input[name="_method"]');
-            if (methodInput) methodInput.remove();
+            const categoryIdInput = document.getElementById('categoryId');
+            const categoryNameInput = document.getElementById('categoryName');
+            const categoryDescInput = document.getElementById('categoryDescription');
+            const categoryActiveCheckbox = document.getElementById('categoryIsActive');
+
+            // Reset form
+            modalTitle.textContent = 'Tambah Kategori';
+            categoryIdInput.value = '';
+            categoryNameInput.value = '';
+            categoryDescInput.value = '';
+            categoryActiveCheckbox.checked = true;
+
+            // Reset form action to store route
+            form.action = "{{ route('categories.store') }}";
             form.method = 'POST';
+            
+            // Remove method spoofing if exists
+            const methodInput = form.querySelector('input[name="_method"]');
+            if (methodInput) {
+                methodInput.remove();
+            }
+            
+            // Hapus event listener lama
+            form.onsubmit = null;
+            
+            // Tambahkan event listener baru
+            form.onsubmit = function(e) {
+                e.preventDefault();
+                submitCategoryForm(this);
+            };
 
             showModal('categoryModal');
         }
 
-        function editCategory(categoryId, categoryName) {
-            document.getElementById('categoryModalTitle').textContent = 'Edit Kategori';
-            document.getElementById('categoryForm').action = `/categories/${categoryId}`;
-            document.getElementById('categoryId').value = categoryId;
-            document.getElementById('categoryName').value = categoryName;
-
-            // Change method to PUT
+        function editCategory(categoryId, categoryName, categoryDescription = '', categoryIsActive = true) {
+            const modalTitle = document.getElementById('categoryModalTitle');
             const form = document.getElementById('categoryForm');
-            if (!form.querySelector('input[name="_method"]')) {
-                const methodInput = document.createElement('input');
+            const categoryIdInput = document.getElementById('categoryId');
+            const categoryNameInput = document.getElementById('categoryName');
+            const categoryDescInput = document.getElementById('categoryDescription');
+            const categoryActiveCheckbox = document.getElementById('categoryIsActive');
+
+            modalTitle.textContent = 'Edit Kategori';
+            categoryIdInput.value = categoryId;
+            categoryNameInput.value = categoryName;
+            categoryDescInput.value = categoryDescription || '';
+            categoryActiveCheckbox.checked = categoryIsActive;
+
+            // Change form action to update route
+            form.action = `/categories/${categoryId}`;
+            
+            // Add method spoofing for PUT
+            let methodInput = form.querySelector('input[name="_method"]');
+            if (!methodInput) {
+                methodInput = document.createElement('input');
                 methodInput.type = 'hidden';
                 methodInput.name = '_method';
-                methodInput.value = 'PUT';
                 form.appendChild(methodInput);
             }
+            methodInput.value = 'PUT';
+            
+            // Hapus event listener lama
+            form.onsubmit = null;
+            
+            // Tambahkan event listener baru
+            form.onsubmit = function(e) {
+                e.preventDefault();
+                submitCategoryForm(this);
+            };
 
             showModal('categoryModal');
+        }
+
+        function submitCategoryForm(form) {
+            const formData = new FormData(form);
+            const url = form.action;
+            const method = form.method;
+            
+            console.log('Submitting to:', url);
+            console.log('Method:', method);
+            console.log('Form Data:', Object.fromEntries(formData));
+            
+            // Tampilkan loading
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Menyimpan...';
+            submitBtn.disabled = true;
+            
+            fetch(url, {
+                method: method,
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                }
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                if (!response.ok) {
+                    return response.json().then(err => Promise.reject(err));
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Success:', data);
+                closeModal('categoryModal');
+                
+                if (data.success) {
+                    showToast(data.message || 'Kategori berhasil disimpan', 'success');
+                    // Reload page to show new category
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    showToast(data.message || 'Gagal menyimpan kategori', 'error');
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast(error.message || 'Terjadi kesalahan saat menyimpan kategori', 'error');
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
+        }
+
+        function showToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) return;
+            
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+                <span>${message}</span>
+                <button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+            `;
+            toastContainer.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
         }
 
         function confirmDeleteCategory(categoryId, categoryName) {

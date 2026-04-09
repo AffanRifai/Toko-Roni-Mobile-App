@@ -6,8 +6,8 @@ use App\Models\Receivable;
 use App\Models\ReceivablePayment;
 use App\Models\Member;
 use App\Models\Transaction;
-use App\Models\User; // Tambahkan ini
-use App\Notifications\PaymentReceivedNotification; // Tambahkan ini
+use App\Models\User;
+use App\Notifications\PaymentReceivedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -82,7 +82,7 @@ class ReceivableController extends Controller
     }
 
     /**
-     * Display the specified receivable.
+     * Display the specified receivable with payment history.
      */
     public function show($id)
     {
@@ -98,13 +98,13 @@ class ReceivableController extends Controller
             // Check if member exists
             if (!$receivable->member) {
                 Log::warning('Receivable without member:', ['receivable_id' => $id]);
-
+                
                 // Try to load member separately
                 $member = Member::find($receivable->member_id);
                 if ($member) {
                     $receivable->setRelation('member', $member);
                 } else {
-                    return redirect()->route('receivables.index')
+                    return redirect()->route('members.receivables', $receivable->member_id)
                         ->with('error', 'Data member tidak ditemukan untuk piutang ini');
                 }
             }
@@ -124,7 +124,7 @@ class ReceivableController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error showing receivable: ' . $e->getMessage());
-            return redirect()->route('receivables.index')
+            return redirect()->route('members.receivables', $receivable->member_id ?? 0)
                 ->with('error', 'Data piutang tidak ditemukan');
         }
     }

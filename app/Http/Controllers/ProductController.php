@@ -5,14 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\User;
+use App\Models\CheckerReport;
+use App\Notifications\ProductReportedNotification;
 use App\Notifications\ProductCreatedNotification;
 use App\Notifications\ProductUpdatedNotification;
 use App\Notifications\ProductDeletedNotification;
 use App\Notifications\ProductStockNotification;
+use App\Notifications\ProductRestockNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\schema;
 use Carbon\Carbon;
 
 class ProductController extends Controller
@@ -122,7 +126,7 @@ class ProductController extends Controller
 
         $perPage = $request->per_page ?? 20;
         $products = $query->paginate($perPage);
-
+        
         // Tambahkan status expired untuk setiap produk di pagination
         $products->getCollection()->transform(function ($product) use ($today) {
             if ($product->expiry_date) {
@@ -220,6 +224,7 @@ class ProductController extends Controller
             return redirect()->route('products.index')
                 ->with('success', 'Produk "' . $product->name . '" berhasil ditambahkan!')
                 ->with('new_product_id', $product->id);
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error creating product: ' . $e->getMessage());
@@ -273,7 +278,7 @@ class ProductController extends Controller
                 'price' => $this->parseIndonesianNumber($request->price)
             ]);
         }
-
+        
         if ($request->has('cost_price')) {
             $request->merge([
                 'cost_price' => $this->parseIndonesianNumber($request->cost_price)
@@ -327,10 +332,10 @@ class ProductController extends Controller
             // Catat perubahan untuk notifikasi
             $changes = [];
             $skipFields = ['image', 'updated_at', 'created_at', 'profit_margin', 'total_value', 'total_cost', 'total_profit'];
-
+            
             foreach ($validated as $key => $value) {
                 if (in_array($key, $skipFields)) continue;
-
+                
                 if (isset($oldData[$key]) && $oldData[$key] != $value) {
                     $changes[$key] = [
                         'old' => $oldData[$key],
@@ -372,6 +377,7 @@ class ProductController extends Controller
             return redirect()->route('products.index')
                 ->with('success', 'Produk "' . $product->name . '" berhasil diperbarui!')
                 ->with('updated_product_id', $product->id);
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error updating product: ' . $e->getMessage());
@@ -389,16 +395,16 @@ class ProductController extends Controller
         if (is_null($value) || $value === '') {
             return 0;
         }
-
+        
         // Hapus "Rp" dan spasi
         $value = str_replace(['Rp', 'rp', ' '], '', $value);
-
+        
         // Hapus titik ribuan
         $value = str_replace('.', '', $value);
-
+        
         // Ganti koma desimal dengan titik
         $value = str_replace(',', '.', $value);
-
+        
         return (float) $value;
     }
 
@@ -428,6 +434,7 @@ class ProductController extends Controller
 
             return redirect()->route('products.index')
                 ->with('success', 'Produk "' . $productName . '" berhasil dihapus!');
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error deleting product: ' . $e->getMessage());
@@ -461,77 +468,6 @@ class ProductController extends Controller
             'weight' => $product->weight,
             'dimensions' => $product->dimensions,
         ]);
-    }
-
-    /**
-     * API: Produk dengan stok hampir habis (stok <= min_stock)
-     * GET /api/v1/products/low-stock
-     */
-    public function lowStockProducts()
-    {
-        try {
-            $products = Product::with('category')
-                ->whereRaw('stock <= min_stock')
-                ->orderBy('stock', 'asc')
-                ->limit(20)
-                ->get()
-                ->map(function ($product) {
-                    return [
-                        'id'        => $product->id,
-                        'name'      => $product->name,
-                        'stock'     => $product->stock,
-                        'min_stock' => $product->min_stock ?? 10,
-                        'unit'      => $product->unit,
-                        'category'  => [
-                            'name' => $product->category?->name ?? '-',
-                        ],
-                    ];
-                });
-
-            return response()->json([
-                'status' => true,
-                'data'   => $products,
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
-        }
-    }
-
-
-    /**
-     * API: Search produk
-     * GET /api/v1/products/search?q=keyword
-     */
-    public function search(Request $request)
-    {
-        try {
-            $q = $request->get('q', '');
-
-            $products = Product::with('category')
-                ->where('is_active', true)
-                ->where(function ($query) use ($q) {
-                    $query->where('name', 'LIKE', "%{$q}%")
-                        ->orWhere('code', 'LIKE', "%{$q}%")
-                        ->orWhere('barcode', 'LIKE', "%{$q}%");
-                })
-                ->limit(20)
-                ->get()
-                ->map(function ($p) {
-                    return [
-                        'id'       => $p->id,
-                        'name'     => $p->name,
-                        'code'     => $p->code,
-                        'price'    => $p->price,
-                        'stock'    => $p->stock,
-                        'unit'     => $p->unit,
-                        'category' => ['name' => $p->category?->name ?? '-'],
-                    ];
-                });
-
-            return response()->json(['status' => true, 'data' => $products]);
-        } catch (\Exception $e) {
-            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
-        }
     }
 
     /**
@@ -597,6 +533,7 @@ class ProductController extends Controller
                 'message' => 'Stok berhasil diperbarui!',
                 'new_stock' => $product->stock
             ]);
+
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
@@ -615,7 +552,7 @@ class ProductController extends Controller
         $product->update(['is_active' => !$product->is_active]);
 
         $status = $product->is_active ? 'diaktifkan' : 'dinonaktifkan';
-
+        
         // Kirim notifikasi perubahan status
         if ($oldStatus != $product->is_active) {
             $changes = [
@@ -650,7 +587,7 @@ class ProductController extends Controller
 
         $oldPrice = $product->price;
         $oldStock = $product->stock;
-
+        
         $product->update($request->only(['price', 'stock']));
 
         // Catat perubahan untuk notifikasi
@@ -774,6 +711,172 @@ class ProductController extends Controller
         ]);
     }
 
+    /**
+     * Restock produk (menambah stok)
+     */
+    public function restock(Request $request, Product $product)
+    {
+        $request->validate([
+            'quantity' => 'required|integer|min:1',
+            'note' => 'nullable|string|max:255'
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $oldStock = $product->stock;
+            $quantity = $request->quantity;
+            
+            // Tambah stok
+            $product->increment('stock', $quantity);
+            $product->refresh(); // Refresh untuk mendapatkan stok terbaru
+            $newStock = $product->stock;
+
+            // Record stock history
+            DB::table('stock_histories')->insert([
+                'product_id' => $product->id,
+                'type' => 'add',
+                'quantity' => $quantity,
+                'previous_stock' => $oldStock,
+                'new_stock' => $newStock,
+                'note' => $request->note ?? 'Restock manual',
+                'created_by' => auth()->id(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // Update updated_by
+            $product->update(['updated_by' => auth()->id()]);
+
+            // KIRIM NOTIFIKASI RESTOK
+            $this->sendRestockNotifications($product, $quantity, $oldStock, $newStock);
+
+            DB::commit();
+
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "Stok {$product->name} berhasil ditambah {$quantity} {$product->unit}",
+                    'new_stock' => $newStock
+                ]);
+            }
+
+            return redirect()->back()->with('success', "Stok {$product->name} berhasil ditambah {$quantity} {$product->unit}");
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error restock product: ' . $e->getMessage());
+
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Gagal melakukan restock: ' . $e->getMessage()
+                ], 500);
+            }
+
+            return redirect()->back()->with('error', 'Gagal melakukan restock: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Send notifications when product is restocked
+     */
+    private function sendRestockNotifications($product, $quantity, $oldStock, $newStock)
+    {
+        try {
+            $currentUser = auth()->user();
+            
+            // 1. Kirim ke semua user dengan role owner
+            $owners = User::where('role', 'owner')->get();
+            
+            foreach ($owners as $owner) {
+                if ($owner->id != $currentUser->id) {
+                    $owner->notify(new ProductRestockNotification($product, $currentUser, $quantity, $oldStock, $newStock));
+                    Log::info('Notifikasi restock terkirim ke owner:', [
+                        'owner_id' => $owner->id,
+                        'product_id' => $product->id,
+                        'quantity' => $quantity
+                    ]);
+                }
+            }
+            
+            // 2. Kirim ke semua user dengan role kepala_gudang
+            $kepalaGudang = User::where('role', 'kepala_gudang')->get();
+            
+            foreach ($kepalaGudang as $kg) {
+                if ($kg->id != $currentUser->id) {
+                    $kg->notify(new ProductRestockNotification($product, $currentUser, $quantity, $oldStock, $newStock));
+                    Log::info('Notifikasi restock terkirim ke kepala gudang:', [
+                        'user_id' => $kg->id,
+                        'product_id' => $product->id,
+                        'quantity' => $quantity
+                    ]);
+                }
+            }
+            
+            // 3. Kirim ke semua user dengan role manager (jika ada)
+            $managers = User::where('role', 'manager')->get();
+            
+            foreach ($managers as $manager) {
+                if ($manager->id != $currentUser->id) {
+                    $manager->notify(new ProductRestockNotification($product, $currentUser, $quantity, $oldStock, $newStock));
+                    Log::info('Notifikasi restock terkirim ke manager:', [
+                        'user_id' => $manager->id,
+                        'product_id' => $product->id,
+                        'quantity' => $quantity
+                    ]);
+                }
+            }
+            
+            // 4. Kirim ke user yang melakukan restock (diri sendiri)
+            $currentUser->notify(new ProductRestockNotification($product, $currentUser, $quantity, $oldStock, $newStock));
+            Log::info('Notifikasi restock terkirim ke diri sendiri:', [
+                'user_id' => $currentUser->id,
+                'product_id' => $product->id,
+                'quantity' => $quantity
+            ]);
+            
+            // 5. Jika stok masih rendah setelah restock, kirim notifikasi peringatan
+            if ($newStock <= $product->min_stock) {
+                $this->sendStockNotifications($product, 'low_stock');
+            } elseif ($newStock > $product->min_stock && $oldStock <= $product->min_stock) {
+                // Jika tadinya stok rendah dan sekarang sudah normal
+                $this->sendStockNotifications($product, 'restock_complete');
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Gagal mengirim notifikasi restock: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * API untuk mendapatkan detail produk (untuk modal)
+     */
+    public function getProductDetails($id)
+    {
+        try {
+            $product = Product::with('category')->findOrFail($id);
+            
+            return response()->json([
+                'success' => true,
+                'product' => [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'code' => $product->code,
+                    'stock' => $product->stock,
+                    'min_stock' => $product->min_stock ?? 10,
+                    'unit' => $product->unit,
+                    'category' => $product->category->name ?? '-',
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Produk tidak ditemukan'
+            ], 404);
+        }
+    }
+
     // ==================== PRIVATE METHODS ====================
 
     /**
@@ -802,10 +905,10 @@ class ProductController extends Controller
     {
         try {
             $currentUser = auth()->user();
-
+            
             // Kirim ke semua user dengan role owner
             $owners = User::where('role', 'owner')->get();
-
+            
             foreach ($owners as $owner) {
                 if ($owner->id != $currentUser->id) {
                     $owner->notify(new ProductCreatedNotification($product, $currentUser));
@@ -815,10 +918,10 @@ class ProductController extends Controller
                     ]);
                 }
             }
-
+            
             // Kirim ke user dengan role gudang
             $gudang = User::where('role', 'gudang')->get();
-
+            
             foreach ($gudang as $user) {
                 if ($user->id != $currentUser->id) {
                     $user->notify(new ProductCreatedNotification($product, $currentUser));
@@ -828,13 +931,14 @@ class ProductController extends Controller
                     ]);
                 }
             }
-
+            
             // Kirim ke diri sendiri (pembuat)
             $currentUser->notify(new ProductCreatedNotification($product, $currentUser));
             Log::info('Notifikasi produk terkirim ke diri sendiri:', [
                 'user_id' => $currentUser->id,
                 'product_id' => $product->id
             ]);
+            
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi produk: ' . $e->getMessage());
         }
@@ -863,7 +967,7 @@ class ProductController extends Controller
     {
         try {
             $users = User::whereIn('role', ['owner', 'gudang'])->get();
-
+            
             foreach ($users as $user) {
                 $user->notify(new ProductStockNotification($product, $type));
                 Log::info('Notifikasi stok ' . $type . ' terkirim ke:', [
@@ -871,6 +975,7 @@ class ProductController extends Controller
                     'product_id' => $product->id
                 ]);
             }
+            
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi stok: ' . $e->getMessage());
         }
@@ -883,11 +988,11 @@ class ProductController extends Controller
     {
         try {
             $currentUser = auth()->user();
-
+            
             $owners = User::where('role', 'owner')
                 ->where('id', '!=', $currentUser->id)
                 ->get();
-
+            
             foreach ($owners as $owner) {
                 $owner->notify(new ProductUpdatedNotification($product, $currentUser, $changes));
                 Log::info('Notifikasi update produk terkirim ke owner:', [
@@ -895,11 +1000,11 @@ class ProductController extends Controller
                     'product_id' => $product->id
                 ]);
             }
-
+            
             $gudang = User::where('role', 'gudang')
                 ->where('id', '!=', $currentUser->id)
                 ->get();
-
+            
             foreach ($gudang as $user) {
                 $user->notify(new ProductUpdatedNotification($product, $currentUser, $changes));
                 Log::info('Notifikasi update produk terkirim ke gudang:', [
@@ -907,12 +1012,13 @@ class ProductController extends Controller
                     'product_id' => $product->id
                 ]);
             }
-
+            
             $currentUser->notify(new ProductUpdatedNotification($product, $currentUser, $changes));
             Log::info('Notifikasi update produk terkirim ke diri sendiri:', [
                 'user_id' => $currentUser->id,
                 'product_id' => $product->id
             ]);
+            
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi update produk: ' . $e->getMessage());
         }
@@ -927,7 +1033,7 @@ class ProductController extends Controller
             $owners = User::where('role', 'owner')
                 ->where('id', '!=', $deletedBy->id)
                 ->get();
-
+            
             foreach ($owners as $owner) {
                 $owner->notify(new ProductDeletedNotification($productName, $productCode, $deletedBy));
                 Log::info('Notifikasi hapus produk terkirim ke owner:', [
@@ -935,11 +1041,11 @@ class ProductController extends Controller
                     'product_name' => $productName
                 ]);
             }
-
+            
             $gudang = User::where('role', 'gudang')
                 ->where('id', '!=', $deletedBy->id)
                 ->get();
-
+            
             foreach ($gudang as $user) {
                 $user->notify(new ProductDeletedNotification($productName, $productCode, $deletedBy));
                 Log::info('Notifikasi hapus produk terkirim ke gudang:', [
@@ -947,14 +1053,153 @@ class ProductController extends Controller
                     'product_name' => $productName
                 ]);
             }
-
+            
             $deletedBy->notify(new ProductDeletedNotification($productName, $productCode, $deletedBy));
             Log::info('Notifikasi hapus produk terkirim ke diri sendiri:', [
                 'user_id' => $deletedBy->id,
                 'product_name' => $productName
             ]);
+            
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi hapus produk: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Report product to kepala gudang (for checker)
+     */
+    public function reportProduct(Request $request, Product $product)
+    {
+        $request->validate([
+            'report_type' => 'required|in:low_stock,expiring,expired,damaged,other',
+            'notes' => 'required|string|max:500',
+            'quantity' => 'nullable|integer|min:1',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            // Buat laporan
+            $report = CheckerReport::create([
+                'product_id' => $product->id,
+                'reported_by' => auth()->id(),
+                'report_type' => $request->report_type,
+                'notes' => $request->notes,
+                'quantity' => $request->quantity ?? $product->stock,
+                'status' => 'pending',
+                'reported_at' => now(),
+            ]);
+
+            // Kirim notifikasi ke semua kepala gudang
+            $kepalaGudang = User::where('role', 'kepala_gudang')->get();
+            
+            foreach ($kepalaGudang as $kg) {
+                $kg->notify(new ProductReportedNotification($report, $product, auth()->user()));
+            }
+
+            // Kirim juga ke owner dan manager
+            $owners = User::whereIn('role', ['owner', 'manager'])->get();
+            
+            foreach ($owners as $owner) {
+                $owner->notify(new ProductReportedNotification($report, $product, auth()->user()));
+            }
+
+            DB::commit();
+
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Laporan berhasil dikirim ke Kepala Gudang',
+                    'report' => $report
+                ]);
+            }
+
+            return redirect()->back()->with('success', 'Laporan berhasil dikirim ke Kepala Gudang');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error reporting product: ' . $e->getMessage());
+
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Gagal mengirim laporan: ' . $e->getMessage()
+                ], 500);
+            }
+
+            return redirect()->back()->with('error', 'Gagal mengirim laporan: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * API: Produk dengan stok hampir habis (stok <= min_stock)
+     * GET /api/v1/products/low-stock
+     * DITAMBAHKAN DARI KODE (2)
+     */
+    public function lowStockProducts()
+    {
+        try {
+            $products = Product::with('category')
+                ->whereRaw('stock <= min_stock')
+                ->orderBy('stock', 'asc')
+                ->limit(20)
+                ->get()
+                ->map(function ($product) {
+                    return [
+                        'id'        => $product->id,
+                        'name'      => $product->name,
+                        'stock'     => $product->stock,
+                        'min_stock' => $product->min_stock ?? 10,
+                        'unit'      => $product->unit,
+                        'category'  => [
+                            'name' => $product->category?->name ?? '-',
+                        ],
+                    ];
+                });
+
+            return response()->json([
+                'status' => true,
+                'data'   => $products,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * API: Search produk
+     * GET /api/v1/products/search?q=keyword
+     * DITAMBAHKAN DARI KODE (2)
+     */
+    public function search(Request $request)
+    {
+        try {
+            $q = $request->get('q', '');
+
+            $products = Product::with('category')
+                ->where('is_active', true)
+                ->where(function ($query) use ($q) {
+                    $query->where('name', 'LIKE', "%{$q}%")
+                        ->orWhere('code', 'LIKE', "%{$q}%")
+                        ->orWhere('barcode', 'LIKE', "%{$q}%");
+                })
+                ->limit(20)
+                ->get()
+                ->map(function ($p) {
+                    return [
+                        'id'       => $p->id,
+                        'name'     => $p->name,
+                        'code'     => $p->code,
+                        'price'    => $p->price,
+                        'stock'    => $p->stock,
+                        'unit'     => $p->unit,
+                        'category' => ['name' => $p->category?->name ?? '-'],
+                    ];
+                });
+
+            return response()->json(['status' => true, 'data' => $products]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
         }
     }
 }

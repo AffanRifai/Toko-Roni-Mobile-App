@@ -257,6 +257,20 @@
     background: #e6f0ff;
     border-left: 3px solid #3b82f6;
 }
+.spinner {
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #3b82f6;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
 </style>
 
 <script>
@@ -268,6 +282,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchResults = document.getElementById('searchResults');
     const template = document.getElementById('searchResultTemplate');
 
+    if (!searchInput || !searchResults || !template) {
+        console.error('Elements not found');
+        return;
+    }
+
     // Search functionality
     searchInput.addEventListener('input', function() {
         clearTimeout(searchTimeout);
@@ -278,50 +297,95 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // Tampilkan loading
+        searchResults.innerHTML = `
+            <div class="p-4 text-center text-gray-500">
+                <div class="spinner mx-auto mb-2"></div>
+                <p>Mencari...</p>
+            </div>
+        `;
+        searchResults.classList.remove('hidden');
+
         searchTimeout = setTimeout(() => {
-            fetch(`/api/transactions/search?q=${encodeURIComponent(query)}`)
-                .then(response => response.json())
-                .then(data => {
-                    searchResults.innerHTML = '';
+            // PERBAIKAN: Gunakan route yang sudah kita buat
+            fetch(`/search-transactions?q=${encodeURIComponent(query)}`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Search results:', data);
+                
+                searchResults.innerHTML = '';
 
-                    if (data.length === 0) {
-                        searchResults.innerHTML = `
-                            <div class="p-4 text-center text-gray-500">
-                                <i class="fas fa-search mb-2 text-2xl"></i>
-                                <p>Tidak ada transaksi ditemukan</p>
-                            </div>
-                        `;
-                    } else {
-                        data.forEach(transaction => {
-                            const item = document.importNode(template.content, true);
+                if (!data || data.length === 0) {
+                    searchResults.innerHTML = `
+                        <div class="p-4 text-center text-gray-500">
+                            <i class="fas fa-search mb-2 text-2xl"></i>
+                            <p>Tidak ada transaksi ditemukan</p>
+                        </div>
+                    `;
+                } else {
+                    data.forEach(transaction => {
+                        const item = document.importNode(template.content, true);
 
-                            item.querySelector('.transaction-item').dataset.id = transaction.id;
-                            item.querySelector('.invoice-number').textContent = transaction.invoice_number;
-                            item.querySelector('.customer-name').textContent = transaction.customer_name;
-                            item.querySelector('.transaction-date').textContent = transaction.date;
-                            item.querySelector('.transaction-total').textContent = 'Rp ' + transaction.total_formatted;
+                        // Set data
+                        const itemDiv = item.querySelector('.transaction-item');
+                        if (itemDiv) itemDiv.dataset.id = transaction.id;
 
-                            item.querySelector('.transaction-item').addEventListener('click', function() {
+                        const invoiceNumber = item.querySelector('.invoice-number');
+                        if (invoiceNumber) invoiceNumber.textContent = transaction.invoice_number;
+
+                        const customerName = item.querySelector('.customer-name');
+                        if (customerName) customerName.textContent = transaction.customer_name;
+
+                        const transactionDate = item.querySelector('.transaction-date');
+                        if (transactionDate) transactionDate.textContent = transaction.date;
+
+                        const transactionTotal = item.querySelector('.transaction-total');
+                        if (transactionTotal) transactionTotal.textContent = 'Rp ' + transaction.total_formatted;
+
+                        // Add click event
+                        const clickableItem = item.querySelector('.transaction-item');
+                        if (clickableItem) {
+                            clickableItem.addEventListener('click', function() {
                                 selectTransaction(transaction);
                                 searchResults.classList.add('hidden');
                                 searchInput.value = transaction.invoice_number + ' - ' + transaction.customer_name;
                             });
+                        }
 
-                            searchResults.appendChild(item);
-                        });
-                    }
-
-                    searchResults.classList.remove('hidden');
-                })
-                .catch(error => {
-                    console.error('Search error:', error);
-                });
-        }, 300);
+                        searchResults.appendChild(item);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Search error:', error);
+                searchResults.innerHTML = `
+                    <div class="p-4 text-center text-red-500">
+                        <i class="fas fa-exclamation-circle mb-2 text-2xl"></i>
+                        <p>Gagal memuat data: ${error.message}</p>
+                    </div>
+                `;
+            });
+        }, 500);
     });
 
     // Close search results when clicking outside
     document.addEventListener('click', function(e) {
-        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+        if (searchInput && searchResults && 
+            !searchInput.contains(e.target) && 
+            !searchResults.contains(e.target)) {
             searchResults.classList.add('hidden');
         }
     });
@@ -337,12 +401,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Set default origin
     const originInput = document.getElementById('origin');
-    if (!originInput.value) {
+    if (originInput && !originInput.value) {
         originInput.value = 'Toko Roni Juntinyuat';
     }
 });
 
 function selectTransaction(transaction) {
+    console.log('Selected transaction:', transaction);
+    
     selectedTransaction = transaction;
 
     document.getElementById('transaction_id').value = transaction.id;
@@ -353,15 +419,16 @@ function selectTransaction(transaction) {
 
     document.getElementById('selectedTransactionInfo').classList.remove('hidden');
 
-    // Auto-fill destination if empty (bisa diambil dari alamat customer)
-    const destination = document.getElementById('destination');
-    if (!destination.value && transaction.customer_address) {
-        destination.value = transaction.customer_address;
+    // Auto-fill total items (DARI KODE 2)
+    const totalItems = document.getElementById('total_items');
+    if (totalItems && transaction.total_items) {
+        totalItems.value = transaction.total_items;
     }
 
-    // Auto-fill total items from transaction
-    if (transaction.total_items) {
-        document.getElementById('total_items').value = transaction.total_items;
+    // Auto-fill destination if empty (bisa diambil dari alamat customer) - DARI KODE 2
+    const destination = document.getElementById('destination');
+    if (destination && !destination.value && transaction.customer_address) {
+        destination.value = transaction.customer_address;
     }
 }
 
@@ -369,8 +436,15 @@ function clearSelectedTransaction() {
     selectedTransaction = null;
     document.getElementById('transaction_id').value = '';
     document.getElementById('selectedTransactionInfo').classList.add('hidden');
-    document.getElementById('searchTransaction').value = '';
-    document.getElementById('searchTransaction').focus();
+    
+    const searchInput = document.getElementById('searchTransaction');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+    }
+    
+    // Reset destination jika diperlukan - DARI KODE 2
+    // Biarkan destination tetap jika sudah diisi manual
 }
 </script>
 @endsection

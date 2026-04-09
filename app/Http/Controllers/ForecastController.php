@@ -19,8 +19,14 @@ class ForecastController extends Controller
         $salesForecast = $this->forecastService->getSalesForecast(7);
         $demandForecast = $this->forecastService->getProductDemandForecast(7);
         $monthlyForecast = $this->forecastService->getMonthlySalesForecast(3);
+        $restockPlan = $this->forecastService->getRestockPlan();
 
-        return view('forecast.index', compact('salesForecast', 'demandForecast', 'monthlyForecast'));
+        return view('forecast.index', compact(
+            'salesForecast', 
+            'demandForecast', 
+            'monthlyForecast',
+            'restockPlan'
+        ));
     }
 
     public function getApiData()
@@ -29,6 +35,7 @@ class ForecastController extends Controller
             'sales' => $this->forecastService->getSalesForecast(7),
             'demand' => $this->forecastService->getProductDemandForecast(7),
             'monthly' => $this->forecastService->getMonthlySalesForecast(3),
+            'restock_plan' => $this->forecastService->getRestockPlan(),
         ]);
     }
 }

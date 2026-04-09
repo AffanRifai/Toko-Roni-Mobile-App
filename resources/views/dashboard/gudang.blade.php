@@ -44,113 +44,183 @@
         </div>
     </div>
 
-    <!-- Stats Grid Gudang -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
+    <!-- Stats Grid Gudang - Baris Pertama (4 Card) -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
         <!-- Total Produk -->
-        <div class="stat-card group">
-            <div class="stat-card-glow bg-gradient-to-r from-blue-500 to-cyan-500"></div>
-            <div class="stat-card-content">
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex items-center gap-3">
-                        <div class="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 shadow-lg">
-                            <i class="fas fa-boxes text-lg text-white"></i>
-                        </div>
-                        <div>
-                            <p class="text-xs md:text-sm text-gray-500 font-medium">Total Produk</p>
-                            <h3 class="text-xl md:text-2xl font-bold text-gray-800 mt-1">{{ $totalProducts ?? 0 }}</h3>
-                        </div>
+        <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-5 md:p-6 shadow-sm border border-white/50 hover:shadow-md transition-all">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3 md:gap-4">
+                    <div class="p-3 md:p-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 shadow-lg">
+                        <i class="fas fa-boxes text-lg md:text-xl text-white"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs md:text-sm text-gray-500 font-medium">Total Produk</p>
+                        <h3 class="text-xl md:text-3xl font-bold text-gray-800 mt-1">{{ number_format($totalProducts ?? 0) }}</h3>
                     </div>
                 </div>
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center text-xs">
-                        <span class="text-gray-500">{{ $totalCategories ?? 0 }} kategori</span>
-                        <span class="text-blue-600 font-semibold ml-2">{{ $activeProducts ?? 0 }} aktif</span>
+                <a href="{{ route('products.index') }}" class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-blue-500 hover:text-white transition-all">
+                    <i class="fas fa-arrow-right text-xs"></i>
+                </a>
+            </div>
+            <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                <div class="flex items-center text-xs md:text-sm">
+                    <div class="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-emerald-100 flex items-center justify-center mr-2">
+                        <i class="fas fa-arrow-up text-emerald-600 text-xs"></i>
                     </div>
+                    <span class="text-emerald-600 font-semibold">{{ $totalCategories ?? 0 }} kategori</span>
+                    <span class="text-gray-500 ml-2 hidden sm:inline">{{ $activeProducts ?? 0 }} aktif</span>
                 </div>
+                <div class="text-xs text-gray-400">Products</div>
             </div>
         </div>
 
         <!-- Stok Rendah -->
-        <div class="stat-card group">
-            <div class="stat-card-glow bg-gradient-to-r from-red-500 to-rose-500"></div>
-            <div class="stat-card-content">
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex items-center gap-3">
-                        <div class="p-3 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg">
-                            <i class="fas fa-exclamation-triangle text-lg text-white"></i>
-                        </div>
-                        <div>
-                            <p class="text-xs md:text-sm text-gray-500 font-medium">Stok Rendah</p>
-                            <h3 class="text-xl md:text-2xl font-bold text-gray-800 mt-1">{{ $lowStockProducts ?? 0 }}</h3>
-                        </div>
+        <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-5 md:p-6 shadow-sm border border-white/50 hover:shadow-md transition-all">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3 md:gap-4">
+                    <div class="p-3 md:p-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 shadow-lg">
+                        <i class="fas fa-exclamation-triangle text-lg md:text-xl text-white"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs md:text-sm text-gray-500 font-medium">Stok Rendah</p>
+                        <h3 class="text-xl md:text-3xl font-bold text-gray-800 mt-1">{{ number_format($lowStockProducts ?? 0) }}</h3>
                     </div>
                 </div>
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center text-xs">
-                        <div class="w-6 h-6 rounded-lg bg-red-100 flex items-center justify-center mr-2">
-                            <i class="fas fa-arrow-down text-red-600 text-xs"></i>
-                        </div>
-                        <span class="text-red-600 font-semibold">Perlu Restock</span>
+                <a href="{{ route('products.index') }}?filter=low_stock" class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-red-500 hover:text-white transition-all">
+                    <i class="fas fa-arrow-right text-xs"></i>
+                </a>
+            </div>
+            <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                <div class="flex items-center text-xs md:text-sm">
+                    <div class="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-red-100 flex items-center justify-center mr-2">
+                        <i class="fas fa-exclamation text-red-600 text-xs"></i>
                     </div>
+                    <span class="text-red-600 font-semibold">Perlu Restock</span>
+                    <span class="text-gray-500 ml-2 hidden sm:inline">segera</span>
                 </div>
+                <div class="text-xs text-gray-400">Alert</div>
             </div>
         </div>
 
         <!-- Nilai Inventori -->
-        <div class="stat-card group">
-            <div class="stat-card-glow bg-gradient-to-r from-emerald-500 to-green-500"></div>
-            <div class="stat-card-content">
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex items-center gap-3">
-                        <div class="p-3 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg">
-                            <i class="fas fa-coins text-lg text-white"></i>
-                        </div>
-                        <div>
-                            <p class="text-xs md:text-sm text-gray-500 font-medium">Nilai Inventori</p>
-                            <h3 class="text-xl md:text-2xl font-bold text-gray-800 mt-1">Rp {{ number_format($inventoryValue ?? 0, 0, ',', '.') }}</h3>
-                        </div>
+        <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-5 md:p-2 shadow-sm border border-white/50 hover:shadow-md transition-all">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3 md:gap-4">
+                    <div class="p-3 md:p-4 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg">
+                        <i class="fas fa-coins text-lg md:text-xl text-white"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs md:text-sm text-gray-500 font-medium">Nilai Inventori</p>
+                        <h3 class="text-xl md:text-3xl font-bold text-gray-800 mt-1">Rp {{ number_format($inventoryValue ?? 0, 0, ',', '.') }}</h3>
                     </div>
                 </div>
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center text-xs">
-                        <div class="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center mr-2">
-                            <i class="fas fa-arrow-up text-emerald-600 text-xs"></i>
-                        </div>
-                        <span class="text-emerald-600 font-semibold">+5%</span>
-                        <span class="text-gray-500 ml-2">dari bulan lalu</span>
+                
+                <!-- FORM UNTUK EXPORT PDF INVENTORY -->
+                <form action="{{ route('reports.export.pdf') }}" method="POST" target="_blank">
+                    @csrf
+                    <input type="hidden" name="type" value="inventory">
+                    <button type="submit" class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-emerald-500 hover:text-white transition-all">
+                        <i class="fas fa-arrow-right text-xs"></i>
+                    </button>
+                </form>
+            </div>
+            <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                <div class="flex items-center text-xs md:text-sm">
+                    <div class="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-emerald-100 flex items-center justify-center mr-2">
+                        <i class="fas fa-arrow-up text-emerald-600 text-xs"></i>
+                    </div>
+                    <span class="text-emerald-600 font-semibold">+5%</span>
+                    <span class="text-gray-500 ml-2 hidden sm:inline">dari bulan lalu</span>
+                </div>
+                <div class="text-xs text-gray-400">Value</div>
+            </div>
+        </div>
+    <!-- Stats Grid Gudang - Baris Kedua (3 Card All Time) -->
+        <!-- Total Semua Produk Terjual (All Time) -->
+        <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-5 md:p-6 shadow-sm border border-white/50 hover:shadow-md transition-all">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3 md:gap-4">
+                    <div class="p-3 md:p-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 shadow-lg">
+                        <i class="fas fa-chart-bar text-lg md:text-xl text-white"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs md:text-sm text-gray-500 font-medium">Total Terjual</p>
+                        <h3 class="text-xl md:text-3xl font-bold text-gray-800 mt-1">{{ number_format($totalItemsSoldAllTime ?? 0) }} unit</h3>
                     </div>
                 </div>
+                <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400">
+                    <i class="fas fa-infinity text-xs"></i>
+                </div>
+            </div>
+            <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                <div class="flex items-center text-xs md:text-sm">
+                    <div class="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-indigo-100 flex items-center justify-center mr-2">
+                        <i class="fas fa-calendar-alt text-indigo-600 text-xs"></i>
+                    </div>
+                    <span class="text-indigo-600 font-semibold">Sepanjang waktu</span>
+                </div>
+                <div class="text-xs text-gray-400">All Time</div>
             </div>
         </div>
 
-        <!-- Produk Terjual Hari Ini -->
-        <div class="stat-card group">
-            <div class="stat-card-glow bg-gradient-to-r from-purple-500 to-pink-500"></div>
-            <div class="stat-card-content">
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex items-center gap-3">
-                        <div class="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg">
-                            <i class="fas fa-chart-line text-lg text-white"></i>
-                        </div>
-                        <div>
-                            <p class="text-xs md:text-sm text-gray-500 font-medium">Produk Terjual</p>
-                            <h3 class="text-xl md:text-2xl font-bold text-gray-800 mt-1">{{ $todayItemsSold ?? 0 }}</h3>
-                        </div>
+        <!-- Total Pendapatan All Time -->
+        <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-5 md:p-6 shadow-sm border border-white/50 hover:shadow-md transition-all">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3 md:gap-4">
+                    <div class="p-3 md:p-4 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg">
+                        <i class="fas fa-chart-pie text-lg md:text-xl text-white"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs md:text-sm text-gray-500 font-medium">Total Pendapatan</p>
+                        <h3 class="text-xl md:text-3xl font-bold text-gray-800 mt-1">Rp {{ number_format($totalRevenueAllTime ?? 0, 0, ',', '.') }}</h3>
                     </div>
                 </div>
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center text-xs">
-                        <span class="text-gray-500">Total: Rp {{ number_format($todayRevenue ?? 0, 0, ',', '.') }}</span>
-                        <span class="text-purple-600 font-semibold ml-2">{{ $topSellingProduct ?? '-' }}</span>
+                <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400">
+                    <i class="fas fa-infinity text-xs"></i>
+                </div>
+            </div>
+            <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                <div class="flex items-center text-xs md:text-sm">
+                    <div class="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-green-100 flex items-center justify-center mr-2">
+                        <i class="fas fa-chart-line text-green-600 text-xs"></i>
+                    </div>
+                    <span class="text-green-600 font-semibold">Dari semua transaksi</span>
+                </div>
+                <div class="text-xs text-gray-400">Revenue</div>
+            </div>
+        </div>
+
+        <!-- Rata-rata Nilai Item -->
+        <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-5 md:p-6 shadow-sm border border-white/50 hover:shadow-md transition-all">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3 md:gap-4">
+                    <div class="p-3 md:p-4 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg">
+                        <i class="fas fa-calculator text-lg md:text-xl text-white"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs md:text-sm text-gray-500 font-medium">Rata-rata per Item</p>
+                        <h3 class="text-xl md:text-3xl font-bold text-gray-800 mt-1">Rp {{ number_format($avgItemValue ?? 0, 0, ',', '.') }}</h3>
                     </div>
                 </div>
+                <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400">
+                    <i class="fas fa-chart-simple text-xs"></i>
+                </div>
+            </div>
+            <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+                <div class="flex items-center text-xs md:text-sm">
+                    <div class="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-amber-100 flex items-center justify-center mr-2">
+                        <i class="fas fa-tag text-amber-600 text-xs"></i>
+                    </div>
+                    <span class="text-amber-600 font-semibold">Nilai rata-rata</span>
+                </div>
+                <div class="text-xs text-gray-400">Average</div>
             </div>
         </div>
     </div>
 
     <!-- Main Content Area -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-        <!-- Produk Stok Rendah -->
+       <!-- Produk Stok Rendah -->
         <div class="lg:col-span-2">
             <div class="glass-effect rounded-3xl overflow-hidden shadow-elegant h-full">
                 <div class="p-4 md:p-6 border-b border-gray-100/50">
@@ -160,7 +230,7 @@
                             <p class="text-xs md:text-sm text-gray-600 mt-1">Perlu restock segera</p>
                         </div>
                         <a href="{{ route('products.index') }}?filter=low_stock"
-                           class="text-red-600 hover:text-red-700 font-medium text-sm flex items-center gap-1">
+                        class="text-red-600 hover:text-red-700 font-medium text-sm flex items-center gap-1">
                             Lihat Semua <i class="fas fa-arrow-right text-xs"></i>
                         </a>
                     </div>
@@ -180,7 +250,7 @@
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <h4 class="font-semibold text-gray-900 truncate">{{ $product->name }}</h4>
-                                    <p class="text-xs text-gray-500 mt-1">{{ $product->category->name ?? '-' }} • SKU: {{ $product->sku ?? '-' }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">{{ $product->category->name ?? '-' }} • SKU: {{ $product->code ?? '-' }}</p>
                                 </div>
                             </div>
                             <div class="text-right">
@@ -192,11 +262,18 @@
                         </div>
                         <div class="mt-3 flex items-center gap-2">
                             <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                <div class="h-full bg-red-500 rounded-full"
-                                     style="width: {{ min(100, ($product->stock / ($product->min_stock ?? 10)) * 100) }}%"></div>
+                                @php
+                                    $minStock = $product->min_stock ?? 10;
+                                    $percentage = $minStock > 0 ? min(100, ($product->stock / $minStock) * 100) : 0;
+                                @endphp
+                                <div class="h-full bg-red-500 rounded-full" style="width: {{ $percentage }}%"></div>
                             </div>
-                            <button class="px-3 py-1 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition-colors">
-                                Restock
+                            
+                            <!-- Tombol Restock dengan modal -->
+                            <button type="button" 
+                                    onclick="openRestockModal({{ $product->id }}, '{{ $product->name }}', {{ $product->stock }}, {{ $product->min_stock ?? 10 }})"
+                                    class="px-3 py-1 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition-colors">
+                                 Restock
                             </button>
                         </div>
                     </div>
@@ -239,12 +316,12 @@
                         </div>
                         <p class="text-sm font-medium text-gray-900">Stok Rendah</p>
                     </a>
-                    <a href="#"
-                       class="group p-4 rounded-xl bg-purple-50 hover:bg-purple-100 transition-colors text-center">
+                    <a href="{{ route('reports.index') }}" 
+                    class="group p-4 rounded-xl bg-purple-50 hover:bg-purple-100 transition-colors text-center">
                         <div class="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
                             <i class="fas fa-file-export text-white"></i>
                         </div>
-                        <p class="text-sm font-medium text-gray-900">Export Laporan</p>
+                        <p class="text-sm font-medium text-gray-900">Ekstrak Laporan</p>
                     </a>
                 </div>
             </div>
@@ -261,7 +338,23 @@
                             </div>
                             <div>
                                 <p class="text-xs font-medium text-gray-900">{{ $update->product_name }}</p>
-                                <p class="text-xs text-gray-500">{{ $update->created_at->format('H:i') }}</p>
+                                <p class="text-xs text-gray-500">
+                                    @php
+                                        $createdAt = $update->created_at;
+                                        if (is_string($createdAt)) {
+                                            try {
+                                                $time = \Carbon\Carbon::parse($createdAt)->format('H:i');
+                                            } catch (\Exception $e) {
+                                                $time = '-';
+                                            }
+                                        } elseif ($createdAt instanceof \Carbon\Carbon) {
+                                            $time = $createdAt->format('H:i');
+                                        } else {
+                                            $time = '-';
+                                        }
+                                    @endphp
+                                    {{ $time }}
+                                </p>
                             </div>
                         </div>
                         <div class="text-right">
@@ -317,6 +410,117 @@
     </div>
 </div>
 
+<!-- Modal Restock -->
+<div id="restockModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-[9999] backdrop-blur-sm">
+    <div class="bg-white rounded-2xl max-w-md w-full mx-4 shadow-2xl">
+        <div class="flex justify-between items-center p-6 border-b">
+            <h3 class="text-xl font-bold text-gray-900 flex items-center">
+                <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                    <i class="fas fa-boxes text-blue-600"></i>
+                </div>
+                Restock Produk
+            </h3>
+            <button onclick="closeRestockModal()" class="text-gray-400 hover:text-gray-600 transition">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <div class="p-6">
+            <div id="productInfo" class="bg-blue-50 p-4 rounded-xl mb-6">
+                <div class="flex items-center text-blue-800 mb-2">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    <span class="font-medium">Informasi Produk</span>
+                </div>
+                <div id="productInfoContent" class="space-y-1 text-blue-700 text-sm">
+                    <div class="flex justify-between">
+                        <span class="font-medium">Nama:</span>
+                        <span id="productName"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="font-medium">Stok Saat Ini:</span>
+                        <span id="currentStock" class="font-bold"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="font-medium">Stok Minimum:</span>
+                        <span id="minStock"></span>
+                    </div>
+                </div>
+            </div>
+
+            <form id="restockForm" method="POST">
+                @csrf
+                <input type="hidden" id="productId" name="product_id">
+
+                <div class="mb-5">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-cubes mr-1 text-blue-600"></i>
+                        Jumlah Restock <span class="text-red-500">*</span>
+                    </label>
+                    <input type="number" name="quantity" id="quantity" 
+                           min="1" value="10" required
+                           class="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                           placeholder="Masukkan jumlah">
+                </div>
+
+                <div class="mb-5">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-sticky-note mr-1 text-gray-600"></i>
+                        Catatan (Opsional)
+                    </label>
+                    <textarea name="note" id="note" rows="2"
+                              class="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                              placeholder="Catatan restock..."></textarea>
+                </div>
+
+                <div class="bg-yellow-50 p-3 rounded-xl mb-5">
+                    <div class="flex items-start gap-2">
+                        <i class="fas fa-lightbulb text-yellow-600 mt-1"></i>
+                        <p class="text-xs text-yellow-700">
+                            Stok akan bertambah sesuai jumlah yang dimasukkan. Pastikan jumlah sesuai dengan barang yang diterima.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button type="submit"
+                        class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all font-medium shadow-lg">
+                        <i class="fas fa-check mr-2"></i>
+                        Proses Restock
+                    </button>
+                    <button type="button" onclick="closeRestockModal()"
+                        class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl hover:bg-gray-300 transition-all font-medium">
+                        Batal
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Spinner -->
+<div id="loadingSpinner" class="fixed inset-0 bg-black/30 hidden items-center justify-center z-[10000] backdrop-blur-sm">
+    <div class="bg-white p-6 rounded-2xl shadow-2xl flex items-center gap-4">
+        <div class="spinner"></div>
+        <span class="text-gray-700 font-medium">Memproses...</span>
+    </div>
+</div>
+
+<!-- Success Toast -->
+<div id="successToast" class="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-[10001] hidden">
+    <div class="flex items-center gap-3">
+        <i class="fas fa-check-circle"></i>
+        <span id="toastMessage"></span>
+    </div>
+</div>
+
+<!-- Error Toast -->
+<div id="errorToast" class="fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-[10001] hidden">
+    <div class="flex items-center gap-3">
+        <i class="fas fa-exclamation-circle"></i>
+        <span id="errorToastMessage"></span>
+    </div>
+</div>
+
 <script>
     // Stock alert functionality
     document.addEventListener('DOMContentLoaded', function() {
@@ -364,22 +568,114 @@
             }, 10000);
         }
     }
+
+    // Fungsi untuk membuka modal restock
+    function openRestockModal(productId, productName, currentStock, minStock) {
+        document.getElementById('productId').value = productId;
+        document.getElementById('productName').textContent = productName;
+        document.getElementById('currentStock').textContent = currentStock + ' unit';
+        document.getElementById('minStock').textContent = minStock + ' unit';
+        document.getElementById('quantity').value = minStock; // Default = min stock
+        document.getElementById('note').value = '';
+        
+        // Set form action
+        document.getElementById('restockForm').action = '/products/' + productId + '/restock';
+        
+        document.getElementById('restockModal').classList.remove('hidden');
+        document.getElementById('restockModal').classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    // Fungsi untuk menutup modal restock
+    function closeRestockModal() {
+        document.getElementById('restockModal').classList.add('hidden');
+        document.getElementById('restockModal').classList.remove('flex');
+        document.body.style.overflow = 'auto';
+    }
+
+    // Fungsi untuk menampilkan loading
+    function showLoading() {
+        document.getElementById('loadingSpinner').classList.remove('hidden');
+        document.getElementById('loadingSpinner').classList.add('flex');
+    }
+
+    // Fungsi untuk menyembunyikan loading
+    function hideLoading() {
+        document.getElementById('loadingSpinner').classList.add('hidden');
+        document.getElementById('loadingSpinner').classList.remove('flex');
+    }
+
+    // Fungsi untuk menampilkan toast sukses
+    function showSuccess(message) {
+        document.getElementById('toastMessage').textContent = message;
+        document.getElementById('successToast').classList.remove('hidden');
+        
+        setTimeout(() => {
+            document.getElementById('successToast').classList.add('hidden');
+        }, 3000);
+    }
+
+    // Fungsi untuk menampilkan toast error
+    function showError(message) {
+        document.getElementById('errorToastMessage').textContent = message;
+        document.getElementById('errorToast').classList.remove('hidden');
+        
+        setTimeout(() => {
+            document.getElementById('errorToast').classList.add('hidden');
+        }, 3000);
+    }
+
+    // Handle form submission dengan AJAX
+    document.addEventListener('DOMContentLoaded', function() {
+        const restockForm = document.getElementById('restockForm');
+        
+        if (restockForm) {
+            restockForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                const action = this.action;
+                const productId = document.getElementById('productId').value;
+                const productName = document.getElementById('productName').textContent;
+                
+                showLoading();
+                
+                fetch(action, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    closeRestockModal();
+                    
+                    if (data.success) {
+                        showSuccess(data.message);
+                        
+                        // Refresh halaman setelah 2 detik untuk melihat perubahan
+                        setTimeout(() => {
+                            location.reload();
+                        }, 2000);
+                    } else {
+                        showError(data.message || 'Gagal melakukan restock');
+                    }
+                })
+                .catch(error => {
+                    hideLoading();
+                    closeRestockModal();
+                    showError('Terjadi kesalahan: ' + error.message);
+                    console.error('Error:', error);
+                });
+            });
+        }
+    });
 </script>
 
 <style>
-    .stat-card {
-        @apply relative bg-white/80 backdrop-blur-sm rounded-2xl p-4 shadow-soft border border-white/50;
-        transition: all 0.3s ease;
-    }
-
-    .stat-card:hover {
-        @apply shadow-lg -translate-y-1 border-amber-200/50;
-    }
-
-    .stat-card-glow {
-        @apply absolute -inset-1 rounded-2xl blur-xl opacity-0 transition-opacity duration-300;
-    }
-
     .glass-effect {
         background: rgba(255, 255, 255, 0.7);
         backdrop-filter: blur(10px);
@@ -390,6 +686,20 @@
         background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+    }
+
+    .spinner {
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #3b82f6;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
     }
 </style>
 @endsection

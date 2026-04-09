@@ -87,71 +87,59 @@
         </div>
     </div>
 
-    <!-- Filter dan Search -->
+    <!-- Filter dan Search - HANYA Filter Metode Pembayaran -->
     <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+        <form method="GET" action="{{ route('transactions.index') }}" id="filterForm">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Search Input -->
                 <div class="relative">
                     <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
                     <input type="text"
-                           id="searchInput"
+                           name="search"
+                           value="{{ request('search') }}"
                            placeholder="Cari invoice, customer, atau kasir..."
-                           class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                           onkeyup="filterTable()">
-                    <button onclick="clearSearch()"
-                            class="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors">
-                        <i class="fas fa-times"></i>
-                    </button>
+                           class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                           onchange="this.form.submit()">
+                </div>
+
+                <!-- ========== HANYA PERTAHANKAN: Payment Method Filter ========== -->
+                <div>
+                    <select name="payment_method" onchange="this.form.submit()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="all" {{ request('payment_method') == 'all' || !request('payment_method') ? 'selected' : '' }}>Semua Pembayaran</option>
+                        <option value="cash" {{ request('payment_method') == 'cash' ? 'selected' : '' }}>💵 Cash (Tunai)</option>
+                        <option value="debit_card" {{ request('payment_method') == 'debit_card' ? 'selected' : '' }}>💳 Debit Card</option>
+                        <option value="credit_card" {{ request('payment_method') == 'credit_card' ? 'selected' : '' }}>🏦 Credit Card (Hutang)</option>
+                        <option value="e_wallet" {{ request('payment_method') == 'e_wallet' ? 'selected' : '' }}>📱 E-Wallet</option>
+                    </select>
+                </div>
+
+                <!-- Tombol Reset Filter -->
+                <div>
+                    @if(request('search') || request('payment_method') || request('start_date') || request('end_date'))
+                        <a href="{{ route('transactions.index') }}" class="inline-flex items-center justify-center w-full px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">
+                            <i class="fas fa-times-circle mr-2"></i>
+                            Reset Filter
+                        </a>
+                    @endif
                 </div>
             </div>
-            <div>
-                <div class="flex gap-2">
-                    <div class="relative">
-                        <button class="px-4 py-2 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 flex items-center gap-2 transition-colors">
-                            <i class="fas fa-filter"></i>
-                            <span>Filter</span>
-                            <i class="fas fa-chevron-down text-xs"></i>
-                        </button>
-                        <div class="absolute hidden bg-white shadow-lg rounded-lg mt-1 w-48 z-10">
-                            <a href="{{ request()->fullUrlWithQuery(['filter' => 'today']) }}"
-                               class="block px-4 py-2 hover:bg-gray-100">Hari Ini</a>
-                            <a href="{{ request()->fullUrlWithQuery(['filter' => 'week']) }}"
-                               class="block px-4 py-2 hover:bg-gray-100">Minggu Ini</a>
-                            <a href="{{ request()->fullUrlWithQuery(['filter' => 'month']) }}"
-                               class="block px-4 py-2 hover:bg-gray-100">Bulan Ini</a>
-                            <div class="border-t my-1"></div>
-                            <a href="{{ request()->fullUrlWithQuery(['filter' => 'cash']) }}"
-                               class="block px-4 py-2 hover:bg-gray-100">Cash</a>
-                            <a href="{{ request()->fullUrlWithQuery(['filter' => 'credit_card']) }}"
-                               class="block px-4 py-2 hover:bg-gray-100">Credit Card</a>
-                            <a href="{{ request()->fullUrlWithQuery(['filter' => 'e_wallet']) }}"
-                               class="block px-4 py-2 hover:bg-gray-100">E-Wallet</a>
-                        </div>
-                    </div>
-                    <div class="relative">
-                        <button class="px-4 py-2 border border-green-200 text-green-600 rounded-lg hover:bg-green-50 flex items-center gap-2 transition-colors">
-                            <i class="fas fa-download"></i>
-                            <span>Export</span>
-                            <i class="fas fa-chevron-down text-xs"></i>
-                        </button>
-                        <div class="absolute hidden bg-white shadow-lg rounded-lg mt-1 w-48 z-10">
-                            <a href="#" class="block px-4 py-2 hover:bg-gray-100 flex items-center gap-2">
-                                <i class="fas fa-file-excel text-green-600"></i>
-                                Excel
-                            </a>
-                            <a href="#" class="block px-4 py-2 hover:bg-gray-100 flex items-center gap-2">
-                                <i class="fas fa-file-pdf text-red-600"></i>
-                                PDF
-                            </a>
-                            <a href="#" class="block px-4 py-2 hover:bg-gray-100 flex items-center gap-2">
-                                <i class="fas fa-print text-gray-600"></i>
-                                Print
-                            </a>
-                        </div>
-                    </div>
+
+            <!-- Date Range Filter (Opsional, bisa dipertahankan untuk range tanggal) -->
+            <div class="flex flex-wrap items-center gap-4 mt-4 pt-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-gray-600">Dari:</span>
+                    <input type="date" name="start_date" value="{{ request('start_date') }}"
+                           class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                           onchange="this.form.submit()">
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-gray-600">Sampai:</span>
+                    <input type="date" name="end_date" value="{{ request('end_date') }}"
+                           class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                           onchange="this.form.submit()">
                 </div>
             </div>
-        </div>
+        </form>
     </div>
 
     <!-- Main Table -->
@@ -175,19 +163,15 @@
                         <th class="px-6 py-3">Invoice</th>
                         <th class="px-6 py-3">Tanggal</th>
                         <th class="px-6 py-3">Customer</th>
-                        <th class="px-6 py-3 text-center">Status</th>
                         <th class="px-6 py-3 text-center">Pembayaran</th>
                         <th class="px-6 py-3">Kasir</th>
                         <th class="px-6 py-3 text-right">Total</th>
                         <th class="px-6 py-3 text-center">Actions</th>
-                    </tr>
+                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
                     @forelse($transactions as $transaction)
-                    <tr class="transaction-row hover:bg-blue-50 transition-colors"
-                        data-invoice="{{ $transaction->invoice_number }}"
-                        data-customer="{{ strtolower($transaction->customer_name) }}"
-                        data-cashier="{{ strtolower($transaction->user->name) }}">
+                    <tr class="transaction-row hover:bg-blue-50 transition-colors">
                         <!-- Invoice -->
                         <td class="px-6 py-4">
                             <div class="flex items-center gap-3">
@@ -223,26 +207,6 @@
                             @endif
                         </td>
 
-                        <!-- Status -->
-                        <td class="px-6 py-4 text-center">
-                            @php
-                                $statusColors = [
-                                    'completed' => 'bg-green-100 text-green-800 border-green-200',
-                                    'pending' => 'bg-yellow-100 text-yellow-800 border-yellow-200',
-                                    'cancelled' => 'bg-red-100 text-red-800 border-red-200',
-                                ];
-                                $statusIcons = [
-                                    'completed' => 'check-circle',
-                                    'pending' => 'clock',
-                                    'cancelled' => 'times-circle',
-                                ];
-                            @endphp
-                            <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full border text-sm font-medium {{ $statusColors[$transaction->status] ?? 'bg-gray-100 text-gray-800 border-gray-200' }}">
-                                <i class="fas fa-{{ $statusIcons[$transaction->status] ?? 'circle' }}"></i>
-                                {{ ucfirst($transaction->status) }}
-                            </span>
-                        </td>
-
                         <!-- Pembayaran -->
                         <td class="px-6 py-4 text-center">
                             @php
@@ -251,20 +215,24 @@
                                     'debit_card' => 'bg-blue-100 text-blue-800 border-blue-200',
                                     'credit_card' => 'bg-purple-100 text-purple-800 border-purple-200',
                                     'e_wallet' => 'bg-cyan-100 text-cyan-800 border-cyan-200',
-                                    'transfer' => 'bg-orange-100 text-orange-800 border-orange-200',
                                 ];
                                 $paymentIcons = [
                                     'cash' => 'money-bill-wave',
                                     'debit_card' => 'credit-card',
-                                    'credit_card' => 'credit-card',
+                                    'credit_card' => 'hand-holding-usd',
                                     'e_wallet' => 'mobile-alt',
-                                    'transfer' => 'university',
+                                ];
+                                $paymentLabels = [
+                                    'cash' => 'Tunai',
+                                    'debit_card' => 'Debit Card',
+                                    'credit_card' => 'Kredit',
+                                    'e_wallet' => 'E-Wallet',
                                 ];
                             @endphp
                             <div class="flex flex-col items-center gap-1">
                                 <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-medium {{ $paymentColors[$transaction->payment_method] ?? 'bg-gray-100 text-gray-800 border-gray-200' }}">
                                     <i class="fas fa-{{ $paymentIcons[$transaction->payment_method] ?? 'credit-card' }}"></i>
-                                    {{ ucfirst(str_replace('_', ' ', $transaction->payment_method)) }}
+                                    {{ $paymentLabels[$transaction->payment_method] ?? ucfirst(str_replace('_', ' ', $transaction->payment_method)) }}
                                 </span>
                                 @if($transaction->payment_method === 'credit_card')
                                     <span class="text-xs text-red-600 font-medium">
@@ -301,14 +269,12 @@
                         <!-- Actions -->
                         <td class="px-6 py-4 text-center">
                             <div class="flex items-center justify-center gap-1">
-                                <!-- Detail Button -->
                                 <a href="{{ route('transactions.show', $transaction) }}"
                                    class="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
                                    data-tooltip="Detail">
                                     <i class="fas fa-eye"></i>
                                 </a>
 
-                                <!-- Print Button -->
                                 <a href="{{ route('transactions.print', $transaction) }}"
                                    class="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
                                    target="_blank"
@@ -316,15 +282,7 @@
                                     <i class="fas fa-print"></i>
                                 </a>
 
-                                <!-- Edit Button (Sementara Disabled) -->
-                                <button class="p-2 text-yellow-600 hover:bg-yellow-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                        data-tooltip="Fitur edit dalam pengembangan"
-                                        disabled>
-                                    <i class="fas fa-edit"></i>
-                                </button>
-
                                 @if(auth()->user()->role === 'owner')
-                                <!-- Delete Button -->
                                 <button type="button"
                                         class="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
                                         data-tooltip="Hapus"
@@ -337,7 +295,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="8" class="px-6 py-12 text-center">
+                        <td colspan="7" class="px-6 py-12 text-center">
                             <div class="flex flex-col items-center justify-center">
                                 <div class="p-4 bg-gray-100 rounded-full mb-4">
                                     <i class="fas fa-shopping-cart text-3xl text-gray-400"></i>
@@ -421,7 +379,6 @@
 @endif
 
 <style>
-    /* Tooltip Styles */
     [data-tooltip] {
         position: relative;
     }
@@ -444,27 +401,11 @@
         z-index: 10;
     }
 
-    [data-tooltip]:after {
-        content: '';
-        position: absolute;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        border-width: 4px;
-        border-style: solid;
-        border-color: #374151 transparent transparent transparent;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.2s, visibility 0.2s;
-    }
-
-    [data-tooltip]:hover:before,
-    [data-tooltip]:hover:after {
+    [data-tooltip]:hover:before {
         opacity: 1;
         visibility: visible;
     }
 
-    /* Table row animation */
     .transaction-row {
         animation: fadeIn 0.3s ease-out;
     }
@@ -480,35 +421,6 @@
         }
     }
 
-    /* Highlight today's transactions */
-    .today-transaction {
-        border-left: 4px solid #3b82f6 !important;
-    }
-
-    /* Pagination styling */
-    .pagination {
-        display: flex;
-        gap: 2px;
-    }
-
-    .page-link {
-        padding: 6px 12px;
-        border-radius: 6px;
-        color: #3b82f6;
-        font-weight: 500;
-        transition: all 0.2s;
-    }
-
-    .page-link:hover {
-        background-color: rgba(59, 130, 246, 0.1);
-    }
-
-    .page-item.active .page-link {
-        background-color: #3b82f6;
-        color: white;
-    }
-
-    /* Custom scrollbar */
     ::-webkit-scrollbar {
         width: 6px;
         height: 6px;
@@ -523,74 +435,9 @@
         background: #c1c1c1;
         border-radius: 3px;
     }
-
-    ::-webkit-scrollbar-thumb:hover {
-        background: #a8a8a8;
-    }
 </style>
 
 <script>
-    // Tooltip functionality
-    function initTooltips() {
-        const tooltips = document.querySelectorAll('[data-tooltip]');
-        tooltips.forEach(element => {
-            element.addEventListener('mouseenter', function() {
-                const tooltip = this.getAttribute('data-tooltip');
-                // Bootstrap tooltips are disabled, using custom tooltips instead
-            });
-        });
-    }
-
-    // Search functionality
-    function filterTable() {
-        const input = document.getElementById('searchInput');
-        const filter = input.value.toLowerCase();
-        const rows = document.querySelectorAll('.transaction-row');
-
-        rows.forEach(row => {
-            const invoice = row.getAttribute('data-invoice').toLowerCase();
-            const customer = row.getAttribute('data-customer');
-            const cashier = row.getAttribute('data-cashier');
-
-            if (invoice.includes(filter) || customer.includes(filter) || cashier.includes(filter)) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
-        });
-    }
-
-    function clearSearch() {
-        document.getElementById('searchInput').value = '';
-        filterTable();
-    }
-
-    // Dropdown functionality
-    function initDropdowns() {
-        const dropdownButtons = document.querySelectorAll('button:has(.fa-chevron-down)');
-
-        dropdownButtons.forEach(button => {
-            const dropdown = button.nextElementSibling;
-
-            if (dropdown && dropdown.classList.contains('hidden')) {
-                button.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    dropdown.classList.toggle('hidden');
-                });
-
-                // Close dropdown when clicking outside
-                document.addEventListener('click', () => {
-                    dropdown.classList.add('hidden');
-                });
-
-                dropdown.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                });
-            }
-        });
-    }
-
-    // Delete Modal functionality
     function openDeleteModal(id, invoice, total) {
         const modal = document.getElementById('deleteModal');
         const form = document.getElementById('deleteForm');
@@ -611,98 +458,17 @@
         modal.classList.remove('flex');
     }
 
-    // Highlight today's transactions
-    function highlightTodayTransactions() {
-        const today = new Date().toISOString().split('T')[0];
-        const rows = document.querySelectorAll('.transaction-row');
+    document.addEventListener('click', function(e) {
+        const modal = document.getElementById('deleteModal');
+        if (modal && !modal.classList.contains('hidden') && e.target === modal) {
+            closeDeleteModal();
+        }
+    });
 
-        rows.forEach(row => {
-            const dateCell = row.querySelector('td:nth-child(2)');
-            if (dateCell) {
-                const dateText = dateCell.querySelector('.font-medium').textContent;
-                const todayDate = new Date().getDate();
-
-                // Check if date text contains today's date
-                if (dateText.includes(todayDate.toString())) {
-                    row.classList.add('today-transaction');
-                }
-            }
-        });
-    }
-
-    // Row click functionality for mobile
-    function initRowClicks() {
-        const rows = document.querySelectorAll('.transaction-row');
-
-        rows.forEach(row => {
-            row.addEventListener('click', function(e) {
-                // Don't trigger if clicking on a button or link
-                if (e.target.closest('button') || e.target.closest('a') ||
-                    e.target.tagName === 'BUTTON' || e.target.tagName === 'A' ||
-                    e.target.closest('[data-tooltip]')) {
-                    return;
-                }
-
-                // On mobile, click the detail button
-                if (window.innerWidth < 768) {
-                    const detailBtn = this.querySelector('a[href*="show"]');
-                    if (detailBtn) {
-                        detailBtn.click();
-                    }
-                }
-            });
-        });
-    }
-
-    // Print confirmation
-    function initPrintButtons() {
-        const printButtons = document.querySelectorAll('a[href*="print"]');
-
-        printButtons.forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                if (!confirm('Cetak invoice transaksi ini?')) {
-                    e.preventDefault();
-                }
-            });
-        });
-    }
-
-    // Initialize everything when DOM is loaded
-    document.addEventListener('DOMContentLoaded', function() {
-        initTooltips();
-        initDropdowns();
-        initRowClicks();
-        initPrintButtons();
-        highlightTodayTransactions();
-
-        // Add event listener for search input
-        document.getElementById('searchInput').addEventListener('input', filterTable);
-
-        // Add event listener for clear search button
-        document.getElementById('clearSearch').addEventListener('click', clearSearch);
-
-        // Close modal when clicking outside
-        document.addEventListener('click', function(e) {
-            const modal = document.getElementById('deleteModal');
-            if (modal && !modal.classList.contains('hidden') &&
-                e.target === modal) {
-                closeDeleteModal();
-            }
-        });
-
-        // Close modal with Escape key
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeDeleteModal();
-            }
-        });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeDeleteModal();
+        }
     });
 </script>
-
-@php
-    // Pastikan variabel ini dikirim dari controller:
-    // $totalRevenue = Transaction::sum('total_amount');
-    // $averageTransaction = Transaction::avg('total_amount') ?? 0;
-    // $todayTransactions = Transaction::whereDate('created_at', today())->count();
-@endphp
 @endsection

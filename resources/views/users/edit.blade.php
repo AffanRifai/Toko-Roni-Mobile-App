@@ -89,7 +89,7 @@
                                     </div>
 
                                     {{-- ROLE --}}
-                                     <div class="col-md-6">
+                                    <div class="col-md-6">
                                         <label for="role" class="form-label fw-semibold">
                                             <i class="fas fa-user-tag me-1 text-primary"></i> Peran (Role)
                                             <span class="text-danger">*</span>
@@ -102,33 +102,26 @@
                                                 class="form-select border-start-0 @error('role') is-invalid @enderror"
                                                 required>
                                                 <option value="">Pilih Peran</option>
-                                                <option value="owner" {{ old('role') == 'owner' ? 'selected' : '' }}>
-                                                    Owner (Administrator)
+                                                <option value="owner" {{ old('role', $user->role) == 'owner' ? 'selected' : '' }}>
+                                                    Owner (Pemilik)
                                                 </option>
-                                                <option value="kasir" {{ old('role') == 'kasir' ? 'selected' : '' }}>
+                                                <option value="manager" {{ old('role', $user->role) == 'manager' ? 'selected' : '' }}>
+                                                    Manager
+                                                </option>
+                                                <option value="kasir" {{ old('role', $user->role) == 'kasir' ? 'selected' : '' }}>
                                                     Kasir
                                                 </option>
                                                 <option value="kepala_gudang"
-                                                    {{ old('role') == 'kepala_gudang' ? 'selected' : '' }}>
+                                                    {{ old('role', $user->role) == 'kepala_gudang' ? 'selected' : '' }}>
                                                     Kepala Gudang
                                                 </option>
                                                 <option value="logistik"
-                                                    {{ old('role') == 'logistik' ? 'selected' : '' }}>
+                                                    {{ old('role', $user->role) == 'logistik' ? 'selected' : '' }}>
                                                     Staff Logistik
                                                 </option>
                                                 <option value="checker_barang"
-                                                    {{ old('role') == 'checker_barang' ? 'selected' : '' }}>
+                                                    {{ old('role', $user->role) == 'checker_barang' ? 'selected' : '' }}>
                                                     Checker Barang
-                                                </option>
-                                                <option value="manager_toko_eceran"
-                                                    {{ (old('role', $user->role) == 'manager_toko_eceran') ? 'selected' : '' }}>
-                                                    Manager Toko Eceran
-                                                </option>
-                                                <option value="kurir" {{ (old('role', $user->role) == 'kurir') ? 'selected' : '' }}>
-                                                    Kurir
-                                                </option>
-                                                <option value="driver" {{ (old('role', $user->role) == 'driver') ? 'selected' : '' }}>
-                                                    Driver
                                                 </option>
                                             </select>
                                             @error('role')
@@ -147,14 +140,14 @@
                                         <label class="form-label fw-semibold">Jenis Toko</label>
 
                                         <input type="hidden" name="jenis_toko" id="jenis_toko_hidden"
-                                            value="{{ $user->jenis_toko }}">
+                                            value="{{ old('jenis_toko', $user->jenis_toko) }}">
 
                                         <select id="jenis_toko" class="form-select">
                                             <option value="">- Pilih -</option>
-                                            <option value="grosir" {{ $user->jenis_toko == 'grosir' ? 'selected' : '' }}>
+                                            <option value="grosir" {{ old('jenis_toko', $user->jenis_toko) == 'grosir' ? 'selected' : '' }}>
                                                 Grosir
                                             </option>
-                                            <option value="eceran" {{ $user->jenis_toko == 'eceran' ? 'selected' : '' }}>
+                                            <option value="eceran" {{ old('jenis_toko', $user->jenis_toko) == 'eceran' ? 'selected' : '' }}>
                                                 Eceran
                                             </option>
                                         </select>
@@ -166,7 +159,7 @@
                                         <div class="form-check form-switch mt-2">
                                             <input type="hidden" name="is_active" value="0">
                                             <input class="form-check-input" type="checkbox" name="is_active" value="1"
-                                                {{ $user->is_active ? 'checked' : '' }}>
+                                                {{ old('is_active', $user->is_active) ? 'checked' : '' }}>
                                             <label class="form-check-label">Akun aktif</label>
                                         </div>
                                     </div>
@@ -190,9 +183,9 @@
                     </div>
                 </div>
 
-                {{-- SIDEBAR --}}
+               {{-- SIDEBAR --}}
                 <div class="col-lg-4">
-                    <div class="card border-0 shadow-sm sticky-top" style="top:20px">
+                    <div class="card border-0 shadow-sm" style="position: sticky; top: 20px; z-index: 1020;">
                         <div class="card-body small text-muted">
                             <ul class="mb-0 ps-3">
                                 <li>Password hanya berubah jika diisi</li>
@@ -215,10 +208,28 @@
             const hiddenJenis = document.getElementById('jenis_toko_hidden');
 
             function syncJenisToko() {
-                if (role.value === 'owner') {
+                const selectedRole = role.value;
+                
+                // Role yang mempengaruhi jenis toko
+                if (selectedRole === 'owner' || selectedRole === 'manager') {
+                    // Owner dan Manager bisa memilih jenis toko
+                    jenisToko.disabled = false;
+                    hiddenJenis.value = jenisToko.value;
+                } 
+                else if (selectedRole === 'kepala_gudang') {
+                    // Kepala Gudang hanya untuk toko grosir
+                    jenisToko.value = 'grosir';
                     jenisToko.disabled = true;
-                    hiddenJenis.value = '';
-                } else {
+                    hiddenJenis.value = 'grosir';
+                }
+                else if (selectedRole === 'manager_toko_eceran') {
+                    // Manager Toko Eceran hanya untuk toko eceran
+                    jenisToko.value = 'eceran';
+                    jenisToko.disabled = true;
+                    hiddenJenis.value = 'eceran';
+                }
+                else {
+                    // Role lainnya bisa memilih jenis toko
                     jenisToko.disabled = false;
                     hiddenJenis.value = jenisToko.value;
                 }

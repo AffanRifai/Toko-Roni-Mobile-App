@@ -29,35 +29,8 @@ class TransactionController extends Controller
     public function index(Request $request)
     {
         $query = Transaction::with(['user', 'member'])->latest();
-
-        // Filter tanggal
-        if ($request->has('filter')) {
-            switch ($request->filter) {
-                case 'today':
-                    $query->whereDate('created_at', today());
-                    break;
-                case 'week':
-                    $query->whereBetween('created_at', [
-                        now()->startOfWeek(),
-                        now()->endOfWeek()
-                    ]);
-                    break;
-                case 'month':
-                    $query->whereMonth('created_at', now()->month)
-                        ->whereYear('created_at', now()->year);
-                    break;
-                case 'year':
-                    $query->whereYear('created_at', now()->year);
-                    break;
-            }
-        }
-
-        // Filter status pembayaran
-        if ($request->has('payment_status') && $request->payment_status !== 'all') {
-            $query->where('payment_status', $request->payment_status);
-        }
-
-        // Filter metode pembayaran
+        
+        // ========== HANYA PERTAHANKAN: Filter metode pembayaran ==========
         if ($request->has('payment_method') && $request->payment_method !== 'all') {
             $query->where('payment_method', $request->payment_method);
         }
@@ -84,7 +57,7 @@ class TransactionController extends Controller
             });
         }
 
-        // Filter tanggal custom
+        // Filter tanggal custom (pertahankan untuk range tanggal)
         if ($request->has('start_date') && $request->has('end_date')) {
             $query->whereBetween('created_at', [
                 Carbon::parse($request->start_date)->startOfDay(),
@@ -134,42 +107,155 @@ class TransactionController extends Controller
     }
 
     /**
-     * FUNGSI UNTUK MENAMPILKAN HALAMAN SEARCH (API)
+     * API: Search transactions for delivery creation
+     * DARI KODE (1) - dengan logging detail
      */
     public function search(Request $request)
     {
-        $query = $request->get('q');
+        try {
+            // Log request untuk debugging
+            \Log::info('Search request received', [
+                'query' => $request->get('q'),
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'headers' => $request->headers->all()
+            ]);
 
-        $transactions = Transaction::with('items')
-            ->where(function ($q) use ($query) {
-                $q->where('invoice_number', 'like', "%{$query}%")
-                    ->orWhere('customer_name', 'like', "%{$query}%")
-                    ->orWhere('customer_phone', 'like', "%{$query}%");
-            })
-            ->whereDoesntHave('delivery') // Hanya transaksi yang belum punya pengiriman
-            ->latest()
-            ->limit(10)
-            ->get()
-            ->map(function ($transaction) {
+            $query = $request->get('q', '');
+            
+            if (strlen($query) < 2) {
+                return response()->json([]);
+            }
+
+            // Cek apakah user sudah login
+            if (!auth()->check()) {
+                \Log::error('User not authenticated');
+                return response()->json(['error' => 'Unauthenticated'], 401);
+            }
+
+            // Cek apakah tabel transactions ada
+            if (!\Schema::hasTable('transactions')) {
+                \Log::error('Transactions table does not exist');
+                return response()->json(['error' => 'Table not found'], 500);
+            }
+
+            // Query transactions
+            $transactions = Transaction::with('items')
+                ->where(function ($q) use ($query) {
+                    $q->where('invoice_number', 'like', "%{$query}%")
+                        ->orWhere('customer_name', 'like', "%{$query}%")
+                        ->orWhere('customer_phone', 'like', "%{$query}%");
+                })
+                ->whereDoesntHave('delivery')
+                ->latest()
+                ->limit(10)
+                ->get();
+
+            \Log::info('Search results found', ['count' => $transactions->count()]);
+
+            // Format response
+            $result = $transactions->map(function ($transaction) {
+                // Hitung total items
+                $totalItems = 0;
+                if ($transaction->items && $transaction->items->count() > 0) {
+                    $totalItems = $transaction->items->sum('qty');
+                }
+                
                 return [
                     'id' => $transaction->id,
-                    'invoice_number' => $transaction->invoice_number,
-                    'customer_name' => $transaction->customer_name,
-                    'customer_phone' => $transaction->customer_phone,
-                    'customer_address' => $transaction->customer_address,
-                    'date' => $transaction->created_at->format('d/m/Y H:i'),
-                    'total' => $transaction->total_amount,
-                    'total_formatted' => number_format($transaction->total_amount, 0, ',', '.'),
-                    'total_items' => $transaction->items->sum('qty'),
+                    'invoice_number' => $transaction->invoice_number ?? '-',
+                    'customer_name' => $transaction->customer_name ?? '-',
+                    'customer_phone' => $transaction->customer_phone ?? '',
+                    'customer_address' => $transaction->customer_address ?? '',
+                    'date' => $transaction->created_at ? $transaction->created_at->format('d/m/Y H:i') : '-',
+                    'total' => (float) ($transaction->total_amount ?? 0),
+                    'total_formatted' => number_format($transaction->total_amount ?? 0, 0, ',', '.'),
+                    'total_items' => $totalItems,
                 ];
             });
 
-        return response()->json($transactions);
+            return response()->json($result);
+            
+        } catch (\Illuminate\Database\QueryException $e) {
+            \Log::error('Database error in search: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'error' => 'Database error: ' . $e->getMessage()
+            ], 500);
+            
+        } catch (\Exception $e) {
+            \Log::error('General error in search: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'error' => 'Terjadi kesalahan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Search transactions for delivery (PENTING: Method ini yang dipanggil)
+     * DARI KODE (1)
+     */
+    public function searchForDelivery(Request $request)
+    {
+        try {
+            $query = $request->get('q', '');
+            
+            Log::info('searchForDelivery called with query: ' . $query);
+
+            if (strlen($query) < 2) {
+                return response()->json([]);
+            }
+
+            // Query transactions yang belum punya delivery
+            $transactions = Transaction::with('items')
+                ->where(function ($q) use ($query) {
+                    $q->where('invoice_number', 'like', "%{$query}%")
+                      ->orWhere('customer_name', 'like', "%{$query}%");
+                })
+                ->whereDoesntHave('delivery')
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get();
+
+            $results = [];
+            foreach ($transactions as $transaction) {
+                // Hitung total items
+                $totalItems = 0;
+                if ($transaction->items && $transaction->items->count() > 0) {
+                    $totalItems = $transaction->items->sum('qty');
+                }
+
+                $results[] = [
+                    'id' => $transaction->id,
+                    'invoice_number' => $transaction->invoice_number ?? '-',
+                    'customer_name' => $transaction->customer_name ?? '-',
+                    'customer_address' => $transaction->customer_address ?? '',
+                    'date' => $transaction->created_at ? $transaction->created_at->format('d/m/Y H:i') : '-',
+                    'total' => (float) ($transaction->total_amount ?? 0),
+                    'total_formatted' => number_format($transaction->total_amount ?? 0, 0, ',', '.'),
+                    'total_items' => $totalItems,
+                ];
+            }
+
+            return response()->json($results);
+
+        } catch (\Exception $e) {
+            Log::error('searchForDelivery error: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
      * API: Transaksi terbaru (7 hari terakhir)
      * GET /api/v1/transactions/recent
+     * DITAMBAHKAN DARI KODE (2)
      */
     public function recentTransactions()
     {
@@ -210,10 +296,10 @@ class TransactionController extends Controller
         }
     }
 
-
     /**
      * API: Statistik transaksi hari ini
      * GET /api/v1/transactions/today-stats
+     * DITAMBAHKAN DARI KODE (2)
      */
     public function todayStats()
     {
@@ -494,6 +580,7 @@ class TransactionController extends Controller
 
     /**
      * DETAIL TRANSAKSI
+     * DARI KODE (1) - dengan data delivery dan items_to_deliver/items_taken
      */
     public function show($id)
     {
@@ -504,18 +591,35 @@ class TransactionController extends Controller
                 'member',
                 'receivable' => function ($query) {
                     $query->with('payments.kasir');
-                }
+                },
+                'delivery' // Tambahkan relasi delivery
             ])->findOrFail($id);
+
+            // Hitung total items untuk delivery jika perlu
+            $totalItems = $transaction->items->sum('qty');
+            
+            // Decode items_to_deliver jika dalam format JSON
+            if (is_string($transaction->items_to_deliver)) {
+                $transaction->items_to_deliver = json_decode($transaction->items_to_deliver, true) ?? [];
+            }
+            
+            // Decode items_taken jika dalam format JSON
+            if (is_string($transaction->items_taken)) {
+                $transaction->items_taken = json_decode($transaction->items_taken, true) ?? [];
+            }
 
             Log::info('Showing transaction:', [
                 'id' => $id,
                 'invoice' => $transaction->invoice_number,
                 'payment_method' => $transaction->payment_method,
                 'payment_status' => $transaction->payment_status,
-                'has_receivable' => $transaction->receivable ? 'yes' : 'no'
+                'has_receivable' => $transaction->receivable ? 'yes' : 'no',
+                'need_delivery' => $transaction->need_delivery ? 'yes' : 'no',
+                'has_delivery' => $transaction->delivery ? 'yes' : 'no'
             ]);
 
             return view('transactions.show', compact('transaction'));
+
         } catch (\Exception $e) {
             Log::error('Transaction not found:', ['id' => $id, 'error' => $e->getMessage()]);
             return redirect()->route('transactions.index')
@@ -753,6 +857,7 @@ class TransactionController extends Controller
                     }
                 }
             }
+
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi transaksi: ' . $e->getMessage());
         }
@@ -797,6 +902,7 @@ class TransactionController extends Controller
                 'user_id' => $currentUser->id,
                 'invoice' => $transaction->invoice_number
             ]);
+
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi update transaksi: ' . $e->getMessage());
         }
@@ -840,8 +946,170 @@ class TransactionController extends Controller
                 'user_id' => $deletedBy->id,
                 'invoice' => $invoiceNumber
             ]);
+
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi hapus transaksi: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Request delivery from transaction
+     */
+    public function requestDelivery(Request $request, Transaction $transaction)
+    {
+        // Log untuk debugging
+        Log::info('Delivery request received', [
+            'transaction_id' => $transaction->id,
+            'request_data' => $request->all(),
+            'user_role' => auth()->user()->role
+        ]);
+
+        // Validasi dasar
+        $validator = Validator::make($request->all(), [
+            'need_delivery' => 'required|in:yes,no',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->route('transactions.show', $transaction)
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        // Jika tidak perlu dikirim, update transaksi dan redirect
+        if ($request->need_delivery === 'no') {
+            $transaction->update([
+                'need_delivery' => false,
+                'delivery_notes' => $request->delivery_notes ?? 'Pelanggan ambil sendiri di toko'
+            ]);
+            
+            return redirect()->route('transactions.show', $transaction)
+                ->with('success', 'Transaksi telah disimpan tanpa pengiriman');
+        }
+
+        // Validasi untuk yang perlu dikirim
+        $validator = Validator::make($request->all(), [
+            'recipient_name' => 'required|string|max:255',
+            'recipient_phone' => 'nullable|string|max:20',
+            'delivery_address' => 'required|string',
+            'desired_delivery_date' => 'required|date|after_or_equal:today',
+            'vehicle_type' => 'required|in:truck,van,motorcycle,pickup',
+            'delivery_fee' => 'nullable|numeric|min:0',
+            'delivery_notes' => 'nullable|string',
+            'items_to_deliver' => 'nullable|array',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->route('transactions.show', $transaction)
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Cek apakah sudah ada delivery untuk transaksi ini
+            if ($transaction->delivery) {
+                throw new \Exception('Transaksi ini sudah memiliki pengiriman');
+            }
+
+            // Siapkan data untuk delivery
+            $deliveryData = [
+                'transaction_id' => $transaction->id,
+                'delivery_code' => \App\Models\Delivery::generateDeliveryCode(),
+                'invoice_number' => $transaction->invoice_number,
+                'customer_name' => $transaction->customer_name,
+                'recipient_name' => $request->recipient_name,
+                'recipient_phone' => $request->recipient_phone ?? $transaction->customer_phone,
+                'destination' => $request->delivery_address,
+                'address' => $request->delivery_address,
+                'origin' => 'Toko Roni Juntinyuat',
+                'desired_delivery_date' => $request->desired_delivery_date,
+                'vehicle_type' => $request->vehicle_type,
+                'delivery_fee' => $request->delivery_fee ?? 0,
+                'notes' => $request->delivery_notes,
+                'status' => 'pending',
+                'created_by' => auth()->id(),
+            ];
+
+            // Handle items to deliver
+            if ($request->has('items_to_deliver') && !empty($request->items_to_deliver)) {
+                $itemsToDeliver = [];
+                $totalItems = 0;
+                foreach ($request->items_to_deliver as $productId) {
+                    $item = $transaction->items->where('product_id', $productId)->first();
+                    if ($item) {
+                        $itemsToDeliver[] = [
+                            'id' => $item->product_id,
+                            'name' => $item->product->name,
+                            'qty' => $item->qty,
+                            'price' => $item->price
+                        ];
+                        $totalItems += $item->qty;
+                    }
+                }
+                $deliveryData['items_to_deliver'] = json_encode($itemsToDeliver);
+                $deliveryData['total_items'] = $totalItems;
+            } else {
+                // Kirim semua barang
+                $allItems = [];
+                $totalItems = 0;
+                foreach ($transaction->items as $item) {
+                    $allItems[] = [
+                        'id' => $item->product_id,
+                        'name' => $item->product->name,
+                        'qty' => $item->qty,
+                        'price' => $item->price
+                    ];
+                    $totalItems += $item->qty;
+                }
+                $deliveryData['items_to_deliver'] = json_encode($allItems);
+                $deliveryData['total_items'] = $totalItems;
+            }
+
+            // Update transaction need_delivery
+            $transaction->update([
+                'need_delivery' => true,
+                'delivery_address' => $request->delivery_address,
+                'recipient_name' => $request->recipient_name,
+                'recipient_phone' => $request->recipient_phone,
+                'desired_delivery_date' => $request->desired_delivery_date,
+                'delivery_notes' => $request->delivery_notes,
+                'delivery_fee' => $request->delivery_fee ?? 0,
+            ]);
+
+            // Buat delivery
+            $delivery = \App\Models\Delivery::create($deliveryData);
+
+            DB::commit();
+
+            Log::info('Delivery created successfully by kasir', [
+                'delivery_id' => $delivery->id,
+                'transaction_id' => $transaction->id,
+                'kasir_id' => auth()->id()
+            ]);
+
+            // Redirect berdasarkan role
+            $userRole = auth()->user()->role;
+            
+            if ($userRole === 'kasir') {
+                // Kasir: redirect ke halaman transaksi dengan pesan sukses
+                // Tidak bisa mengelola pengiriman lebih lanjut
+                return redirect()->route('transactions.show', $transaction)
+                    ->with('success', 'Permintaan pengiriman berhasil dikirim ke logistik. Status pengiriman akan diupdate oleh tim logistik.');
+            }
+
+            // Untuk role lain (owner, manager, logistik), redirect ke halaman delivery
+            return redirect()->route('delivery.show', $delivery)
+                ->with('success', 'Pengiriman berhasil dibuat. Silakan assign kurir dan kendaraan.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Delivery request failed: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            
+            return redirect()->route('transactions.show', $transaction)
+                ->with('error', 'Gagal mengirim permintaan: ' . $e->getMessage())
+                ->withInput();
         }
     }
 }

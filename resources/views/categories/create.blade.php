@@ -193,7 +193,8 @@
                             <i class="fas fa-check text-green-500 mr-2 mt-1"></i>
                             Hindari nama yang terlalu panjang atau ambigu
                         </li>
-                        <li class="fas fa-check text-green-500 mr-2 mt-1">
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-500 mr-2 mt-1"></i>
                             Pastikan kategori tidak duplikat dengan yang sudah ada
                         </li>
                         <li class="flex items-start">

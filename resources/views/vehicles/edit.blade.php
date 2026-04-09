@@ -88,12 +88,10 @@
                                 <select name="type" id="type" required
                                     class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 appearance-none @error('type') border-red-500 @enderror">
                                     <option value="">-- Pilih Jenis Kendaraan --</option>
-                                    <option value="motor" {{ old('type', $vehicle->type) == 'motor' ? 'selected' : '' }}>
-                                        Motor</option>
-                                    <option value="mobil" {{ old('type', $vehicle->type) == 'mobil' ? 'selected' : '' }}>
-                                        Mobil</option>
-                                    <option value="truck" {{ old('type', $vehicle->type) == 'truck' ? 'selected' : '' }}>
-                                        Truck</option>
+                                    <option value="truck" {{ old('type', $vehicle->type) == 'truck' ? 'selected' : '' }}>Truck</option>
+                                    <option value="van" {{ old('type', $vehicle->type) == 'van' ? 'selected' : '' }}>Van</option>
+                                    <option value="motorcycle" {{ old('type', $vehicle->type) == 'motorcycle' ? 'selected' : '' }}>Motor</option>
+                                    <option value="pickup" {{ old('type', $vehicle->type) == 'pickup' ? 'selected' : '' }}>Pickup</option>
                                 </select>
                                 <i
                                     class="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>

@@ -16,9 +16,9 @@ class NotificationController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
         $notifications = $user->notifications()->paginate(20);
         
+        // FITUR TAMBAHAN DARI KODE (2)
         // Group notifications by date
         $groupedNotifications = $notifications->groupBy(function($notification) {
             return $notification->created_at->isoFormat('D MMMM Y');
@@ -41,6 +41,7 @@ class NotificationController extends Controller
         $notification->markAsRead();
 
         if (request()->wantsJson()) {
+            // DITAMBAHKAN unread_count dari kode (2)
             return response()->json([
                 'success' => true,
                 'message' => 'Notifikasi ditandai sebagai dibaca',
@@ -61,6 +62,7 @@ class NotificationController extends Controller
         $user->unreadNotifications->markAsRead();
 
         if (request()->wantsJson()) {
+            // DITAMBAHKAN unread_count dari kode (2)
             return response()->json([
                 'success' => true,
                 'message' => 'Semua notifikasi ditandai sebagai dibaca',
@@ -81,6 +83,7 @@ class NotificationController extends Controller
         $notification = $user->notifications()->findOrFail($id);
         $notification->delete();
 
+        // DITAMBAHKAN response JSON dari kode (2)
         if (request()->wantsJson()) {
             return response()->json([
                 'success' => true,
@@ -101,6 +104,7 @@ class NotificationController extends Controller
         $user = Auth::user();
         $user->notifications()->delete();
 
+        // DITAMBAHKAN response JSON dari kode (2)
         if (request()->wantsJson()) {
             return response()->json([
                 'success' => true,
@@ -141,6 +145,7 @@ class NotificationController extends Controller
             ->get()
             ->map(function ($notification) {
                 $data = $notification->data;
+                // DITAMBAHKAN field tambahan dari kode (2)
                 return [
                     'id' => $notification->id,
                     'message' => $data['message'] ?? 'Notifikasi baru',
@@ -149,7 +154,9 @@ class NotificationController extends Controller
                     'url' => $data['url'] ?? '#',
                     'time' => $notification->created_at->diffForHumans(),
                     'is_unread' => is_null($notification->read_at),
-                    'type' => $data['type'] ?? 'default'
+                    'type' => $data['type'] ?? 'default',
+                    'read_at' => $notification->read_at,
+                    'data' => $notification->data
                 ];
             });
 

@@ -322,7 +322,7 @@
                         <h3 class="text-lg md:text-xl font-bold text-gray-800">Grafik Penjualan & Pengeluaran Stok</h3>
                         <p class="text-xs md:text-sm text-gray-600 mt-1">Performa penjualan dan pergerakan stok harian</p>
                     </div>
-                    <div class="flex items-center gap-3 mt-4 sm:mt-0">
+                    <div class="flex flex-wrap items-center gap-3 mt-4 sm:mt-0">
                         <div class="flex items-center gap-2">
                             <div class="w-3 h-3 rounded-full bg-blue-500"></div>
                             <span class="text-xs md:text-sm text-gray-600">Penjualan</span>
@@ -332,9 +332,11 @@
                             <span class="text-xs md:text-sm text-gray-600">Stok Keluar</span>
                         </div>
                         <select id="chartRange" class="px-3 md:px-4 py-1.5 md:py-2 bg-white border border-gray-200 rounded-xl text-xs md:text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="7">7 Hari</option>
-                            <option value="30">30 Hari</option>
-                            <option value="90">90 Hari</option>
+                            <option value="7" {{ $chartRange == 7 ? 'selected' : '' }}>7 Hari</option>
+                            <option value="30" {{ $chartRange == 30 ? 'selected' : '' }}>30 Hari</option>
+                            <option value="90" {{ $chartRange == 90 ? 'selected' : '' }}>90 Hari</option>
+                            <option value="180" {{ $chartRange == 180 ? 'selected' : '' }}>180 Hari</option>
+                            <option value="360" {{ $chartRange == 360 ? 'selected' : '' }}>360 Hari</option>
                         </select>
                     </div>
                 </div>
@@ -526,8 +528,8 @@
         // Data awal dari PHP dengan validasi
         @php
             $chartLabels = isset($chartData['labels']) && is_array($chartData['labels']) ? $chartData['labels'] : ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-            $chartSales = isset($chartData['sales']) && is_array($chartData['sales']) ? $chartData['sales'] : [500000, 750000, 600000, 900000, 1200000, 1500000, 800000];
-            $chartStockOut = isset($chartData['stock_out']) && is_array($chartData['stock_out']) ? $chartData['stock_out'] : [25, 30, 28, 35, 42, 55, 38];
+            $chartSales = isset($chartData['sales']) && is_array($chartData['sales']) ? $chartData['sales'] : [0, 0, 0, 0, 0, 0, 0];
+            $chartStockOut = isset($chartData['stock_out']) && is_array($chartData['stock_out']) ? $chartData['stock_out'] : [0, 0, 0, 0, 0, 0, 0];
 
             $normalStock = $normalStockCount ?? 0;
             $lowStock = $lowStockCount ?? 0;
@@ -552,6 +554,16 @@
                 critical: criticalStock
             }
         });
+
+        // Fungsi untuk format angka Rupiah
+        function formatRupiah(value) {
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(value).replace('IDR', 'Rp');
+        }
 
         // Fungsi untuk inisialisasi chart penjualan
         function initSalesChart(labels, salesData, stockOutData) {
@@ -645,9 +657,9 @@
                                     let label = context.dataset.label || '';
                                     let value = context.raw;
                                     if (label.includes('Penjualan')) {
-                                        return label + ': Rp ' + new Intl.NumberFormat('id-ID').format(value);
+                                        return label + ': ' + formatRupiah(value);
                                     } else {
-                                        return label + ': ' + value + ' unit';
+                                        return label + ': ' + value.toLocaleString('id-ID') + ' unit';
                                     }
                                 }
                             }
@@ -668,8 +680,10 @@
                                 callback: function(value) {
                                     if (value >= 1000000) {
                                         return 'Rp ' + (value / 1000000).toFixed(1) + 'Jt';
+                                    } else if (value >= 1000) {
+                                        return 'Rp ' + (value / 1000).toFixed(0) + 'rb';
                                     }
-                                    return 'Rp ' + new Intl.NumberFormat('id-ID').format(value);
+                                    return 'Rp ' + value.toLocaleString('id-ID');
                                 }
                             }
                         },
@@ -684,7 +698,7 @@
                             ticks: {
                                 color: '#f97316',
                                 callback: function(value) {
-                                    return value + ' unit';
+                                    return value.toLocaleString('id-ID') + ' unit';
                                 }
                             }
                         },
@@ -695,7 +709,9 @@
                             ticks: {
                                 color: '#6b7280',
                                 maxRotation: 45,
-                                minRotation: 45
+                                minRotation: 45,
+                                autoSkip: true,
+                                maxTicksLimit: 12
                             }
                         }
                     }
@@ -810,9 +826,8 @@
                     }
                 });
 
-                // PERBAIKAN: Gunakan URL absolut dengan base URL
-                const baseUrl = window.location.origin;
-                const url = `${baseUrl}/dashboard/chart-data/${range}`;
+                // URL untuk mengambil data chart
+                const url = `/dashboard/chart-data/${range}`;
                 
                 fetch(url, {
                     method: 'GET',
@@ -846,7 +861,7 @@
                             Swal.fire({
                                 icon: 'success',
                                 title: 'Berhasil',
-                                text: 'Data chart diperbarui',
+                                text: `Data ${data.range} hari terakhir dimuat`,
                                 timer: 1500,
                                 showConfirmButton: false
                             });

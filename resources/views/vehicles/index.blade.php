@@ -22,6 +22,12 @@
                     <p class="text-gray-600 mt-1">Kelola semua kendaraan untuk pengiriman</p>
                 </div>
             </div>
+            @php
+                $userRole = Auth::user()->role;
+                $canManage = in_array($userRole, ['owner', 'manager', 'kepala_gudang']);
+            @endphp
+            
+            @if($canManage)
             <div class="flex gap-3">
                 <a href="{{ route('vehicles.create') }}"
                    class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:shadow-lg hover:-translate-y-0.5 transition-all">
@@ -29,6 +35,7 @@
                     <span>Tambah Kendaraan</span>
                 </a>
             </div>
+            @endif
         </div>
     </div>
 
@@ -65,7 +72,7 @@
         <div class="overflow-x-auto">
             <table class="w-full">
                 <thead class="bg-gray-50/50">
-                    <tr>
+                     <tr>
                         <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">ID</th>
                         <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">Nama Kendaraan</th>
                         <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">Plat Nomor</th>
@@ -73,7 +80,9 @@
                         <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">Kapasitas</th>
                         <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">Last Maintenance</th>
                         <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">Status</th>
+                        @if($canManage)
                         <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">Aksi</th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -87,44 +96,83 @@
                             <span class="font-mono text-sm font-medium">{{ $vehicle->license_plate }}</span>
                         </td>
                         <td class="px-6 py-4">
-                            <span class="px-2 py-1 text-xs rounded-full
-                                @if($vehicle->type == 'motor') bg-purple-100 text-purple-800
-                                @elseif($vehicle->type == 'mobil') bg-blue-100 text-blue-800
-                                @else bg-orange-100 text-orange-800 @endif">
-                                {{ ucfirst($vehicle->type) }}
+                            @php
+                                $typeLabels = [
+                                    'truck' => 'Truck',
+                                    'van' => 'Van',
+                                    'motorcycle' => 'Motor',
+                                    'pickup' => 'Pickup'
+                                ];
+                                $typeColors = [
+                                    'truck' => 'bg-orange-100 text-orange-800',
+                                    'van' => 'bg-blue-100 text-blue-800',
+                                    'motorcycle' => 'bg-purple-100 text-purple-800',
+                                    'pickup' => 'bg-green-100 text-green-800'
+                                ];
+                            @endphp
+                            <span class="px-2 py-1 text-xs rounded-full {{ $typeColors[$vehicle->type] ?? 'bg-gray-100 text-gray-800' }}">
+                                {{ $typeLabels[$vehicle->type] ?? ucfirst($vehicle->type) }}
                             </span>
                         </td>
                         <td class="px-6 py-4 text-sm">
                             @if($vehicle->capacity_weight > 0 || $vehicle->capacity_volume > 0)
-                                <div>{{ $vehicle->capacity_weight_formatted }}</div>
-                                <div class="text-xs text-gray-500">{{ $vehicle->capacity_volume_formatted }}</div>
+                                <div>{{ number_format($vehicle->capacity_weight, 0) }} kg</div>
+                                <div class="text-xs text-gray-500">{{ number_format($vehicle->capacity_volume, 1) }} m³</div>
                             @else
                                 <span class="text-gray-400">-</span>
                             @endif
                         </td>
                         <td class="px-6 py-4 text-sm">
                             @if($vehicle->last_maintenance)
-                                <div>{{ $vehicle->last_maintenance->format('d/m/Y') }}</div>
                                 @php
-                                    $daysSince = $vehicle->days_since_maintenance;
+                                    try {
+                                        $lastMaintenance = \Carbon\Carbon::parse($vehicle->last_maintenance);
+                                        // Gunakan diffInDays dengan floor untuk mendapatkan integer
+                                        $daysSince = floor($lastMaintenance->diffInDays(now()));
+                                        $maintenanceDate = $lastMaintenance->format('d/m/Y');
+                                    } catch (\Exception $e) {
+                                        $maintenanceDate = '-';
+                                        $daysSince = null;
+                                    }
                                 @endphp
-                                @if($daysSince && $daysSince > 30)
-                                    <span class="text-xs text-red-600">{{ $daysSince }} hari lalu</span>
-                                @elseif($daysSince)
-                                    <span class="text-xs text-gray-500">{{ $daysSince }} hari lalu</span>
+                                <div>{{ $maintenanceDate }}</div>
+                                @if($daysSince !== null)
+                                    @if($daysSince > 30)
+                                        <span class="text-xs text-red-600 font-medium">{{ (int)$daysSince }} hari lalu (Perlu servis!)</span>
+                                    @elseif($daysSince > 0)
+                                        <span class="text-xs text-gray-500">{{ (int)$daysSince }} hari lalu</span>
+                                    @elseif($daysSince == 0)
+                                        <span class="text-xs text-green-600">Hari ini</span>
+                                    @endif
                                 @endif
                             @else
                                 <span class="text-gray-400">Belum pernah</span>
                             @endif
                         </td>
                         <td class="px-6 py-4">
-                            <span class="badge {{ $vehicle->getStatusBadgeClass() }}">
-                                <i class="fas fa-circle mr-1 text-[8px]"></i>
-                                @if($vehicle->status == 'available') Tersedia
-                                @elseif($vehicle->status == 'in_use') Digunakan
-                                @else Servis @endif
+                            @php
+                                $statusBadge = [
+                                    'available' => 'bg-green-100 text-green-800',
+                                    'in_use' => 'bg-blue-100 text-blue-800',
+                                    'maintenance' => 'bg-red-100 text-red-800'
+                                ];
+                                $statusIcon = [
+                                    'available' => 'fa-check-circle',
+                                    'in_use' => 'fa-truck',
+                                    'maintenance' => 'fa-tools'
+                                ];
+                                $statusText = [
+                                    'available' => 'Tersedia',
+                                    'in_use' => 'Digunakan',
+                                    'maintenance' => 'Servis'
+                                ];
+                            @endphp
+                            <span class="badge {{ $statusBadge[$vehicle->status] ?? 'bg-gray-100 text-gray-800' }}">
+                                <i class="fas {{ $statusIcon[$vehicle->status] ?? 'fa-circle' }} mr-1 text-[8px]"></i>
+                                {{ $statusText[$vehicle->status] ?? ucfirst($vehicle->status) }}
                             </span>
                         </td>
+                        @if($canManage)
                         <td class="px-6 py-4">
                             <div class="flex items-center gap-2">
                                 <a href="{{ route('vehicles.show', $vehicle) }}"
@@ -150,20 +198,23 @@
                                 @endif
                             </div>
                         </td>
+                        @endif
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="8" class="px-6 py-12 text-center">
+                        <td colspan="{{ $canManage ? 8 : 7 }}" class="px-6 py-12 text-center">
                             <div class="flex flex-col items-center">
                                 <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                                     <i class="fas fa-car text-3xl text-gray-400"></i>
                                 </div>
                                 <h3 class="text-lg font-medium text-gray-900 mb-2">Belum ada kendaraan</h3>
                                 <p class="text-gray-600 mb-4">Mulai dengan menambahkan kendaraan baru</p>
+                                @if($canManage)
                                 <a href="{{ route('vehicles.create') }}"
                                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                                     <i class="fas fa-plus mr-2"></i>Tambah Kendaraan
                                 </a>
+                                @endif
                             </div>
                         </td>
                     </tr>

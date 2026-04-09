@@ -35,7 +35,7 @@ class UserUpdatedNotification extends Notification
         }
 
         return [
-            'type' => 'user_updated',
+            'type' => 'update',
             'user_id' => $this->user->id,
             'user_name' => $this->user->name,
             'user_email' => $this->user->email,

@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Carbon\Carbon; // Ditambahkan untuk Carbon parsing
 
 class VehicleController extends Controller
 {
@@ -68,11 +69,11 @@ class VehicleController extends Controller
      */
     public function store(Request $request)
     {
-        // Validasi dengan field yang benar
+        // Validasi dengan field yang benar sesuai database (KODE 1 - lebih lengkap)
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'license_plate' => 'required|string|max:20|unique:vehicles,license_plate',
-            'type' => 'required|in:motor,mobil,truck',
+            'type' => 'required|in:truck,van,motorcycle,pickup', // Sesuai ENUM di database
             'capacity_weight' => 'nullable|numeric|min:0',
             'capacity_volume' => 'nullable|numeric|min:0',
             'status' => 'required|in:available,in_use,maintenance',
@@ -83,6 +84,7 @@ class VehicleController extends Controller
             'name.required' => 'Nama kendaraan wajib diisi',
             'license_plate.required' => 'Plat nomor wajib diisi',
             'type.required' => 'Jenis kendaraan wajib dipilih',
+            'type.in' => 'Jenis kendaraan tidak valid',
         ]);
 
         if ($validator->fails()) {
@@ -94,6 +96,16 @@ class VehicleController extends Controller
         DB::beginTransaction();
 
         try {
+            // Proses last_maintenance dengan benar (KODE 1)
+            $lastMaintenance = null;
+            if ($request->last_maintenance) {
+                try {
+                    $lastMaintenance = Carbon::parse($request->last_maintenance)->format('Y-m-d');
+                } catch (\Exception $e) {
+                    $lastMaintenance = $request->last_maintenance;
+                }
+            }
+
             // Create vehicle
             $vehicle = Vehicle::create([
                 'name' => $request->name,
@@ -102,10 +114,10 @@ class VehicleController extends Controller
                 'capacity_weight' => $request->capacity_weight ?? 0,
                 'capacity_volume' => $request->capacity_volume ?? 0,
                 'status' => $request->status,
-                'last_maintenance' => $request->last_maintenance,
+                'last_maintenance' => $lastMaintenance,
                 'notes' => $request->notes,
             ]);
-
+        
             // KIRIM NOTIFIKASI
             $this->sendVehicleCreatedNotifications($vehicle);
 
@@ -163,7 +175,7 @@ class VehicleController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'license_plate' => 'required|string|max:20|unique:vehicles,license_plate,' . $vehicle->id,
-            'type' => 'required|in:motor,mobil,truck',
+            'type' => 'required|in:truck,van,motorcycle,pickup', // Sesuai ENUM di database (KODE 1)
             'capacity_weight' => 'nullable|numeric|min:0',
             'capacity_volume' => 'nullable|numeric|min:0',
             'status' => 'required|in:available,in_use,maintenance',
@@ -174,6 +186,7 @@ class VehicleController extends Controller
             'name.required' => 'Nama kendaraan wajib diisi',
             'license_plate.required' => 'Plat nomor wajib diisi',
             'type.required' => 'Jenis kendaraan wajib dipilih',
+            'type.in' => 'Jenis kendaraan tidak valid',
         ]);
 
         if ($validator->fails()) {
@@ -430,9 +443,10 @@ class VehicleController extends Controller
             'in_use' => Vehicle::where('status', 'in_use')->count(),
             'maintenance' => Vehicle::where('status', 'maintenance')->count(),
             'by_type' => [
-                'motor' => Vehicle::where('type', 'motor')->count(),
-                'mobil' => Vehicle::where('type', 'mobil')->count(),
                 'truck' => Vehicle::where('type', 'truck')->count(),
+                'van' => Vehicle::where('type', 'van')->count(),
+                'motorcycle' => Vehicle::where('type', 'motorcycle')->count(),
+                'pickup' => Vehicle::where('type', 'pickup')->count(),
             ]
         ];
 
@@ -510,33 +524,26 @@ class VehicleController extends Controller
         try {
             $currentUser = auth()->user();
             
-            // 1. Kirim ke semua user dengan role owner
-            $owners = User::where('role', 'owner')->get();
+            // Daftar role yang akan menerima notifikasi
+            $targetRoles = ['owner', 'manager', 'kepala_gudang'];
             
-            foreach ($owners as $owner) {
-                if ($owner->id != $currentUser->id) {
-                    $owner->notify(new VehicleCreatedNotification($vehicle, $currentUser));
-                    Log::info('Notifikasi kendaraan terkirim ke owner:', [
-                        'owner_id' => $owner->id,
-                        'vehicle_id' => $vehicle->id
-                    ]);
+            // Kirim ke semua user dengan role yang ditentukan
+            foreach ($targetRoles as $role) {
+                $users = User::where('role', $role)->get();
+                
+                foreach ($users as $user) {
+                    if ($user->id != $currentUser->id) {
+                        $user->notify(new VehicleCreatedNotification($vehicle, $currentUser));
+                        Log::info('Notifikasi kendaraan terkirim ke ' . $role . ':', [
+                            'user_id' => $user->id,
+                            'role' => $role,
+                            'vehicle_id' => $vehicle->id
+                        ]);
+                    }
                 }
             }
             
-            // 2. Kirim ke user dengan role logistik
-            $logistik = User::where('role', 'logistik')->get();
-            
-            foreach ($logistik as $user) {
-                if ($user->id != $currentUser->id) {
-                    $user->notify(new VehicleCreatedNotification($vehicle, $currentUser));
-                    Log::info('Notifikasi kendaraan terkirim ke logistik:', [
-                        'user_id' => $user->id,
-                        'vehicle_id' => $vehicle->id
-                    ]);
-                }
-            }
-            
-            // 3. Kirim ke diri sendiri (pembuat)
+            // Kirim ke diri sendiri (pembuat)
             $currentUser->notify(new VehicleCreatedNotification($vehicle, $currentUser));
             Log::info('Notifikasi kendaraan terkirim ke diri sendiri:', [
                 'user_id' => $currentUser->id,
@@ -548,7 +555,7 @@ class VehicleController extends Controller
         }
     }
 
-    /**
+   /**
      * Send notifications when vehicle is updated
      */
     private function sendVehicleUpdatedNotifications($vehicle, $changes)
@@ -556,29 +563,22 @@ class VehicleController extends Controller
         try {
             $currentUser = auth()->user();
             
-            // Kirim ke semua owner
-            $owners = User::where('role', 'owner')->get();
+            // Daftar role yang akan menerima notifikasi
+            $targetRoles = ['owner', 'manager', 'kepala_gudang'];
             
-            foreach ($owners as $owner) {
-                if ($owner->id != $currentUser->id) {
-                    $owner->notify(new VehicleUpdatedNotification($vehicle, $currentUser, $changes));
-                    Log::info('Notifikasi update kendaraan terkirim ke owner:', [
-                        'owner_id' => $owner->id,
-                        'vehicle_id' => $vehicle->id
-                    ]);
-                }
-            }
-            
-            // Kirim ke user logistik
-            $logistik = User::where('role', 'logistik')->get();
-            
-            foreach ($logistik as $user) {
-                if ($user->id != $currentUser->id) {
-                    $user->notify(new VehicleUpdatedNotification($vehicle, $currentUser, $changes));
-                    Log::info('Notifikasi update kendaraan terkirim ke logistik:', [
-                        'user_id' => $user->id,
-                        'vehicle_id' => $vehicle->id
-                    ]);
+            // Kirim ke semua user dengan role yang ditentukan
+            foreach ($targetRoles as $role) {
+                $users = User::where('role', $role)->get();
+                
+                foreach ($users as $user) {
+                    if ($user->id != $currentUser->id) {
+                        $user->notify(new VehicleUpdatedNotification($vehicle, $currentUser, $changes));
+                        Log::info('Notifikasi update kendaraan terkirim ke ' . $role . ':', [
+                            'user_id' => $user->id,
+                            'role' => $role,
+                            'vehicle_id' => $vehicle->id
+                        ]);
+                    }
                 }
             }
             
@@ -594,7 +594,7 @@ class VehicleController extends Controller
         }
     }
 
-    /**
+   /**
      * Send notifications when vehicle status changes
      */
     private function sendVehicleStatusChangedNotifications($vehicle, $oldStatus, $newStatus)
@@ -602,37 +602,28 @@ class VehicleController extends Controller
         try {
             $currentUser = auth()->user();
             
-            // 1. Kirim ke semua owner
-            $owners = User::where('role', 'owner')->get();
+            // Daftar role yang akan menerima notifikasi
+            $targetRoles = ['owner', 'manager', 'logistik', 'kepala_gudang'];
             
-            foreach ($owners as $owner) {
-                if ($owner->id != $currentUser->id) {
-                    $owner->notify(new VehicleStatusChangedNotification($vehicle, $currentUser, $oldStatus, $newStatus));
-                    Log::info('Notifikasi status kendaraan terkirim ke owner:', [
-                        'owner_id' => $owner->id,
-                        'vehicle_id' => $vehicle->id,
-                        'old_status' => $oldStatus,
-                        'new_status' => $newStatus
-                    ]);
+            // Kirim ke semua user dengan role yang ditentukan
+            foreach ($targetRoles as $role) {
+                $users = User::where('role', $role)->get();
+                
+                foreach ($users as $user) {
+                    if ($user->id != $currentUser->id) {
+                        $user->notify(new VehicleStatusChangedNotification($vehicle, $currentUser, $oldStatus, $newStatus));
+                        Log::info('Notifikasi status kendaraan terkirim ke ' . $role . ':', [
+                            'user_id' => $user->id,
+                            'role' => $role,
+                            'vehicle_id' => $vehicle->id,
+                            'old_status' => $oldStatus,
+                            'new_status' => $newStatus
+                        ]);
+                    }
                 }
             }
             
-            // 2. Kirim ke user logistik
-            $logistik = User::where('role', 'logistik')->get();
-            
-            foreach ($logistik as $user) {
-                if ($user->id != $currentUser->id) {
-                    $user->notify(new VehicleStatusChangedNotification($vehicle, $currentUser, $oldStatus, $newStatus));
-                    Log::info('Notifikasi status kendaraan terkirim ke logistik:', [
-                        'user_id' => $user->id,
-                        'vehicle_id' => $vehicle->id,
-                        'old_status' => $oldStatus,
-                        'new_status' => $newStatus
-                    ]);
-                }
-            }
-            
-            // 3. Kirim ke diri sendiri
+            // Kirim ke diri sendiri
             $currentUser->notify(new VehicleStatusChangedNotification($vehicle, $currentUser, $oldStatus, $newStatus));
             Log::info('Notifikasi status kendaraan terkirim ke diri sendiri:', [
                 'user_id' => $currentUser->id,
@@ -646,36 +637,29 @@ class VehicleController extends Controller
         }
     }
 
-    /**
+   /**
      * Send notifications when vehicle is deleted
      */
     private function sendVehicleDeletedNotifications($vehicleName, $vehiclePlate, $deletedBy)
     {
         try {
-            // Kirim ke semua owner
-            $owners = User::where('role', 'owner')
-                ->where('id', '!=', $deletedBy->id)
-                ->get();
+            // Daftar role yang akan menerima notifikasi
+            $targetRoles = ['owner', 'manager', 'kepala_gudang'];
             
-            foreach ($owners as $owner) {
-                $owner->notify(new VehicleDeletedNotification($vehicleName, $vehiclePlate, $deletedBy));
-                Log::info('Notifikasi hapus kendaraan terkirim ke owner:', [
-                    'owner_id' => $owner->id,
-                    'vehicle_name' => $vehicleName
-                ]);
-            }
-            
-            // Kirim ke user logistik
-            $logistik = User::where('role', 'logistik')
-                ->where('id', '!=', $deletedBy->id)
-                ->get();
-            
-            foreach ($logistik as $user) {
-                $user->notify(new VehicleDeletedNotification($vehicleName, $vehiclePlate, $deletedBy));
-                Log::info('Notifikasi hapus kendaraan terkirim ke logistik:', [
-                    'user_id' => $user->id,
-                    'vehicle_name' => $vehicleName
-                ]);
+            // Kirim ke semua user dengan role yang ditentukan
+            foreach ($targetRoles as $role) {
+                $users = User::where('role', $role)
+                    ->where('id', '!=', $deletedBy->id)
+                    ->get();
+                
+                foreach ($users as $user) {
+                    $user->notify(new VehicleDeletedNotification($vehicleName, $vehiclePlate, $deletedBy));
+                    Log::info('Notifikasi hapus kendaraan terkirim ke ' . $role . ':', [
+                        'user_id' => $user->id,
+                        'role' => $role,
+                        'vehicle_name' => $vehicleName
+                    ]);
+                }
             }
             
             // Kirim ke diri sendiri
@@ -687,6 +671,127 @@ class VehicleController extends Controller
             
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi hapus kendaraan: ' . $e->getMessage());
+        }
+    }
+
+    // ==================== ACCESSOR METHODS (KODE 1) ====================
+
+    /**
+     * Get formatted capacity weight
+     */
+    public function getCapacityWeightFormattedAttribute()
+    {
+        if (!$this->capacity_weight || $this->capacity_weight == 0) {
+            return 'Tidak ditentukan';
+        }
+        
+        return number_format($this->capacity_weight, 0) . ' kg';
+    }
+
+    /**
+     * Get formatted capacity volume
+     */
+    public function getCapacityVolumeFormattedAttribute()
+    {
+        if (!$this->capacity_volume || $this->capacity_volume == 0) {
+            return 'Tidak ditentukan';
+        }
+        
+        return number_format($this->capacity_volume, 1) . ' m³';
+    }
+
+    /**
+     * Get formatted last maintenance date
+     */
+    public function getLastMaintenanceFormattedAttribute()
+    {
+        if (!$this->last_maintenance) {
+            return 'Belum pernah';
+        }
+        
+        try {
+            return Carbon::parse($this->last_maintenance)->format('d/m/Y');
+        } catch (\Exception $e) {
+            return 'Format tanggal salah';
+        }
+    }
+
+    /**
+     * Get days since last maintenance (integer)
+     */
+    public function getDaysSinceMaintenanceAttribute()
+    {
+        if (!$this->last_maintenance) {
+            return null;
+        }
+        
+        try {
+            $date = Carbon::parse($this->last_maintenance);
+            // Gunakan floor untuk mendapatkan integer
+            return (int) floor($date->diffInDays(now()));
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Get maintenance status text and class
+     */
+    public function getMaintenanceStatusAttribute()
+    {
+        $days = $this->days_since_maintenance;
+        
+        if ($days === null) {
+            return ['text' => 'Belum pernah servis', 'class' => 'text-gray-500', 'badge' => 'gray'];
+        }
+        
+        if ($days == 0) {
+            return ['text' => 'Hari ini', 'class' => 'text-green-600', 'badge' => 'success'];
+        }
+        
+        if ($days > 30) {
+            return ['text' => $days . ' hari lalu (Perlu servis!)', 'class' => 'text-red-600 font-medium', 'badge' => 'danger'];
+        }
+        
+        if ($days > 15) {
+            return ['text' => $days . ' hari lalu (Segera servis)', 'class' => 'text-orange-600', 'badge' => 'warning'];
+        }
+        
+        return ['text' => $days . ' hari lalu', 'class' => 'text-gray-500', 'badge' => 'info'];
+    }
+
+    /**
+     * Check if vehicle needs maintenance (more than 30 days)
+     */
+    public function getNeedsMaintenanceAttribute()
+    {
+        $days = $this->days_since_maintenance;
+        return $days !== null && $days > 30;
+    }
+
+    /**
+     * Check if vehicle needs maintenance soon (15-30 days)
+     */
+    public function getNeedsMaintenanceSoonAttribute()
+    {
+        $days = $this->days_since_maintenance;
+        return $days !== null && $days > 15 && $days <= 30;
+    }
+
+    /**
+     * Get status badge class for styling
+     */
+    public function getStatusBadgeClassAttribute()
+    {
+        switch ($this->status) {
+            case 'available':
+                return 'bg-green-100 text-green-800 border-green-200';
+            case 'in_use':
+                return 'bg-blue-100 text-blue-800 border-blue-200';
+            case 'maintenance':
+                return 'bg-red-100 text-red-800 border-red-200';
+            default:
+                return 'bg-gray-100 text-gray-800 border-gray-200';
         }
     }
 }

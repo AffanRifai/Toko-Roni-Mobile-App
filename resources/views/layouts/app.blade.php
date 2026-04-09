@@ -277,7 +277,7 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
-            max-width: 350px;
+            max-width: 400px;
         }
 
         .toast {
@@ -403,7 +403,7 @@
             class="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden hidden transition-opacity duration-300">
         </div>
 
-        <!-- Global Toast Container -->
+        <!-- Global Toast Container (DARI KODE 2) -->
         <x-toast />
 
         <!-- Sidebar -->
@@ -467,7 +467,7 @@
                         <span class="sidebar-hide text-sm font-medium">Dashboard</span>
                     </a>
 
-                    @if (Auth::user()->role === 'owner')
+                    @if (in_array(Auth::user()->role, ['owner', 'manager']))
                         <!-- Management Section -->
                         <div class="sidebar-hide pt-3 mt-2 border-t border-gray-100 dark:border-gray-700">
                             <div class="px-3 mb-1">
@@ -494,6 +494,7 @@
                             <span class="sidebar-hide text-sm font-medium">Reports</span>
                         </a>
 
+                        <!-- AI Forecast (DARI KODE 2) -->
                         <a href="{{ route('forecast.index') }}"
                             class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 {{ request()->routeIs('forecast.*') ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50' }}"
                             data-tooltip="AI Forecast">
@@ -512,8 +513,35 @@
                             <span class="sidebar-hide text-sm font-medium">Transaction History</span>
                         </a>
                     @endif
+                    @if (in_array(Auth::user()->role, ['kasir']))
+                        <!-- Management Section -->
+                        <div class="sidebar-hide pt-3 mt-2 border-t border-gray-100 dark:border-gray-700">
+                            <div class="px-3 mb-1">
+                                <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Management
+                                </div>
+                            </div>
+                        </div>
 
-                    @if (in_array(Auth::user()->role, ['kasir', 'owner']))
+                        <a href="{{ route('reports.sales') }}"
+                            class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 {{ request()->routeIs('reports.*') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50' }}"
+                            data-tooltip="Reports">
+                            <div class="sidebar-menu-icon w-5 h-5 flex items-center justify-center mr-3">
+                                <i class="fas fa-chart-line text-sm"></i>
+                            </div>
+                            <span class="sidebar-hide text-sm font-medium">Reports</span>
+                        </a>
+
+                        <a href="{{ route('transactions.index') }}"
+                            class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 {{ request()->routeIs('transactions.index') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50' }}"
+                            data-tooltip="Transaction History">
+                            <div class="sidebar-menu-icon w-5 h-5 flex items-center justify-center mr-3">
+                                <i class="fas fa-receipt text-sm"></i>
+                            </div>
+                            <span class="sidebar-hide text-sm font-medium">Transaction History</span>
+                        </a>
+                    @endif
+
+                    @if (in_array(Auth::user()->role, ['kasir', 'owner', 'manager']))
                         <!-- Transaction Section -->
                         <div class="sidebar-hide pt-3 mt-2 border-t border-gray-100 dark:border-gray-700">
                             <div class="px-3 mb-1">
@@ -541,7 +569,7 @@
                         </a>
                     @endif
 
-                    @if (in_array(Auth::user()->role, ['owner', 'gudang']))
+                    @if (in_array(Auth::user()->role, ['owner', 'manager', 'kepala_gudang', 'checker_barang', 'kasir']))
                         <!-- Inventory Section -->
                         <div class="sidebar-hide pt-3 mt-2 border-t border-gray-100 dark:border-gray-700">
                             <div class="px-3 mb-1">
@@ -559,6 +587,7 @@
                             <span class="sidebar-hide text-sm font-medium">Products</span>
                         </a>
 
+                        @if (in_array(Auth::user()->role, ['owner', 'manager', 'kepala_gudang']))
                         <a href="{{ route('categories.index') }}"
                             class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 {{ request()->routeIs('categories.*') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50' }}"
                             data-tooltip="Categories">
@@ -567,50 +596,30 @@
                             </div>
                             <span class="sidebar-hide text-sm font-medium">Categories</span>
                         </a>
+                        @endif
                     @endif
 
-                    <!-- Logistics Management Section -->
-                    @if (in_array(Auth::user()->role, ['owner', 'logistik', 'admin']))
+                    <!-- Delivery Section -->
+                    @if (in_array(Auth::user()->role, ['owner', 'manager', 'logistik', 'kepala_gudang']))
                     <div class="sidebar-hide pt-3 mt-2 border-t border-gray-100 dark:border-gray-700">
                         <div class="px-3 mb-1">
-                            <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Logistics
+                            <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Logistic
                             </div>
                         </div>
                     </div>
 
                     <a href="{{ route('delivery.index') }}"
-                        class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 {{ request()->routeIs('delivery.index') || request()->routeIs('delivery.show') || request()->routeIs('delivery.edit') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50' }}"
-                        data-tooltip="Management">
+                        class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 {{ request()->routeIs('delivery.*') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50' }}"
+                        data-tooltip="Delivery">
                         <div class="sidebar-menu-icon w-5 h-5 flex items-center justify-center mr-3">
-                            <i class="fas fa-tasks text-sm"></i>
+                            <i class="fas fa-truck text-sm"></i>
                         </div>
-                        <span class="sidebar-hide text-sm font-medium">Management</span>
-                    </a>
-                    @endif
-
-                    <!-- Courier Section -->
-                    @if (in_array(Auth::user()->role, ['kurir', 'driver', 'logistik', 'owner']))
-                    @if (Auth::user()->role === 'kurir' || Auth::user()->role === 'driver')
-                    <div class="sidebar-hide pt-3 mt-2 border-t border-gray-100 dark:border-gray-700">
-                        <div class="px-3 mb-1">
-                            <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">My Tasks
-                            </div>
-                        </div>
-                    </div>
-                    @endif
-
-                    <a href="{{ route('delivery.my-deliveries') }}"
-                        class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 {{ request()->routeIs('delivery.my-deliveries') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50' }}"
-                        data-tooltip="My Deliveries">
-                        <div class="sidebar-menu-icon w-5 h-5 flex items-center justify-center mr-3">
-                            <i class="fas fa-truck-loading text-sm"></i>
-                        </div>
-                        <span class="sidebar-hide text-sm font-medium">My Deliveries</span>
+                        <span class="sidebar-hide text-sm font-medium">Delivery</span>
                     </a>
                     @endif
 
                     <!-- Vehicle Section -->
-                    @if (in_array(Auth::user()->role, ['owner', 'logistik','admin']))
+                    @if (in_array(Auth::user()->role, ['owner', 'manager', 'logistik','kepala_gudang']))
                     <a href="{{ route('vehicles.index') }}"
                         class="sidebar-tooltip sidebar-menu-item flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 {{ request()->routeIs('vehicles.*') ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/50' }}"
                         data-tooltip="Vehicle">
@@ -714,7 +723,7 @@
                 <div class="flex items-center space-x-3">
                     <!-- Notifications Dropdown -->
                     <x-notification-dropdown />
-
+                    
                     <!-- User Profile -->
                     <div class="flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity">
                         <div class="relative">
@@ -820,7 +829,7 @@
                 @yield('content')
             </main>
 
-            <!-- Footer -->
+            <!-- Footer with Alpine.js polling for live notifications (DARI KODE 2) -->
             <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-3" 
                     x-data="{ 
                         lastChecked: '{{ now()->toDateTimeString() }}',

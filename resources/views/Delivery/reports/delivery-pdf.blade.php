@@ -233,7 +233,7 @@
     <table class="stats-table">
         <tr>
             <td>
-                <div class="stats-label">TOTALE</div>
+                <div class="stats-label">TOTAL</div>
                 <div class="stats-value">{{ $stats['total'] }}</div>
             </td>
             <td>

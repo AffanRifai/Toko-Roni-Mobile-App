@@ -600,7 +600,8 @@ class AuthenticatedSessionController extends Controller
         return match($role) {
             'owner' => route('dashboard.owner'),
             'kasir' => route('dashboard.kasir'),
-            'kepala_gudang', 'checker' => route('dashboard.gudang'),
+            'kepala_gudang' => route('dashboard.kepala_gudang'),
+            'checker_barang' => route('dashboard.checker_barang'),
             'logistik' => route('dashboard.logistik'),
             'kurir' => route('dashboard.kurir'),
             default => route('dashboard'),

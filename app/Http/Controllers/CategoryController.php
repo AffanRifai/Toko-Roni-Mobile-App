@@ -30,31 +30,63 @@ class CategoryController extends Controller
 
     public function store(Request $request)
     {
+        // Log request untuk debugging
+        \Log::info('Category store request received', [
+            'all' => $request->all(),
+            'method' => $request->method(),
+            'url' => $request->url(),
+            'ajax' => $request->ajax()
+        ]);
+
         $validated = $request->validate([
             'name' => 'required|string|max:100|unique:categories,name',
             'description' => 'nullable|string|max:255',
+            'is_active' => 'sometimes|boolean',
         ]);
 
         try {
             DB::beginTransaction();
 
             $validated['slug'] = Str::slug($validated['name']);
-            $validated['is_active'] = $request->has('is_active');
+            $validated['is_active'] = $request->has('is_active') ? (bool)$request->is_active : true;
+
+            \Log::info('Creating category with data', $validated);
 
             $category = Category::create($validated);
+
+            \Log::info('Category created successfully', ['id' => $category->id, 'name' => $category->name]);
 
             // KIRIM NOTIFIKASI
             $this->sendCategoryCreatedNotifications($category);
 
             DB::commit();
 
-            return redirect()->route('categories.index')
-                ->with('success', 'Kategori berhasil ditambahkan');
+            // Jika AJAX request, return JSON
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Kategori "' . $category->name . '" berhasil ditambahkan!',
+                    'category' => $category
+                ]);
+            }
+
+            return redirect()->route('products.index')
+                ->with('success', 'Kategori "' . $category->name . '" berhasil ditambahkan!');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error creating category: ' . $e->getMessage());
-            return back()->withInput()->with('error', 'Gagal menambahkan kategori: ' . $e->getMessage());
+            \Log::error('Category creation failed: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Gagal menambahkan kategori: ' . $e->getMessage()
+                ], 500);
+            }
+            
+            return redirect()->route('products.index')
+                ->with('error', 'Gagal menambahkan kategori: ' . $e->getMessage());
         }
     }
 
@@ -89,6 +121,20 @@ class CategoryController extends Controller
         } catch (\Exception $e) {
             Log::error('Gagal mengirim notifikasi kategori: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Display the specified category.
+     */
+    public function show(Category $category)
+    {
+        // Load category dengan relasi products
+        $category->load('products');
+        
+        // Hitung jumlah produk dalam kategori ini
+        $productsCount = $category->products()->count();
+        
+        return view('categories.show', compact('category', 'productsCount'));
     }
 
     public function edit(Category $category)

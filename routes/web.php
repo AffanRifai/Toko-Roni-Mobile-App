@@ -1,7 +1,5 @@
 <?php
 
-// routes/web.php
-
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserController;
@@ -17,6 +15,7 @@ use App\Http\Controllers\ReceivableController;
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\DeliveryReportController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\CheckerReportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -29,6 +28,7 @@ use App\Http\Controllers\NotificationController;
 | ROOT ROUTE
 |--------------------------------------------------------------------------
 */
+// KODE (2) - Welcome page dengan stats
 Route::get('/', function () {
     $stats = [
         'products' => \App\Models\Product::count(),
@@ -50,6 +50,7 @@ Route::get('/', function () {
     return view('welcome', compact('stats', 'featuredProducts', 'categories'));
 });
 
+// KODE (2) - Route login fallback
 Route::get('/login', function () {
     return auth()->check() ? redirect()->route('dashboard') : redirect()->route('login');
 });
@@ -58,6 +59,7 @@ Route::get('/login', function () {
 |--------------------------------------------------------------------------
 | CSRF TOKEN REFRESH ROUTE (NO CSRF PROTECTION)
 |--------------------------------------------------------------------------
+| DARI KODE (2)
 */
 Route::get('/csrf-token', [AuthenticatedSessionController::class, 'refreshCsrf'])
     ->name('csrf.refresh')
@@ -74,6 +76,7 @@ require __DIR__ . '/auth.php';
 |--------------------------------------------------------------------------
 | PUBLIC FACE RECOGNITION ROUTES - TANPA CSRF
 |--------------------------------------------------------------------------
+| DARI KODE (2) - lebih lengkap
 */
 // Route face login TANPA middleware CSRF
 Route::post('/face-login', [AuthenticatedSessionController::class, 'faceLogin'])
@@ -85,34 +88,26 @@ Route::post('/face-register', [AuthenticatedSessionController::class, 'faceRegis
     ->name('face.register.direct')
     ->middleware(['auth']); // Hanya untuk yang sudah login
 
-// Route face comparison (public API, tanpa CSRF)
+// Route face comparison (public API, tanpa CSRF) - DARI KODE (2)
 Route::post('/face-compare', [AuthenticatedSessionController::class, 'compareFace'])
     ->name('face.compare')
     ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
 
-// Route face status (public)
+// Route face status (public) - DARI KODE (2)
 Route::get('/face-status', [AuthenticatedSessionController::class, 'faceStatus'])
     ->name('face.status')
     ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
 
-// Get users for face registration (AJAX) - perlu auth
+// Get users for face registration (AJAX) - perlu auth - DARI KODE (2)
 Route::get('/face-users', [AuthenticatedSessionController::class, 'getUsersForRegistration'])
     ->name('face.users')
     ->middleware(['auth']);
 
-// Get all registered faces (public)
+// Get all registered faces (public) - DARI KODE (2)
 Route::get('/registered-faces', [AuthenticatedSessionController::class, 'getRegisteredFaces'])
     ->name('face.registered')
     ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
 
-/*
-|--------------------------------------------------------------------------
-| AUTHENTICATED USERS ROUTES
-|--------------------------------------------------------------------------
-*/
-Route::middleware(['auth', 'verified'])->group(function () {
-    // ... rest of your authenticated routes ...
-});
 /*
 |--------------------------------------------------------------------------
 | AUTHENTICATED USERS ROUTES
@@ -125,19 +120,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     | DASHBOARD ROUTES
     |--------------------------------------------------------------------------
     */
-// Contoh route yang menggunakan middleware 'verified'
-Route::get('/dashboard', [DashboardController::class, 'index'])
-    ->middleware(['auth', 'verified']) // 'verified' sekarang benar
-    ->name('dashboard');
-        Route::get('/dashboard/chart-data/{range?}', [DashboardController::class, 'getChartData'])->name('dashboard.chart-data');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/logistik/chart-data/{range}', [DashboardController::class, 'getLogistikChartData'])
+        ->name('dashboard.logistik.chart-data')
+        ->middleware('role:logistik,staff_logistik');
 
-    // Role-specific dashboard routes
+    // Role-specific dashboard routes (DARI KODE 1 - lebih lengkap)
     Route::get('/dashboard/owner', [DashboardController::class, 'ownerDashboard'])->name('dashboard.owner')->middleware('role:owner');
+    Route::get('/dashboard/manager', [DashboardController::class, 'managerDashboard'])->name('dashboard.manager')->middleware('role:manager');
     Route::get('/dashboard/kasir', [DashboardController::class, 'kasirDashboard'])->name('dashboard.kasir')->middleware('role:kasir');
-    Route::get('/dashboard/gudang', [DashboardController::class, 'gudangDashboard'])->name('dashboard.gudang')->middleware('role:kepala_gudang');
-    Route::get('/dashboard/checker', [DashboardController::class, 'gudangDashboard'])->name('dashboard.gudang')->middleware('role:checker');
+    Route::get('/dashboard/kepala-gudang', [DashboardController::class, 'gudangDashboard'])->name('dashboard.kepala_gudang')->middleware('role:kepala_gudang');
+    Route::get('/dashboard/checker-barang', [DashboardController::class, 'checkerDashboard'])->name('dashboard.checker_barang')->middleware('role:checker_barang');
     Route::get('/dashboard/logistik', [DashboardController::class, 'logistikDashboard'])->name('dashboard.logistik')->middleware('role:logistik');
-    Route::get('/dashboard/kurir', [DashboardController::class, 'kurirDashboard'])->name('dashboard.kurir')->middleware('role:kurir');
 
     /*
     |--------------------------------------------------------------------------
@@ -153,7 +147,7 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     | VEHICLE MANAGEMENT ROUTES
     |--------------------------------------------------------------------------
     */
-    Route::middleware('role:owner,admin,logistik')->prefix('vehicles')->name('vehicles.')->group(function () {
+    Route::middleware('role:owner,manager,logistik,kepala_gudang')->prefix('vehicles')->name('vehicles.')->group(function () {
         Route::get('/', [VehicleController::class, 'index'])->name('index');
         Route::get('/create', [VehicleController::class, 'create'])->name('create');
         Route::post('/', [VehicleController::class, 'store'])->name('store');
@@ -188,6 +182,7 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     Route::prefix('receivables')->name('receivables.')->group(function () {
         Route::get('/', [ReceivableController::class, 'index'])->name('index');
         Route::get('/{receivable}', [ReceivableController::class, 'show'])->name('show');
+        Route::get('/{receivable}/show', [ReceivableController::class, 'show'])->name('receivables.show');
         Route::post('/{receivable}/pay', [ReceivableController::class, 'pay'])->name('pay');
         Route::get('/{receivable}/payment-history', [ReceivableController::class, 'paymentHistory'])->name('payment-history');
         Route::get('/export/{format}', [ReceivableController::class, 'export'])->name('export');
@@ -195,43 +190,80 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 
     /*
     |--------------------------------------------------------------------------
-    | TRANSACTION ROUTES (KASIR & OWNER)
+    | TRANSACTION ROUTES (KASIR, OWNER, MANAGER)
     |--------------------------------------------------------------------------
     */
-    Route::middleware('role:kasir,owner')->prefix('transactions')->name('transactions.')->group(function () {
+    Route::middleware('role:kasir,owner,manager')->prefix('transactions')->name('transactions.')->group(function () {
         Route::get('/', [TransactionController::class, 'index'])->name('index');
         Route::get('/create', [TransactionController::class, 'create'])->name('create');
         Route::post('/', [TransactionController::class, 'store'])->name('store');
         Route::get('/{transaction}/edit', [TransactionController::class, 'edit'])->name('edit');
         Route::put('/{transaction}', [TransactionController::class, 'update'])->name('update');
-        Route::get('/history', [TransactionController::class, 'index'])->name('history');
         Route::get('/{transaction}', [TransactionController::class, 'show'])->name('show');
+        Route::post('/{transaction}/delivery-request', [DeliveryController::class, 'requestDelivery'])->name('delivery.request');
         Route::get('/{transaction}/print', [TransactionController::class, 'printReceipt'])->name('print');
         Route::get('/{transaction}/download', [TransactionController::class, 'downloadReceipt'])->name('download');
 
-        // Owner only routes
-        Route::middleware('role:owner')->group(function () {
+        // Owner & Manager only routes (delete)
+        Route::middleware('role:owner,manager,kepala_gudang')->group(function () {
             Route::delete('/{transaction}', [TransactionController::class, 'destroy'])->name('destroy');
+        });
+    });
+
+    Route::get('/transactions/history', [App\Http\Controllers\TransactionController::class, 'history'])->name('transactions.history');
+    Route::get('/search-transactions', [App\Http\Controllers\TransactionController::class, 'searchForDelivery'])->name('search.transactions');
+
+    /*
+    |--------------------------------------------------------------------------
+    | PRODUCT ROUTES
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('products')->name('products.')->group(function () {
+        // ===== ROUTE STATIS (tanpa parameter) =====
+        Route::get('/create', [ProductController::class, 'create'])->name('create');
+        
+        // ===== ROUTE DENGAN FORMAT KHUSUS =====
+        Route::get('/{id}/details', [ProductController::class, 'getProductDetails'])->name('details');
+        Route::get('/{id}/quick-view', [ProductController::class, 'quickView'])->name('quick-view');
+        
+        // ===== CRUD ROUTES (dinamis dengan parameter) =====
+        Route::get('/', [ProductController::class, 'index'])->name('index');
+        Route::post('/', [ProductController::class, 'store'])->name('store');
+        Route::get('/{product}', [ProductController::class, 'show'])->name('show');
+        Route::get('/{product}/edit', [ProductController::class, 'edit'])->name('edit');
+        Route::put('/{product}', [ProductController::class, 'update'])->name('update');
+        Route::delete('/{product}', [ProductController::class, 'destroy'])->name('destroy');
+        
+        // ===== ACTION ROUTES =====
+        // Checker Barang bisa melaporkan produk (dengan middleware)
+        Route::middleware('role:checker_barang')->group(function () {
+            Route::post('/{product}/report', [ProductController::class, 'reportProduct'])->name('report');
+        });
+        
+        Route::middleware('role:kepala_gudang,owner,manager')->group(function () {
+        Route::post('/{product}/restock', [ProductController::class, 'restock'])->name('products.restock');
+        Route::post('/{product}/stock', [ProductController::class, 'stockUpdate'])->name('products.stock.update');
         });
     });
 
     /*
     |--------------------------------------------------------------------------
-    | PRODUCT ROUTES (OWNER & GUDANG)
+    | CHECKER REPORT ROUTES
     |--------------------------------------------------------------------------
+    | DARI KODE (1)
     */
-    Route::middleware('role:owner,kepala_gudang')->prefix('products')->name('products.')->group(function () {
-        Route::get('/', [ProductController::class, 'index'])->name('index');
-        Route::get('/create', [ProductController::class, 'create'])->name('create');
-        Route::post('/', [ProductController::class, 'store'])->name('store');
-        Route::get('/{product}/edit', [ProductController::class, 'edit'])->name('edit');
-        Route::put('/{product}', [ProductController::class, 'update'])->name('update');
-        Route::delete('/{product}', [ProductController::class, 'destroy'])->name('destroy');
+    Route::middleware('auth')->prefix('checker-reports')->name('checker.')->group(function () {
+        // Checker Barang bisa melihat laporannya sendiri
+        Route::middleware('role:checker_barang')->group(function () {
+            Route::get('/', [CheckerReportController::class, 'index'])->name('index');
+        });
 
-        // Additional product routes
-        Route::post('/{product}/stock', [ProductController::class, 'stockUpdate'])->name('stock.update');
-        Route::post('/import', [ProductController::class, 'import'])->name('import');
-        Route::get('/{id}/quick-view', [ProductController::class, 'quickView'])->name('quick-view');
+        // Kepala Gudang, Owner, Manager bisa mengelola semua laporan
+        Route::middleware('role:kepala_gudang,owner,manager')->group(function () {
+            Route::get('/all', [CheckerReportController::class, 'allReports'])->name('all');
+            Route::post('/{report}/resolve', [CheckerReportController::class, 'resolve'])->name('resolve');
+            Route::delete('/{report}', [CheckerReportController::class, 'destroy'])->name('destroy');
+        });
     });
 
     /*
@@ -243,29 +275,29 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
         Route::get('/dashboard', [DeliveryController::class, 'dashboard'])->name('dashboard');
 
         // Courier-specific routes (Must be before wildcard routes)
-        Route::middleware('role:kurir,driver,logistik,owner,admin')->group(function () {
+        Route::middleware('role:kurir,driver,logistik,owner,manager')->group(function () {
             Route::get('/staff-dashboard', [DeliveryController::class, 'staffDashboard'])->name('staff.dashboard');
             Route::get('/my-deliveries', [DeliveryController::class, 'myDeliveries'])->name('my-deliveries');
             Route::post('/location/update', [DeliveryController::class, 'updateStaffLocation'])->name('location');
             Route::post('/{delivery}/accept', [DeliveryController::class, 'acceptDelivery'])->name('accept');
         });
 
-
         // ===== ROUTES KHUSUS UNTUK TAMBAH KURIR DAN KENDARAAN =====
         Route::post('/kurir/store', [DeliveryController::class, 'storeKurir'])
             ->name('kurir.store')
-            ->middleware('role:owner,admin,logistik');
+            ->middleware('role:owner,manager,logistik');
 
         Route::post('/kendaraan/store', [DeliveryController::class, 'storeKendaraan'])
             ->name('kendaraan.store')
-            ->middleware('role:owner,admin,logistik');
+            ->middleware('role:owner,manager,logistik');
         // ===== END =====
 
-        // CRUD operations (hanya owner, admin, logistik)
-        Route::middleware('role:owner,admin,logistik')->group(function () {
+        // CRUD operations (owner, manager, logistik)
+        Route::middleware('role:owner,manager,logistik,kepala_gudang')->group(function () {
             Route::get('/', [DeliveryController::class, 'index'])->name('index');
             Route::get('/create', [DeliveryController::class, 'create'])->name('create');
             Route::post('/', [DeliveryController::class, 'store'])->name('store');
+            Route::get('/{delivery}', [DeliveryController::class, 'show'])->name('show');
             Route::get('/{delivery}/edit', [DeliveryController::class, 'edit'])->name('edit');
             Route::put('/{delivery}', [DeliveryController::class, 'update'])->name('update');
             Route::delete('/{delivery}', [DeliveryController::class, 'destroy'])->name('destroy');
@@ -275,15 +307,16 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
             Route::post('/staff/{staff}/status', [DeliveryController::class, 'updateStaffStatus'])->name('staff.status');
             Route::get('/zones/list', [DeliveryController::class, 'zones'])->name('zones.index');
             Route::get('/reports/generate', [DeliveryController::class, 'reports'])->name('reports');
+        });
 
-            // Export (admin only)
+        // Export (owner, manager, logistik)
+        Route::middleware('role:owner,manager,logistik')->group(function () {
             Route::get('/export', [DeliveryController::class, 'export'])->name('export');
         });
 
-        // Delivery actions (owner, admin, logistik, kurir, driver)
-        Route::middleware('role:owner,admin,logistik,kurir,driver')->group(function () {
-            Route::get('/{delivery}', [DeliveryController::class, 'show'])->name('show');
-            Route::post('/{delivery}/assign', [DeliveryController::class, 'assign'])->name('assign');
+        // Delivery actions (owner, manager, logistik, kurir)
+        Route::middleware('role:owner,manager,logistik,kurir')->group(function () {
+            Route::put('/{delivery}/assign', [DeliveryController::class, 'assign'])->name('assign');
             Route::post('/{delivery}/pickup', [DeliveryController::class, 'pickup'])->name('pickup');
             Route::post('/{delivery}/start', [DeliveryController::class, 'startDelivery'])->name('start');
             Route::post('/{delivery}/complete', [DeliveryController::class, 'complete'])->name('complete');
@@ -293,10 +326,11 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
             Route::get('/{delivery}/details', [DeliveryController::class, 'getDeliveryDetails'])->name('details');
         });
 
-
         // Print routes (semua role bisa akses)
-        Route::get('/{delivery}/print/note', [DeliveryController::class, 'printDeliveryNote'])->name('print.note');
-        Route::get('/{delivery}/print/receipt', [DeliveryController::class, 'printReceipt'])->name('print.receipt');
+        Route::middleware('auth')->group(function () {
+            Route::get('/{delivery}/print/note', [DeliveryController::class, 'printDeliveryNote'])->name('print.note');
+            Route::get('/{delivery}/print/receipt', [DeliveryController::class, 'printReceipt'])->name('print.receipt');
+        });
     });
 
     // Request delivery from transaction
@@ -304,10 +338,7 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 
     // Route untuk laporan PDF
     Route::prefix('reports')->middleware(['auth'])->group(function () {
-        // Route untuk PDF laporan pengiriman
         Route::get('/delivery/pdf', [DeliveryReportController::class, 'exportPdf'])->name('reports.delivery.pdf');
-
-        // Route untuk summary (jika ada)
         Route::get('/delivery/summary', [DeliveryReportController::class, 'summary'])->name('reports.delivery.summary');
     });
 
@@ -316,36 +347,56 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 
     /*
     |--------------------------------------------------------------------------
-    | CATEGORY ROUTES (OWNER & GUDANG)
+    | CATEGORY ROUTES
     |--------------------------------------------------------------------------
     */
-    Route::middleware('role:owner,kepala_gudang')->resource('categories', CategoryController::class)->except('show');
+    Route::prefix('categories')->name('categories.')->group(function () {
+        // Index - semua role bisa lihat
+        Route::middleware('role:owner,manager,kepala_gudang,checker_barang')->group(function () {
+            Route::get('/', [CategoryController::class, 'index'])->name('index');
+        });
+
+        // CRUD - hanya owner, manager, kepala_gudang
+        Route::middleware('role:owner,manager,kepala_gudang')->group(function () {
+            Route::get('/create', [CategoryController::class, 'create'])->name('create');
+            Route::post('/', [CategoryController::class, 'store'])->name('store');
+            Route::get('/{category}/edit', [CategoryController::class, 'edit'])->name('edit');
+            Route::put('/{category}', [CategoryController::class, 'update'])->name('update');
+            Route::delete('/{category}', [CategoryController::class, 'destroy'])->name('destroy');
+        });
+    });
 
     /*
     |--------------------------------------------------------------------------
-    | REPORT ROUTES (OWNER, MANAGER, ADMIN)
+    | REPORT ROUTES
     |--------------------------------------------------------------------------
     */
-    Route::middleware('role:owner,manager,admin')->prefix('reports')->name('reports.')->group(function () {
+    Route::middleware('role:owner,manager,kepala_gudang,kasir')->prefix('reports')->name('reports.')->group(function () {
         Route::get('/', [ReportController::class, 'index'])->name('index');
         Route::get('/sales', [ReportController::class, 'salesReport'])->name('sales');
         Route::get('/inventory', [ReportController::class, 'inventoryReport'])->name('inventory');
         Route::get('/best-selling', [ReportController::class, 'bestSellingProducts'])->name('best-selling');
         Route::get('/cashiers', [ReportController::class, 'cashierPerformance'])->name('cashiers');
         Route::get('/customers', [ReportController::class, 'customerReport'])->name('customers');
+        
+        // Export routes
+        Route::post('/sales/export-pdf', [App\Http\Controllers\ReportController::class, 'exportSalesPDF'])->name('sales.export-pdf');
+        Route::post('/inventory/export-pdf', [App\Http\Controllers\ReportController::class, 'exportInventoryPDF'])->name('inventory.export-pdf');
+        Route::get('/export/excel', [App\Http\Controllers\ReportController::class, 'exportExcel'])->name('export.excel');
 
         // Export routes
         Route::post('/export/pdf', [ReportController::class, 'exportPDF'])->name('export.pdf');
         Route::post('/sales/export-pdf', [ReportController::class, 'exportSalesPDF'])->name('sales.export-pdf');
         Route::post('/sales/export', [ReportController::class, 'exportSalesPDF'])->name('sales.export');
+        Route::get('/export/inventory-pdf', [ReportController::class, 'exportInventoryPDF'])->name('export.inventory-pdf');
     });
 
     /*
     |--------------------------------------------------------------------------
-    | USER MANAGEMENT ROUTES (OWNER ONLY)
+    | USER MANAGEMENT ROUTES (OWNER & MANAGER)
     |--------------------------------------------------------------------------
     */
-    Route::group(['middleware' => 'role:owner', 'prefix' => 'users', 'as' => 'users.'], function () {
+    Route::middleware('role:owner,manager')->prefix('users')->name('users.')->group(function () {
         // Basic CRUD
         Route::get('/', [UserController::class, 'index'])->name('index');
         Route::get('/create', [UserController::class, 'create'])->name('create');
@@ -353,7 +404,11 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
         Route::get('/{user}', [UserController::class, 'show'])->name('show');
         Route::get('/{user}/edit', [UserController::class, 'edit'])->name('edit');
         Route::put('/{user}', [UserController::class, 'update'])->name('update');
-        Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
+
+        // Hanya owner yang bisa hapus user
+        Route::middleware('role:owner')->group(function () {
+            Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
+        });
 
         // Additional actions
         Route::post('/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('toggle-status');
@@ -369,10 +424,8 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     |--------------------------------------------------------------------------
     | PROFILE SETTINGS ROUTES
     |--------------------------------------------------------------------------
-    | Routes for managing user profile settings.
-    |--------------------------------------------------------------------------
     */
-    Route::group(['prefix' => 'profile', 'as' => 'profile.'], function () {
+    Route::prefix('profile')->name('profile.')->group(function () {
         Route::get('/settings', [UserController::class, 'profile'])->name('settings');
         Route::put('/update', [UserController::class, 'updateProfile'])->name('update');
     });
@@ -381,20 +434,34 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     |--------------------------------------------------------------------------
     | NOTIFICATIONS
     |--------------------------------------------------------------------------
+    | DARI KODE (2) - dengan tambahan route recent dan unread-count
     */
     Route::prefix('notifications')->name('notifications.')->group(function () {
-        Route::get('/', [App\Http\Controllers\NotificationController::class, 'index'])->name('index');
-        Route::get('/recent', [App\Http\Controllers\NotificationController::class, 'getRecent'])->name('recent');
-        Route::get('/unread-count', [App\Http\Controllers\NotificationController::class, 'getUnreadCount'])->name('unread-count');
-        Route::post('/{id}/mark-as-read', [App\Http\Controllers\NotificationController::class, 'markAsRead'])->name('mark-as-read');
-        Route::post('/mark-all-as-read', [App\Http\Controllers\NotificationController::class, 'markAllAsRead'])->name('mark-all-as-read');
-        Route::delete('/{id}', [App\Http\Controllers\NotificationController::class, 'destroy'])->name('destroy');
-        Route::delete('/clear-all', [App\Http\Controllers\NotificationController::class, 'clearAll'])->name('clear-all');
+        Route::get('/', [NotificationController::class, 'index'])->name('index');
+        Route::get('/recent', [NotificationController::class, 'getRecent'])->name('recent'); // DARI KODE (2)
+        Route::get('/unread-count', [NotificationController::class, 'getUnreadCount'])->name('unread-count'); // DARI KODE (2)
+        Route::post('/{id}/mark-as-read', [NotificationController::class, 'markAsRead'])->name('mark-as-read');
+        Route::post('/mark-all-as-read', [NotificationController::class, 'markAllAsRead'])->name('mark-all-as-read');
+        Route::delete('/{id}', [NotificationController::class, 'destroy'])->name('destroy');
+        Route::delete('/clear-all', [NotificationController::class, 'clearAll'])->name('clear-all');
     });
     
-    // AI Forecast Routes
+    /*
+    |--------------------------------------------------------------------------
+    | AI FORECAST ROUTES
+    |--------------------------------------------------------------------------
+    */
     Route::prefix('forecast')->name('forecast.')->group(function () {
         Route::get('/', [\App\Http\Controllers\ForecastController::class, 'index'])->name('index');
         Route::get('/api-data', [\App\Http\Controllers\ForecastController::class, 'getApiData'])->name('api-data');
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | API FOR PRODUCTS
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('api/v1')->group(function () {
+    Route::get('/products/search', [ProductController::class, 'search'])->name('api.products.search');
     });
 });
