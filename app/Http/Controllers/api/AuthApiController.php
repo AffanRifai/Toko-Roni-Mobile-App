@@ -70,7 +70,6 @@ class AuthApiController extends Controller
                     'user'       => $this->formatUserData($user),
                 ],
             ], 200);
-
         } catch (\Exception $e) {
             Log::error('API Login error: ' . $e->getMessage());
 
@@ -136,7 +135,6 @@ class AuthApiController extends Controller
                     'user'       => $this->formatUserData($user),
                 ],
             ], 200);
-
         } catch (\Exception $e) {
             Log::error('API Face Login error: ' . $e->getMessage());
 
@@ -159,7 +157,6 @@ class AuthApiController extends Controller
                 'message' => 'Profile berhasil diambil',
                 'data'    => $this->formatUserData($request->user()),
             ], 200);
-
         } catch (\Exception $e) {
             Log::error('API Profile error: ' . $e->getMessage());
 
@@ -185,7 +182,6 @@ class AuthApiController extends Controller
                 'success' => true,
                 'message' => 'Logout berhasil',
             ], 200);
-
         } catch (\Exception $e) {
             Log::error('API Logout error: ' . $e->getMessage());
 
@@ -212,7 +208,6 @@ class AuthApiController extends Controller
                 'success' => true,
                 'data'    => $users,
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -244,7 +239,7 @@ class AuthApiController extends Controller
     private function formatUserData(User $user): array
     {
         return [
-            'id'            => $user->id,
+            'id'            => (string) $user->id, // string untuk Flutter
             'name'          => $user->name,
             'email'         => $user->email,
             'role'          => $user->role,
@@ -254,12 +249,12 @@ class AuthApiController extends Controller
             'is_active'     => (bool) $user->is_active,
             'jenis_toko'    => $user->jenis_toko    ?? null,
             'avatar'        => $user->image
-                                ? asset('storage/' . $user->image)
-                                : null,
+                ? asset('storage/' . $user->image)
+                : null,
             'has_face'      => !empty($user->face_descriptor),
             'last_login_at' => $user->last_login_at
-                                ? $user->last_login_at->format('d/m/Y H:i:s')
-                                : null,
+                ? $user->last_login_at->format('d/m/Y H:i:s')
+                : null,
             'created_at'    => $user->created_at->format('d/m/Y H:i:s'),
         ];
     }

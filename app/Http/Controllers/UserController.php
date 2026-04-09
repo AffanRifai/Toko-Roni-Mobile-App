@@ -1,4 +1,5 @@
 <?php
+
 /** @noinspection PhpUndefinedMethodInspection */
 /** @noinspection PhpUndefinedVariableInspection */
 
@@ -249,7 +250,6 @@ class UserController extends Controller
                 'best_distance' => $bestDistance,
                 'threshold' => $threshold
             ], 401);
-
         } catch (\Exception $e) {
             Log::error('Face login error: ' . $e->getMessage());
 
@@ -286,7 +286,7 @@ class UserController extends Controller
      */
     private function getRedirectUrl($role): string
     {
-        return match($role) {
+        return match ($role) {
             'owner' => route('dashboard'),
             'manager' => route('dashboard'),
             'kasir' => route('transactions.create'),
@@ -368,7 +368,6 @@ class UserController extends Controller
                 'score' => $score,
                 'registered_at' => $user->face_registered_at->format('d/m/Y H:i:s')
             ]);
-
         } catch (\Exception $e) {
             Log::error('Face registration error: ' . $e->getMessage());
 
@@ -405,7 +404,6 @@ class UserController extends Controller
             User::where('id', $userId)->update(['image' => $path]);
 
             Log::info('Face image saved', ['user_id' => $userId, 'path' => $path]);
-
         } catch (\Exception $e) {
             Log::error('Error saving face image: ' . $e->getMessage());
         }
@@ -460,7 +458,6 @@ class UserController extends Controller
                 'success' => true,
                 'message' => 'Face registration deleted successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error deleting face registration: ' . $e->getMessage());
 
@@ -493,7 +490,7 @@ class UserController extends Controller
             'phone'      => 'nullable|string|max:20',
             'address'    => 'nullable|string|max:500',
             'is_active'  => 'nullable|boolean',
-            'image'      => 'nullable|image|max:2048'
+            'image'      => 'nullable|image|max:2048',
         ]);
 
         // Validasi logic role x jenis toko
@@ -509,7 +506,7 @@ class UserController extends Controller
         if ($request->hasFile('image')) {
             $validated['image'] = $request->file('image')->store('users', 'public');
         }
-        
+
         // Buat user baru
         $user = User::create($validated);
 
@@ -581,7 +578,7 @@ class UserController extends Controller
             'phone'      => 'nullable|string|max:20',
             'address'    => 'nullable|string|max:500',
             'is_active'  => 'nullable|boolean',
-            'image'      => 'nullable|image|max:2048'
+            'image'      => 'nullable|image|max:2048',
         ]);
 
         if ($validated['role'] === 'kepala_gudang' && $validated['jenis_toko'] === 'eceran') {
@@ -608,7 +605,7 @@ class UserController extends Controller
         // Catat perubahan sebelum update
         $oldData = $user->toArray();
         $changes = [];
-        
+
         foreach ($validated as $key => $value) {
             if ($key != 'password' && isset($oldData[$key]) && $oldData[$key] != $value) {
                 $changes[$key] = [
@@ -619,14 +616,14 @@ class UserController extends Controller
         }
 
         $user->update($validated);
-        
+
         // Kirim notifikasi jika ada perubahan
         if (!empty($changes)) {
             // 1. Kirim ke semua owner dan manager
             $owners = User::whereIn('role', ['owner', 'manager'])
                 ->where('id', '!=', auth()->id())
                 ->get();
-            
+
             foreach ($owners as $owner) {
                 $owner->notify(new UserUpdatedNotification($user, auth()->user(), $changes));
                 Log::info('Notifikasi update terkirim ke owner/manager:', [
@@ -755,7 +752,6 @@ class UserController extends Controller
                 'score' => $score,
                 'registered_at' => $user->face_registered_at->format('d/m/Y H:i')
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error storing face data: ' . $e->getMessage());
             return response()->json([
@@ -783,7 +779,6 @@ class UserController extends Controller
                 'success' => true,
                 'message' => 'Registrasi wajah berhasil direset'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error destroying face data: ' . $e->getMessage());
             return response()->json([

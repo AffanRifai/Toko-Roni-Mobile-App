@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class ProductApiController extends Controller
 {
@@ -136,7 +137,46 @@ class ProductApiController extends Controller
      */
     public function store(Request $request)
     {
-        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+        $validated = $request->validate([
+            'code' => 'required|string|max:100|unique:products,code',
+            'name' => 'required|string|max:255',
+            'category_id' => 'required|integer|exists:categories,id',
+            'description' => 'nullable|string',
+            'price' => 'required|numeric|min:0',
+            'cost_price' => 'nullable|numeric|min:0',
+            'stock' => 'nullable|integer|min:0',
+            'min_stock' => 'nullable|integer|min:0',
+            'unit' => 'nullable|string|max:50',
+            'barcode' => 'nullable|string|max:100|unique:products,barcode',
+            'weight' => 'nullable|numeric|min:0',
+            'dimensions' => 'nullable|string|max:255',
+            'expiry_date' => 'nullable|date',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        try {
+            $validated['stock'] = $validated['stock'] ?? 0;
+            $validated['min_stock'] = $validated['min_stock'] ?? 10;
+            $validated['unit'] = $validated['unit'] ?? 'Pcs';
+            $validated['is_active'] = $validated['is_active'] ?? true;
+            $validated['created_by'] = auth()->id();
+            $validated['updated_by'] = auth()->id();
+
+            $product = Product::create($validated)->load('category');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Product created successfully',
+                'data' => $product,
+            ], 201);
+        } catch (\Exception $e) {
+            Log::error('Product store error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create product',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -144,7 +184,53 @@ class ProductApiController extends Controller
      */
     public function update(Request $request, Product $product)
     {
-        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+        $validated = $request->validate([
+            'code' => [
+                'sometimes',
+                'required',
+                'string',
+                'max:100',
+                Rule::unique('products', 'code')->ignore($product->id),
+            ],
+            'name' => 'sometimes|required|string|max:255',
+            'category_id' => 'sometimes|required|integer|exists:categories,id',
+            'description' => 'nullable|string',
+            'price' => 'sometimes|required|numeric|min:0',
+            'cost_price' => 'nullable|numeric|min:0',
+            'stock' => 'sometimes|required|integer|min:0',
+            'min_stock' => 'sometimes|required|integer|min:0',
+            'unit' => 'nullable|string|max:50',
+            'barcode' => [
+                'nullable',
+                'string',
+                'max:100',
+                Rule::unique('products', 'barcode')->ignore($product->id),
+            ],
+            'weight' => 'nullable|numeric|min:0',
+            'dimensions' => 'nullable|string|max:255',
+            'expiry_date' => 'nullable|date',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        try {
+            $validated['updated_by'] = auth()->id();
+
+            $product->update($validated);
+            $product->load('category');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Product updated successfully',
+                'data' => $product,
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Product update error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update product',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -152,7 +238,21 @@ class ProductApiController extends Controller
      */
     public function destroy(Product $product)
     {
-        return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+        try {
+            $product->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Product deleted successfully',
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Product delete error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete product',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

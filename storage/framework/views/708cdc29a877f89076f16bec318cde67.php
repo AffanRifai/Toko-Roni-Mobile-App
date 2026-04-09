@@ -48,23 +48,79 @@ $unreadCount = $user ? $user->unreadNotifications->count() : 0;
 ?>
 
 <?php if($user): ?>
-<div class="relative" x-data="{ open: false }">
+<div class="relative" x-data="{ 
+    open: false, 
+    notifications: [], 
+    unreadCount: 0,
+    loading: false,
+    
+    init() {
+        this.fetchNotifications();
+        // Polling setiap 30 detik
+        setInterval(() => this.fetchNotifications(), 30000);
+    },
+    
+    fetchNotifications() {
+        fetch('<?php echo e(route('notifications.recent')); ?>')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    this.notifications = data.data;
+                    this.unreadCount = data.unread_count;
+                }
+            });
+    },
+    
+    markAsRead(id) {
+        fetch(`/notifications/${id}/mark-as-read`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': '<?php echo e(csrf_token()); ?>',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                this.notifications = this.notifications.map(n => 
+                    n.id === id ? { ...n, is_unread: false } : n
+                );
+                this.unreadCount = data.unread_count;
+            }
+        });
+    },
+    
+    markAllRead() {
+        fetch('<?php echo e(route('notifications.mark-all-as-read')); ?>', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': '<?php echo e(csrf_token()); ?>',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                this.notifications = this.notifications.map(n => ({ ...n, is_unread: false }));
+                this.unreadCount = 0;
+            }
+        });
+    }
+}">
     <!-- Tombol Notifikasi -->
     <button @click="open = !open" 
             class="relative p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group focus:outline-none">
         <i class="fas fa-bell text-gray-600 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white text-sm"></i>
         
-        <?php if($unreadCount > 0): ?>
+        <template x-if="unreadCount > 0">
             <span class="absolute -top-1 -right-1 flex h-4 w-4">
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-white text-[10px] items-center justify-center font-bold">
-                    <?php echo e($unreadCount > 9 ? '9+' : $unreadCount); ?>
-
-                </span>
+                <span class="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-white text-[10px] items-center justify-center font-bold" x-text="unreadCount > 9 ? '9+' : unreadCount"></span>
             </span>
-        <?php else: ?>
-            <span class="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full"></span>
-        <?php endif; ?>
+        </template>
+        <template x-if="unreadCount === 0">
+            <span class="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full"></span>
+        </template>
     </button>
 
     <!-- Dropdown Menu -->
@@ -76,32 +132,28 @@ $unreadCount = $user ? $user->unreadNotifications->count() : 0;
          x-transition:leave="transition ease-in duration-75"
          x-transition:leave-start="transform opacity-100 scale-100"
          x-transition:leave-end="transform opacity-0 scale-95"
-         class="absolute z-50 <?php echo e($alignmentClasses); ?> mt-2 w-80 rounded-lg shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
+         class="absolute z-50 <?php echo e($alignmentClasses); ?> mt-2 w-80 rounded-xl shadow-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden"
          style="display: none;">
         
         <!-- Header -->
-        <div class="p-3 border-b border-gray-200 dark:border-gray-700">
+        <div class="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
             <div class="flex items-center justify-between">
-                <h3 class="font-semibold text-gray-900 dark:text-white text-sm">
+                <h3 class="font-bold text-gray-900 dark:text-white text-sm flex items-center">
                     Notifikasi
-                    <?php if($unreadCount > 0): ?>
-                        <span class="ml-2 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-0.5 rounded-full">
-                            <?php echo e($unreadCount); ?> baru
-                        </span>
-                    <?php endif; ?>
+                    <span x-show="unreadCount > 0" 
+                          class="ml-2 px-2 py-0.5 text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 rounded-full"
+                          x-text="unreadCount + ' baru'"></span>
                 </h3>
-                <?php if($unreadCount > 0): ?>
-                    <form action="<?php echo e(route('notifications.mark-all-as-read')); ?>" method="POST">
-                        <?php echo csrf_field(); ?>
-                        <button type="submit" class="text-xs text-blue-600 hover:text-blue-800">
-                            Tandai semua dibaca
-                        </button>
-                    </form>
-                <?php endif; ?>
+                <button x-show="unreadCount > 0" 
+                        @click="markAllRead()"
+                        class="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors">
+                    Tandai semua dibaca
+                </button>
             </div>
         </div>
 
         <!-- List Notifikasi -->
+<<<<<<< HEAD:storage/framework/views/708cdc29a877f89076f16bec318cde67.php
         <div class="max-h-96 overflow-y-auto">
             <?php $__empty_1 = true; $__currentLoopData = $notifications; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $notification): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                 <?php
@@ -228,20 +280,68 @@ $unreadCount = $user ? $user->unreadNotifications->count() : 0;
                     <p class="text-xs text-gray-400 mt-2">
                         User ID: <?php echo e(auth()->id()); ?> | 
                         Notif DB: <?php echo e(\App\Models\User::find(auth()->id())->notifications()->count()); ?>
+=======
+        <div class="max-h-[400px] overflow-y-auto">
+            <template x-if="notifications.length > 0">
+                <div class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="notif in notifications" :key="notif.id">
+                        <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors relative group"
+                             :class="notif.is_unread ? 'bg-indigo-50/30 dark:bg-indigo-900/10' : ''">
+                            
+                            <div class="flex items-start gap-3">
+                                <!-- Icon dengan Color -->
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
+                                     :class="`bg-${notif.color}-100 dark:bg-${notif.color}-900/30`">
+                                    <i :class="`${notif.icon} text-${notif.color}-600 dark:text-${notif.color}-400 text-xs`"></i>
+                                </div>
 
-                    </p>
+                                <!-- Content -->
+                                <div class="flex-1 min-w-0">
+                                    <a :href="notif.url" class="block">
+                                        <p class="text-sm text-gray-800 dark:text-gray-200 leading-snug mb-1"
+                                           :class="notif.is_unread ? 'font-semibold' : ''"
+                                           x-text="notif.message"></p>
+                                    </a>
+                                    <p class="text-[11px] text-gray-500 dark:text-gray-400 flex items-center">
+                                        <i class="far fa-clock mr-1 opacity-70"></i>
+                                        <span x-text="notif.time"></span>
+                                    </p>
+                                </div>
+
+                                <!-- Action Mark as Read (Single) -->
+                                <button x-show="notif.is_unread"
+                                        @click="markAsRead(notif.id)"
+                                        class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-indigo-500 hover:text-indigo-700"
+                                        title="Tandai dibaca">
+                                    <i class="fas fa-check-circle text-xs"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- Unread Bullet -->
+                            <div x-show="notif.is_unread" class="absolute top-4 right-4 w-2 h-2 bg-indigo-500 rounded-full"></div>
+                        </div>
+                    </template>
                 </div>
-            <?php endif; ?>
+            </template>
+>>>>>>> 1ec65ba3b8f30d623dcd67db18b4a0a05a968987:storage/framework/views/57de9ce022d17d199d53e825f0d900f4.php
+
+            <template x-if="notifications.length === 0">
+                <div class="p-10 text-center">
+                    <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-bell-slash text-2xl text-gray-400"></i>
+                    </div>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Belum ada notifikasi</p>
+                </div>
+            </template>
         </div>
 
-        <?php if($notifications->count() > 0): ?>
-            <div class="p-2 border-t border-gray-200 dark:border-gray-700">
-                <a href="<?php echo e(route('notifications.index')); ?>" 
-                   class="block text-center text-sm text-blue-600 hover:text-blue-800 py-1">
-                    Lihat semua notifikasi (<?php echo e($notifications->count()); ?>)
-                </a>
-            </div>
-        <?php endif; ?>
+        <!-- Footer -->
+        <div class="p-3 border-t border-gray-100 dark:border-gray-700 text-center bg-gray-50/30 dark:bg-gray-900/30">
+            <a href="<?php echo e(route('notifications.index')); ?>" 
+               class="text-xs font-bold text-gray-600 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 transition-colors uppercase tracking-wider">
+                Lihat Semua Notifikasi
+            </a>
+        </div>
     </div>
 </div>
 <?php endif; ?><?php /**PATH C:\laragon\www\Toko-Roni-Mobile-App\resources\views/components/notification-dropdown.blade.php ENDPATH**/ ?>
