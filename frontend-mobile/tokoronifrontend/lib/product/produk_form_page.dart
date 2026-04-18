@@ -2,16 +2,16 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../shared_widgets.dart';
+import '../core/services/product_service.dart';
+import '../widgets/shared_widgets.dart';
 import 'produk_model.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
-// HELPER — generate kode & barcode random
+// HELPERS
 // ════════════════════════════════════════════════════════════════════════════
 String generateKodeProduk() {
   final rng = Random();
-  final digits = List.generate(8, (_) => rng.nextInt(10)).join();
-  return 'PRD-$digits';
+  return 'PRD-${List.generate(8, (_) => rng.nextInt(10)).join()}';
 }
 
 String generateBarcode() {
@@ -24,26 +24,28 @@ String generateBarcode() {
 // ════════════════════════════════════════════════════════════════════════════
 class TambahProdukPage extends StatefulWidget {
   const TambahProdukPage({super.key});
-
   @override
   State<TambahProdukPage> createState() => _TambahProdukPageState();
 }
 
 class _TambahProdukPageState extends State<TambahProdukPage> {
   late ProdukFormModel _model;
-
-  late TextEditingController _namaCtrl, _kodeCtrl, _deskCtrl;
-  late TextEditingController _hargaJualCtrl, _hargaModalCtrl;
-  late TextEditingController _stokAwalCtrl, _stokMinCtrl;
-  late TextEditingController _barcodeCtrl, _beratCtrl, _dimensiCtrl;
-  late TextEditingController _kadaluarsaCtrl;
-
+  late _FormCtrls _ctrls;
   final Map<String, String?> _errors = {};
+  List<KategoriItem> _kategoriItems = [];
+  bool _isSubmitting = false;
 
-  static const _satuanList = ['Dus', 'Pcs', 'Pack', 'Kg', 'Liter', 'Meter'];
-
-  List<String> get _kategoriList =>
-      dummyKategoriList.map((k) => k.nama).toList();
+  static const _satuanList = [
+    'Dus',
+    'Pcs',
+    'Pack',
+    'Kg',
+    'Per Kg',
+    'Liter',
+    'Per Liter',
+    'Meter',
+  ];
+  List<String> get _kategoriList => _kategoriItems.map((k) => k.nama).toList();
 
   @override
   void initState() {
@@ -52,61 +54,53 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
       kode: generateKodeProduk(),
       barcode: generateBarcode(),
     );
-    _initControllers();
-  }
-
-  void _initControllers() {
-    _namaCtrl = TextEditingController(text: _model.nama);
-    _kodeCtrl = TextEditingController(text: _model.kode);
-    _deskCtrl = TextEditingController(text: _model.deskripsi);
-    _hargaJualCtrl = TextEditingController(text: _model.hargaJual);
-    _hargaModalCtrl = TextEditingController(text: _model.hargaModal);
-    _stokAwalCtrl = TextEditingController(text: _model.stokAwal);
-    _stokMinCtrl = TextEditingController(text: _model.stokMinimum);
-    _barcodeCtrl = TextEditingController(text: _model.barcode);
-    _beratCtrl = TextEditingController(text: _model.berat);
-    _dimensiCtrl = TextEditingController(text: _model.dimensi);
-    _kadaluarsaCtrl = TextEditingController(
-      text: _model.kadaluarsa != null ? _fmtDate(_model.kadaluarsa!) : '',
-    );
+    _ctrls = _FormCtrls.fromModel(_model);
+    _loadKategori();
   }
 
   @override
   void dispose() {
-    for (final c in [
-      _namaCtrl,
-      _kodeCtrl,
-      _deskCtrl,
-      _hargaJualCtrl,
-      _hargaModalCtrl,
-      _stokAwalCtrl,
-      _stokMinCtrl,
-      _barcodeCtrl,
-      _beratCtrl,
-      _dimensiCtrl,
-      _kadaluarsaCtrl,
-    ]) {
-      c.dispose();
-    }
+    _ctrls.dispose();
     super.dispose();
   }
 
-  String _fmtDate(DateTime dt) =>
-      '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-
   void _regenKode() => setState(() {
-    _kodeCtrl.text = _model.kode = generateKodeProduk();
+    _ctrls.kode.text = _model.kode = generateKodeProduk();
   });
   void _regenBarcode() => setState(() {
-    _barcodeCtrl.text = _model.barcode = generateBarcode();
+    _ctrls.barcode.text = _model.barcode = generateBarcode();
   });
 
+  Future<void> _loadKategori() async {
+    try {
+      final fromApi = await ProductService.getCategories();
+      if (!mounted || fromApi.isEmpty) return;
+      setState(() => _kategoriItems = fromApi);
+    } catch (_) {}
+  }
+
+  void _syncModelFromCtrls() {
+    _model
+      ..nama = _ctrls.nama.text.trim()
+      ..kode = _ctrls.kode.text.trim()
+      ..deskripsi = _ctrls.deskripsi.text.trim()
+      ..hargaJual = _ctrls.hargaJual.text.trim()
+      ..hargaModal = _ctrls.hargaModal.text.trim()
+      ..stokAwal = _ctrls.stokAwal.text.trim()
+      ..stokMinimum = _ctrls.stokMin.text.trim()
+      ..barcode = _ctrls.barcode.text.trim()
+      ..berat = _ctrls.berat.text.trim()
+      ..dimensi = _ctrls.dimensi.text.trim();
+  }
+
   Future<void> _pickDate() async {
+    final today = DateTime.now();
+    final initial =
+        _model.kadaluarsa ?? DateTime.now().add(const Duration(days: 365));
     final picked = await showDatePicker(
       context: context,
-      initialDate:
-          _model.kadaluarsa ?? DateTime.now().add(const Duration(days: 365)),
-      firstDate: DateTime.now(),
+      initialDate: initial.isBefore(today) ? today : initial,
+      firstDate: today,
       lastDate: DateTime(2040),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
@@ -121,21 +115,22 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
     if (picked != null)
       setState(() {
         _model.kadaluarsa = picked;
-        _kadaluarsaCtrl.text = _fmtDate(picked);
+        _ctrls.kadaluarsa.text = _fmtDate(picked);
         _errors.remove('kadaluarsa');
       });
   }
 
   bool _validate() {
     final e = <String, String?>{};
-    if (_namaCtrl.text.trim().isEmpty) e['nama'] = 'Nama produk wajib diisi';
-    if (_kodeCtrl.text.trim().isEmpty) e['kode'] = 'Kode produk wajib diisi';
+    if (_ctrls.nama.text.trim().isEmpty) e['nama'] = 'Nama produk wajib diisi';
+    if (_ctrls.kode.text.trim().isEmpty) e['kode'] = 'Kode produk wajib diisi';
     if (_model.kategori.isEmpty) e['kategori'] = 'Kategori wajib dipilih';
-    if (_hargaJualCtrl.text.trim().isEmpty)
+    if (_ctrls.hargaJual.text.trim().isEmpty)
       e['hargaJual'] = 'Harga jual wajib diisi';
-    if (_stokAwalCtrl.text.trim().isEmpty)
+    if (_ctrls.stokAwal.text.trim().isEmpty)
       e['stokAwal'] = 'Stok awal wajib diisi';
-    if (_barcodeCtrl.text.trim().isEmpty) e['barcode'] = 'Barcode wajib diisi';
+    if (_ctrls.barcode.text.trim().isEmpty)
+      e['barcode'] = 'Barcode wajib diisi';
     if (_model.kadaluarsa == null)
       e['kadaluarsa'] = 'Tanggal kadaluarsa wajib diisi';
     setState(
@@ -164,37 +159,14 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
           );
           _errors.clear();
         });
-        for (final c in [
-          _namaCtrl,
-          _deskCtrl,
-          _hargaJualCtrl,
-          _hargaModalCtrl,
-          _stokAwalCtrl,
-          _stokMinCtrl,
-          _beratCtrl,
-          _dimensiCtrl,
-          _kadaluarsaCtrl,
-        ]) {
-          c.clear();
-        }
-        _kodeCtrl.text = _model.kode;
-        _barcodeCtrl.text = _model.barcode;
+        _ctrls.resetToModel(_model);
       },
     ),
   );
 
   void _showSimpanDialog() {
     if (!_validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Harap isi semua field yang wajib diisi (*)'),
-          backgroundColor: const Color(0xFFE53E3E),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
+      _showErrorSnack();
       return;
     }
     showDialog(
@@ -207,23 +179,64 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
             'Apakah semua informasi produk sudah benar? Produk akan disimpan ke database.',
         confirmLabel: 'Ya, Simpan',
         confirmColor: const Color(0xFF4169E1),
-        onConfirm: () {
-          // TODO: kirim _model.toJson() ke API Laravel POST /api/produk
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Produk berhasil disimpan!'),
-              backgroundColor: const Color(0xFF48BB78),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          );
-        },
+        onConfirm: _submitCreateProduk,
       ),
     );
   }
+
+  Future<void> _submitCreateProduk() async {
+    if (_isSubmitting) return;
+    _syncModelFromCtrls();
+    setState(() => _isSubmitting = true);
+    try {
+      final latestKategori = await ProductService.getCategories();
+      final kategoriForSubmit = latestKategori.isNotEmpty
+          ? latestKategori
+          : _kategoriItems;
+      if (latestKategori.isNotEmpty && mounted) {
+        setState(() => _kategoriItems = latestKategori);
+      }
+      await ProductService.createProduct(
+        model: _model,
+        categories: kategoriForSubmit,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Produk berhasil disimpan!'),
+          backgroundColor: const Color(0xFF48BB78),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: const Color(0xFFE53E3E),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  void _showErrorSnack() => ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: const Text('Harap isi semua field yang wajib diisi (*)'),
+      backgroundColor: const Color(0xFFE53E3E),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -235,27 +248,14 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
         isEdit: false,
         model: _model,
         errors: _errors,
-        namaCtrl: _namaCtrl,
-        kodeCtrl: _kodeCtrl,
-        deskCtrl: _deskCtrl,
-        hargaJualCtrl: _hargaJualCtrl,
-        hargaModalCtrl: _hargaModalCtrl,
-        stokAwalCtrl: _stokAwalCtrl,
-        stokMinCtrl: _stokMinCtrl,
-        barcodeCtrl: _barcodeCtrl,
-        beratCtrl: _beratCtrl,
-        dimensiCtrl: _dimensiCtrl,
-        kadaluarsaCtrl: _kadaluarsaCtrl,
+        ctrls: _ctrls,
         kategoriList: _kategoriList,
         satuanList: _satuanList,
         onKategoriChanged: (v) => setState(() {
           _model.kategori = v ?? '';
           _errors.remove('kategori');
         }),
-        onSatuanChanged: (v) => setState(() {
-          _model.satuan = v ?? '';
-          _errors.remove('satuan');
-        }),
+        onSatuanChanged: (v) => setState(() => _model.satuan = v ?? 'Dus'),
         onAktifChanged: (v) => setState(() => _model.aktif = v),
         onRegenKode: _regenKode,
         onRegenBarcode: _regenBarcode,
@@ -269,93 +269,94 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// EDIT PRODUK PAGE
+// EDIT PRODUK PAGE — pre-fill dari ProdukItem yang dipilih di tabel
 // ════════════════════════════════════════════════════════════════════════════
 class EditProdukPage extends StatefulWidget {
-  // ← Terima ProdukItem (bukan ProdukTableItem lagi)
-  final ProdukItem produk;
+  final ProdukItem produk; // data dari baris tabel yang diklik
   const EditProdukPage({super.key, required this.produk});
-
   @override
   State<EditProdukPage> createState() => _EditProdukPageState();
 }
 
 class _EditProdukPageState extends State<EditProdukPage> {
   late ProdukFormModel _model;
-
-  late TextEditingController _namaCtrl, _kodeCtrl, _deskCtrl;
-  late TextEditingController _hargaJualCtrl, _hargaModalCtrl;
-  late TextEditingController _stokAwalCtrl, _stokMinCtrl;
-  late TextEditingController _barcodeCtrl, _beratCtrl, _dimensiCtrl;
-  late TextEditingController _kadaluarsaCtrl;
-
+  late _FormCtrls _ctrls;
   final Map<String, String?> _errors = {};
+  List<KategoriItem> _kategoriItems = [];
+  bool _isSubmitting = false;
 
-  static const _satuanList = ['Dus', 'Pcs', 'Pack', 'Kg', 'Liter', 'Meter'];
-  List<String> get _kategoriList =>
-      dummyKategoriList.map((k) => k.nama).toList();
+  static const _satuanList = [
+    'Dus',
+    'Pcs',
+    'Pack',
+    'Kg',
+    'Per Kg',
+    'Liter',
+    'Per Liter',
+    'Meter',
+  ];
+  List<String> get _kategoriList => _kategoriItems.map((k) => k.nama).toList();
 
   @override
   void initState() {
     super.initState();
-    // Pre-fill dari ProdukItem pakai ProdukFormModel.fromItem()
+    // Pre-fill semua field dari ProdukItem yang dikirim dari tabel
     _model = ProdukFormModel.fromItem(widget.produk);
     if (_model.barcode.isEmpty) _model.barcode = generateBarcode();
-    _initControllers();
-  }
-
-  void _initControllers() {
-    _namaCtrl = TextEditingController(text: _model.nama);
-    _kodeCtrl = TextEditingController(text: _model.kode);
-    _deskCtrl = TextEditingController(text: _model.deskripsi);
-    _hargaJualCtrl = TextEditingController(text: _model.hargaJual);
-    _hargaModalCtrl = TextEditingController(text: _model.hargaModal);
-    _stokAwalCtrl = TextEditingController(text: _model.stokAwal);
-    _stokMinCtrl = TextEditingController(text: _model.stokMinimum);
-    _barcodeCtrl = TextEditingController(text: _model.barcode);
-    _beratCtrl = TextEditingController(text: _model.berat);
-    _dimensiCtrl = TextEditingController(text: _model.dimensi);
-    _kadaluarsaCtrl = TextEditingController(
-      text: _model.kadaluarsa != null ? _fmtDate(_model.kadaluarsa!) : '',
-    );
+    _ctrls = _FormCtrls.fromModel(_model);
+    _loadKategori();
   }
 
   @override
   void dispose() {
-    for (final c in [
-      _namaCtrl,
-      _kodeCtrl,
-      _deskCtrl,
-      _hargaJualCtrl,
-      _hargaModalCtrl,
-      _stokAwalCtrl,
-      _stokMinCtrl,
-      _barcodeCtrl,
-      _beratCtrl,
-      _dimensiCtrl,
-      _kadaluarsaCtrl,
-    ]) {
-      c.dispose();
-    }
+    _ctrls.dispose();
     super.dispose();
   }
 
-  String _fmtDate(DateTime dt) =>
-      '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-
   void _regenKode() => setState(() {
-    _kodeCtrl.text = _model.kode = generateKodeProduk();
+    _ctrls.kode.text = _model.kode = generateKodeProduk();
   });
   void _regenBarcode() => setState(() {
-    _barcodeCtrl.text = _model.barcode = generateBarcode();
+    _ctrls.barcode.text = _model.barcode = generateBarcode();
   });
 
+  Future<void> _loadKategori() async {
+    try {
+      final fromApi = await ProductService.getCategories();
+      if (!mounted || fromApi.isEmpty) return;
+      setState(() {
+        _kategoriItems = fromApi;
+        final activeKategori = _model.kategori.trim().toLowerCase();
+        final matched = _kategoriItems.where(
+          (k) => k.nama.trim().toLowerCase() == activeKategori,
+        );
+        _model.kategori = matched.isNotEmpty ? matched.first.nama : '';
+      });
+    } catch (_) {}
+  }
+
+  void _syncModelFromCtrls() {
+    _model
+      ..nama = _ctrls.nama.text.trim()
+      ..kode = _ctrls.kode.text.trim()
+      ..deskripsi = _ctrls.deskripsi.text.trim()
+      ..hargaJual = _ctrls.hargaJual.text.trim()
+      ..hargaModal = _ctrls.hargaModal.text.trim()
+      ..stokAwal = _ctrls.stokAwal.text.trim()
+      ..stokMinimum = _ctrls.stokMin.text.trim()
+      ..barcode = _ctrls.barcode.text.trim()
+      ..berat = _ctrls.berat.text.trim()
+      ..dimensi = _ctrls.dimensi.text.trim();
+  }
+
   Future<void> _pickDate() async {
+    final today = DateTime.now();
+    final initial =
+        _model.kadaluarsa ?? DateTime.now().add(const Duration(days: 365));
     final picked = await showDatePicker(
       context: context,
-      initialDate:
-          _model.kadaluarsa ?? DateTime.now().add(const Duration(days: 365)),
-      firstDate: DateTime.now(),
+      initialDate: initial.isBefore(today) ? today : initial,
+      firstDate: today,
       lastDate: DateTime(2040),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
@@ -370,21 +371,22 @@ class _EditProdukPageState extends State<EditProdukPage> {
     if (picked != null)
       setState(() {
         _model.kadaluarsa = picked;
-        _kadaluarsaCtrl.text = _fmtDate(picked);
+        _ctrls.kadaluarsa.text = _fmtDate(picked);
         _errors.remove('kadaluarsa');
       });
   }
 
   bool _validate() {
     final e = <String, String?>{};
-    if (_namaCtrl.text.trim().isEmpty) e['nama'] = 'Nama produk wajib diisi';
-    if (_kodeCtrl.text.trim().isEmpty) e['kode'] = 'Kode produk wajib diisi';
+    if (_ctrls.nama.text.trim().isEmpty) e['nama'] = 'Nama produk wajib diisi';
+    if (_ctrls.kode.text.trim().isEmpty) e['kode'] = 'Kode produk wajib diisi';
     if (_model.kategori.isEmpty) e['kategori'] = 'Kategori wajib dipilih';
-    if (_hargaJualCtrl.text.trim().isEmpty)
+    if (_ctrls.hargaJual.text.trim().isEmpty)
       e['hargaJual'] = 'Harga jual wajib diisi';
-    if (_stokAwalCtrl.text.trim().isEmpty)
+    if (_ctrls.stokAwal.text.trim().isEmpty)
       e['stokAwal'] = 'Stok awal wajib diisi';
-    if (_barcodeCtrl.text.trim().isEmpty) e['barcode'] = 'Barcode wajib diisi';
+    if (_ctrls.barcode.text.trim().isEmpty)
+      e['barcode'] = 'Barcode wajib diisi';
     if (_model.kadaluarsa == null)
       e['kadaluarsa'] = 'Tanggal kadaluarsa wajib diisi';
     setState(
@@ -409,34 +411,14 @@ class _EditProdukPageState extends State<EditProdukPage> {
           _model = ProdukFormModel.fromItem(widget.produk);
           _errors.clear();
         });
-        _namaCtrl.text = _model.nama;
-        _kodeCtrl.text = _model.kode;
-        _hargaJualCtrl.text = _model.hargaJual;
-        _stokAwalCtrl.text = _model.stokAwal;
-        _kadaluarsaCtrl.text = _model.kadaluarsa != null
-            ? _fmtDate(_model.kadaluarsa!)
-            : '';
-        _deskCtrl.clear();
-        _hargaModalCtrl.clear();
-        _stokMinCtrl.clear();
-        _beratCtrl.clear();
-        _dimensiCtrl.clear();
+        _ctrls.resetToModel(_model);
       },
     ),
   );
 
   void _showSimpanDialog() {
     if (!_validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Harap isi semua field yang wajib diisi (*)'),
-          backgroundColor: const Color(0xFFE53E3E),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
+      _showErrorSnack();
       return;
     }
     showDialog(
@@ -449,23 +431,79 @@ class _EditProdukPageState extends State<EditProdukPage> {
             'Apakah semua perubahan sudah benar? Data produk akan diperbarui.',
         confirmLabel: 'Ya, Update',
         confirmColor: const Color(0xFFD69E2E),
-        onConfirm: () {
-          // TODO: kirim _model.toJson() ke API Laravel PUT /api/produk/{kode}
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Produk berhasil diperbarui!'),
-              backgroundColor: const Color(0xFF48BB78),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          );
-        },
+        onConfirm: _submitUpdateProduk,
       ),
     );
   }
+
+  Future<void> _submitUpdateProduk() async {
+    if (_isSubmitting) return;
+    if (widget.produk.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('ID produk tidak ditemukan, gagal update.'),
+          backgroundColor: const Color(0xFFE53E3E),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      return;
+    }
+
+    _syncModelFromCtrls();
+    setState(() => _isSubmitting = true);
+    try {
+      final latestKategori = await ProductService.getCategories();
+      final kategoriForSubmit = latestKategori.isNotEmpty
+          ? latestKategori
+          : _kategoriItems;
+      if (latestKategori.isNotEmpty && mounted) {
+        setState(() => _kategoriItems = latestKategori);
+      }
+      await ProductService.updateProduct(
+        productId: widget.produk.id!,
+        model: _model,
+        categories: kategoriForSubmit,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Produk berhasil diperbarui!'),
+          backgroundColor: const Color(0xFF48BB78),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: const Color(0xFFE53E3E),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  void _showErrorSnack() => ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: const Text('Harap isi semua field yang wajib diisi (*)'),
+      backgroundColor: const Color(0xFFE53E3E),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -477,27 +515,14 @@ class _EditProdukPageState extends State<EditProdukPage> {
         isEdit: true,
         model: _model,
         errors: _errors,
-        namaCtrl: _namaCtrl,
-        kodeCtrl: _kodeCtrl,
-        deskCtrl: _deskCtrl,
-        hargaJualCtrl: _hargaJualCtrl,
-        hargaModalCtrl: _hargaModalCtrl,
-        stokAwalCtrl: _stokAwalCtrl,
-        stokMinCtrl: _stokMinCtrl,
-        barcodeCtrl: _barcodeCtrl,
-        beratCtrl: _beratCtrl,
-        dimensiCtrl: _dimensiCtrl,
-        kadaluarsaCtrl: _kadaluarsaCtrl,
+        ctrls: _ctrls,
         kategoriList: _kategoriList,
         satuanList: _satuanList,
         onKategoriChanged: (v) => setState(() {
           _model.kategori = v ?? '';
           _errors.remove('kategori');
         }),
-        onSatuanChanged: (v) => setState(() {
-          _model.satuan = v ?? '';
-          _errors.remove('satuan');
-        }),
+        onSatuanChanged: (v) => setState(() => _model.satuan = v ?? 'Dus'),
         onAktifChanged: (v) => setState(() => _model.aktif = v),
         onRegenKode: _regenKode,
         onRegenBarcode: _regenBarcode,
@@ -509,6 +534,82 @@ class _EditProdukPageState extends State<EditProdukPage> {
     ),
   );
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// FORM CONTROLLERS — bundled supaya mudah di-pass & dispose
+// ════════════════════════════════════════════════════════════════════════════
+class _FormCtrls {
+  final TextEditingController nama, kode, deskripsi;
+  final TextEditingController hargaJual, hargaModal;
+  final TextEditingController stokAwal, stokMin;
+  final TextEditingController barcode, berat, dimensi, kadaluarsa;
+
+  _FormCtrls({
+    required this.nama,
+    required this.kode,
+    required this.deskripsi,
+    required this.hargaJual,
+    required this.hargaModal,
+    required this.stokAwal,
+    required this.stokMin,
+    required this.barcode,
+    required this.berat,
+    required this.dimensi,
+    required this.kadaluarsa,
+  });
+
+  factory _FormCtrls.fromModel(ProdukFormModel m) => _FormCtrls(
+    nama: TextEditingController(text: m.nama),
+    kode: TextEditingController(text: m.kode),
+    deskripsi: TextEditingController(text: m.deskripsi),
+    hargaJual: TextEditingController(text: m.hargaJual),
+    hargaModal: TextEditingController(text: m.hargaModal),
+    stokAwal: TextEditingController(text: m.stokAwal),
+    stokMin: TextEditingController(text: m.stokMinimum),
+    barcode: TextEditingController(text: m.barcode),
+    berat: TextEditingController(text: m.berat),
+    dimensi: TextEditingController(text: m.dimensi),
+    kadaluarsa: TextEditingController(
+      text: m.kadaluarsa != null ? _fmtDate(m.kadaluarsa!) : '',
+    ),
+  );
+
+  /// Reset semua controller ke nilai model
+  void resetToModel(ProdukFormModel m) {
+    nama.text = m.nama;
+    kode.text = m.kode;
+    deskripsi.text = m.deskripsi;
+    hargaJual.text = m.hargaJual;
+    hargaModal.text = m.hargaModal;
+    stokAwal.text = m.stokAwal;
+    stokMin.text = m.stokMinimum;
+    barcode.text = m.barcode;
+    berat.text = m.berat;
+    dimensi.text = m.dimensi;
+    kadaluarsa.text = m.kadaluarsa != null ? _fmtDate(m.kadaluarsa!) : '';
+  }
+
+  void dispose() {
+    for (final c in [
+      nama,
+      kode,
+      deskripsi,
+      hargaJual,
+      hargaModal,
+      stokAwal,
+      stokMin,
+      barcode,
+      berat,
+      dimensi,
+      kadaluarsa,
+    ]) {
+      c.dispose();
+    }
+  }
+}
+
+String _fmtDate(DateTime dt) =>
+    '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
 
 // ════════════════════════════════════════════════════════════════════════════
 // SHARED APP BAR
@@ -530,19 +631,13 @@ PreferredSizeWidget _formAppBar(
 );
 
 // ════════════════════════════════════════════════════════════════════════════
-// PRODUK FORM BODY — shared antara Tambah & Edit
+// PRODUK FORM BODY — shared antara Tambah & Edit, semua field 1 kolom penuh
 // ════════════════════════════════════════════════════════════════════════════
 class _ProdukFormBody extends StatelessWidget {
   final bool isEdit;
   final ProdukFormModel model;
   final Map<String, String?> errors;
-  final TextEditingController namaCtrl, kodeCtrl, deskCtrl;
-  final TextEditingController hargaJualCtrl, hargaModalCtrl;
-  final TextEditingController stokAwalCtrl, stokMinCtrl;
-  final TextEditingController barcodeCtrl,
-      beratCtrl,
-      dimensiCtrl,
-      kadaluarsaCtrl;
+  final _FormCtrls ctrls;
   final List<String> kategoriList, satuanList;
   final void Function(String?) onKategoriChanged, onSatuanChanged;
   final void Function(bool) onAktifChanged;
@@ -553,17 +648,7 @@ class _ProdukFormBody extends StatelessWidget {
     required this.isEdit,
     required this.model,
     required this.errors,
-    required this.namaCtrl,
-    required this.kodeCtrl,
-    required this.deskCtrl,
-    required this.hargaJualCtrl,
-    required this.hargaModalCtrl,
-    required this.stokAwalCtrl,
-    required this.stokMinCtrl,
-    required this.barcodeCtrl,
-    required this.beratCtrl,
-    required this.dimensiCtrl,
-    required this.kadaluarsaCtrl,
+    required this.ctrls,
     required this.kategoriList,
     required this.satuanList,
     required this.onKategoriChanged,
@@ -585,7 +670,7 @@ class _ProdukFormBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Form header ──
+        // ── Form header card ──────────────────────────────────────────────────
         Container(
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -615,7 +700,7 @@ class _ProdukFormBody extends StatelessWidget {
           ),
         ),
 
-        // ── Form body ──
+        // ── Form body ─────────────────────────────────────────────────────────
         Container(
           decoration: const BoxDecoration(
             color: Colors.white,
@@ -628,255 +713,170 @@ class _ProdukFormBody extends StatelessWidget {
               ),
             ],
           ),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ════ INFORMASI DASAR ════
+              // ══════════════════════════════
+              // INFORMASI DASAR
+              // ══════════════════════════════
               _SectionTitle(title: 'Informasi dasar', color: _accent),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
+              // Nama Produk
               _FieldLabel(label: 'Nama Produk', required: true),
-              _FormTextField(
-                ctrl: namaCtrl,
+              _FField(
+                ctrl: ctrls.nama,
                 hint: 'Masukan nama produk',
                 error: errors['nama'],
                 onChanged: (_) => onClearError('nama'),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
 
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _FieldLabel(label: 'Kode Produk', required: true),
-                        _TextFieldWithAction(
-                          ctrl: kodeCtrl,
-                          hint: 'PRD-XXXXXXXX',
-                          error: errors['kode'],
-                          onChanged: (_) => onClearError('kode'),
-                          actionIcon: Icons.refresh_rounded,
-                          actionTooltip: 'Generate ulang kode',
-                          onAction: onRegenKode,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _FieldLabel(label: 'Kategori', required: true),
-                        _DropdownField(
-                          value: model.kategori.isEmpty ? null : model.kategori,
-                          hint: '---pilih kategori---',
-                          items: kategoriList,
-                          error: errors['kategori'],
-                          onChanged: onKategoriChanged,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              // Kode Produk
+              _FieldLabel(label: 'Kode Produk', required: true),
+              _FFieldAction(
+                ctrl: ctrls.kode,
+                hint: 'PRD-XXXXXXXX',
+                error: errors['kode'],
+                onChanged: (_) => onClearError('kode'),
+                actionIcon: Icons.refresh_rounded,
+                actionTooltip: 'Generate ulang kode',
+                onAction: onRegenKode,
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
 
+              // Kategori
+              _FieldLabel(label: 'Kategori', required: true),
+              _FDropdown(
+                value: kategoriList.contains(model.kategori)
+                    ? model.kategori
+                    : null,
+                hint: '---pilih kategori---',
+                items: kategoriList,
+                error: errors['kategori'],
+                onChanged: onKategoriChanged,
+              ),
+              const SizedBox(height: 16),
+
+              // Deskripsi
               _FieldLabel(label: 'Deskripsi produk', required: false),
-              _FormTextField(
-                ctrl: deskCtrl,
+              _FField(
+                ctrl: ctrls.deskripsi,
                 hint: 'Isi deskripsi jika perlu',
                 maxLines: 4,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
 
-              // ════ HARGA & STOK ════
+              // ══════════════════════════════
+              // HARGA & STOK
+              // ══════════════════════════════
               _SectionTitle(title: 'Harga & Stok', color: _accent),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _FieldLabel(label: 'Harga Jual', required: true),
-                        _FormTextField(
-                          ctrl: hargaJualCtrl,
-                          hint: 'Rp 0',
-                          prefix: 'Rp ',
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          error: errors['hargaJual'],
-                          onChanged: (_) => onClearError('hargaJual'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _FieldLabel(label: 'Harga Modal', required: false),
-                        _FormTextField(
-                          ctrl: hargaModalCtrl,
-                          hint: 'Rp 0',
-                          prefix: 'Rp ',
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              // Harga Jual
+              _FieldLabel(label: 'Harga Jual', required: true),
+              _FField(
+                ctrl: ctrls.hargaJual,
+                hint: 'Rp 0',
+                prefix: 'Rp ',
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                error: errors['hargaJual'],
+                onChanged: (_) => onClearError('hargaJual'),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
 
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _FieldLabel(label: 'Stok awal', required: true),
-                        _FormTextField(
-                          ctrl: stokAwalCtrl,
-                          hint: '0',
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          error: errors['stokAwal'],
-                          onChanged: (_) => onClearError('stokAwal'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _FieldLabel(label: 'Stok minimum', required: false),
-                        _FormTextField(
-                          ctrl: stokMinCtrl,
-                          hint: '0',
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              // Harga Modal
+              _FieldLabel(label: 'Harga Modal', required: false),
+              _FField(
+                ctrl: ctrls.hargaModal,
+                hint: 'Rp 0',
+                prefix: 'Rp ',
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
 
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _FieldLabel(label: 'Satuan', required: true),
-                        _DropdownField(
-                          value: model.satuan.isEmpty ? null : model.satuan,
-                          hint: '---pilih satuan---',
-                          items: satuanList,
-                          error: errors['satuan'],
-                          onChanged: onSatuanChanged,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _FieldLabel(label: 'Barcode', required: true),
-                        _TextFieldWithAction(
-                          ctrl: barcodeCtrl,
-                          hint: '0',
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          error: errors['barcode'],
-                          onChanged: (_) => onClearError('barcode'),
-                          actionIcon: Icons.barcode_reader,
-                          actionTooltip: 'Generate barcode',
-                          onAction: onRegenBarcode,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              // Stok Awal
+              _FieldLabel(label: 'Stok awal', required: true),
+              _FField(
+                ctrl: ctrls.stokAwal,
+                hint: '0',
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                error: errors['stokAwal'],
+                onChanged: (_) => onClearError('stokAwal'),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
-              // ════ INFORMASI TAMBAHAN ════
+              // Stok Minimum
+              _FieldLabel(label: 'Stok minimum', required: false),
+              _FField(
+                ctrl: ctrls.stokMin,
+                hint: '0',
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
+              const SizedBox(height: 16),
+
+              // Satuan
+              _FieldLabel(label: 'Satuan', required: true),
+              _FDropdown(
+                value: satuanList.contains(model.satuan) ? model.satuan : null,
+                hint: 'Pilih satuan',
+                items: satuanList,
+                onChanged: onSatuanChanged,
+              ),
+              const SizedBox(height: 16),
+
+              // Barcode
+              _FieldLabel(label: 'Barcode', required: true),
+              _FFieldAction(
+                ctrl: ctrls.barcode,
+                hint: '0',
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                error: errors['barcode'],
+                onChanged: (_) => onClearError('barcode'),
+                actionIcon: Icons.barcode_reader,
+                actionTooltip: 'Generate barcode',
+                onAction: onRegenBarcode,
+              ),
+              const SizedBox(height: 28),
+
+              // ══════════════════════════════
+              // INFORMASI TAMBAHAN
+              // ══════════════════════════════
               _SectionTitle(title: 'Informasi Tambahan', color: _accent),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _FieldLabel(label: 'Berat (gram)', required: false),
-                        _FormTextField(
-                          ctrl: beratCtrl,
-                          hint: '0',
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _FieldLabel(label: 'Dimensi', required: false),
-                        _FormTextField(
-                          ctrl: dimensiCtrl,
-                          hint: 'panjang X lebar X tinggi',
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              // Berat
+              _FieldLabel(label: 'Berat (gram)', required: false),
+              _FField(
+                ctrl: ctrls.berat,
+                hint: '0',
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
 
+              // Dimensi
+              _FieldLabel(label: 'Dimensi', required: false),
+              _FField(ctrl: ctrls.dimensi, hint: 'panjang X lebar X tinggi'),
+              const SizedBox(height: 16),
+
+              // Tanggal Kadaluarsa
               _FieldLabel(label: 'Tanggal Kadaluarsa', required: true),
-              _DateField(
-                ctrl: kadaluarsaCtrl,
+              _FDateField(
+                ctrl: ctrls.kadaluarsa,
                 error: errors['kadaluarsa'],
                 onTapCalendar: onPickDate,
                 onChanged: (_) => onClearError('kadaluarsa'),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-              // Produk aktif checkbox
+              // Produk Aktif checkbox
               Row(
                 children: [
                   Checkbox(
@@ -887,56 +887,22 @@ class _ProdukFormBody extends StatelessWidget {
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                  const SizedBox(width: 0),
+                  const SizedBox(width: 4),
                   const Text(
                     'Produk aktif',
                     style: TextStyle(fontSize: 14, color: Color(0xFF2D3748)),
                   ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: model.aktif
-                          ? const Color(0xFF48BB78)
-                          : const Color(0xFFE53E3E),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      model.aktif ? 'Aktif' : 'Tidak aktif',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
                 ],
               ),
+              const SizedBox(height: 28),
 
-              Row(
-                children: [
-                  const Icon(Icons.info_outline, size: 16, color: Color(0xFF4A5568)),
-
-                  const SizedBox(width: 4),
-                  const Text(
-                    'produk aktif akan ditampilkan di katalog',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF4A5568)),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // ── Tombol Reset & Simpan ──
+              // ── Tombol Reset & Simpan ─────────────────────────────────────────
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: onReset,
-                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      icon: const Icon(Icons.refresh_rounded, size: 17),
                       label: const Text(
                         'Reset',
                         style: TextStyle(
@@ -950,7 +916,7 @@ class _ProdukFormBody extends StatelessWidget {
                           color: Color(0xFFCBD5E0),
                           width: 1.5,
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -965,7 +931,7 @@ class _ProdukFormBody extends StatelessWidget {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _accent,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -974,7 +940,7 @@ class _ProdukFormBody extends StatelessWidget {
                       child: Text(
                         isEdit ? 'Update' : 'Simpan',
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 15,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -992,12 +958,13 @@ class _ProdukFormBody extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// FORM WIDGETS
+// SECTION TITLE
 // ════════════════════════════════════════════════════════════════════════════
 class _SectionTitle extends StatelessWidget {
   final String title;
   final Color color;
   const _SectionTitle({required this.title, required this.color});
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1023,13 +990,17 @@ class _SectionTitle extends StatelessWidget {
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// FIELD LABEL
+// ════════════════════════════════════════════════════════════════════════════
 class _FieldLabel extends StatelessWidget {
   final String label;
   final bool required;
   const _FieldLabel({required this.label, required this.required});
+
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 6),
+    padding: const EdgeInsets.only(bottom: 7),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1057,7 +1028,10 @@ class _FieldLabel extends StatelessWidget {
   );
 }
 
-class _FormTextField extends StatelessWidget {
+// ════════════════════════════════════════════════════════════════════════════
+// TEXT FIELD
+// ════════════════════════════════════════════════════════════════════════════
+class _FField extends StatelessWidget {
   final TextEditingController ctrl;
   final String hint;
   final String? prefix, error;
@@ -1066,7 +1040,7 @@ class _FormTextField extends StatelessWidget {
   final List<TextInputFormatter>? inputFormatters;
   final void Function(String)? onChanged;
 
-  const _FormTextField({
+  const _FField({
     required this.ctrl,
     required this.hint,
     this.prefix,
@@ -1096,22 +1070,22 @@ class _FormTextField extends StatelessWidget {
           fillColor: const Color(0xFFF8F9FA),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 14,
-            vertical: 12,
+            vertical: 14,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(
               color: error != null ? Colors.red : Colors.grey.shade300,
             ),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(
               color: error != null ? Colors.red.shade300 : Colors.grey.shade300,
             ),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(
               color: error != null ? Colors.red : const Color(0xFF4169E1),
               width: 1.5,
@@ -1120,7 +1094,7 @@ class _FormTextField extends StatelessWidget {
         ),
       ),
       if (error != null) ...[
-        const SizedBox(height: 4),
+        const SizedBox(height: 5),
         Row(
           children: [
             const Icon(
@@ -1140,7 +1114,10 @@ class _FormTextField extends StatelessWidget {
   );
 }
 
-class _TextFieldWithAction extends StatelessWidget {
+// ════════════════════════════════════════════════════════════════════════════
+// TEXT FIELD + ACTION BUTTON (refresh/barcode)
+// ════════════════════════════════════════════════════════════════════════════
+class _FFieldAction extends StatelessWidget {
   final TextEditingController ctrl;
   final String hint;
   final String? error;
@@ -1151,7 +1128,7 @@ class _TextFieldWithAction extends StatelessWidget {
   final String actionTooltip;
   final VoidCallback onAction;
 
-  const _TextFieldWithAction({
+  const _FFieldAction({
     required this.ctrl,
     required this.hint,
     required this.actionIcon,
@@ -1180,24 +1157,24 @@ class _TextFieldWithAction extends StatelessWidget {
           fillColor: const Color(0xFFF8F9FA),
           contentPadding: const EdgeInsets.only(
             left: 14,
-            top: 12,
-            bottom: 12,
+            top: 14,
+            bottom: 14,
             right: 4,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(
               color: error != null ? Colors.red : Colors.grey.shade300,
             ),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(
               color: error != null ? Colors.red.shade300 : Colors.grey.shade300,
             ),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(
               color: error != null ? Colors.red : const Color(0xFF4169E1),
               width: 1.5,
@@ -1207,14 +1184,14 @@ class _TextFieldWithAction extends StatelessWidget {
             message: actionTooltip,
             child: IconButton(
               onPressed: onAction,
-              icon: Icon(actionIcon, size: 20, color: Colors.grey.shade500),
-              splashRadius: 18,
+              icon: Icon(actionIcon, size: 22, color: Colors.grey.shade500),
+              splashRadius: 20,
             ),
           ),
         ),
       ),
       if (error != null) ...[
-        const SizedBox(height: 4),
+        const SizedBox(height: 5),
         Row(
           children: [
             const Icon(
@@ -1234,14 +1211,17 @@ class _TextFieldWithAction extends StatelessWidget {
   );
 }
 
-class _DropdownField extends StatelessWidget {
+// ════════════════════════════════════════════════════════════════════════════
+// DROPDOWN FIELD
+// ════════════════════════════════════════════════════════════════════════════
+class _FDropdown extends StatelessWidget {
   final String? value;
   final String hint;
   final List<String> items;
   final String? error;
   final void Function(String?) onChanged;
 
-  const _DropdownField({
+  const _FDropdown({
     required this.value,
     required this.hint,
     required this.items,
@@ -1257,7 +1237,7 @@ class _DropdownField extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: const Color(0xFFF8F9FA),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: error != null ? Colors.red.shade300 : Colors.grey.shade300,
           ),
@@ -1271,7 +1251,7 @@ class _DropdownField extends StatelessWidget {
               style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
             ),
             style: const TextStyle(fontSize: 13, color: Color(0xFF2D3748)),
-            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 22),
             items: items
                 .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                 .toList(),
@@ -1280,7 +1260,7 @@ class _DropdownField extends StatelessWidget {
         ),
       ),
       if (error != null) ...[
-        const SizedBox(height: 4),
+        const SizedBox(height: 5),
         Row(
           children: [
             const Icon(
@@ -1300,13 +1280,16 @@ class _DropdownField extends StatelessWidget {
   );
 }
 
-class _DateField extends StatelessWidget {
+// ════════════════════════════════════════════════════════════════════════════
+// DATE FIELD
+// ════════════════════════════════════════════════════════════════════════════
+class _FDateField extends StatelessWidget {
   final TextEditingController ctrl;
   final String? error;
   final VoidCallback onTapCalendar;
   final void Function(String)? onChanged;
 
-  const _DateField({
+  const _FDateField({
     required this.ctrl,
     required this.onTapCalendar,
     this.error,
@@ -1329,24 +1312,24 @@ class _DateField extends StatelessWidget {
           fillColor: const Color(0xFFF8F9FA),
           contentPadding: const EdgeInsets.only(
             left: 14,
-            top: 12,
-            bottom: 12,
+            top: 14,
+            bottom: 14,
             right: 4,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(
               color: error != null ? Colors.red : Colors.grey.shade300,
             ),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(
               color: error != null ? Colors.red.shade300 : Colors.grey.shade300,
             ),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(
               color: error != null ? Colors.red : const Color(0xFF4169E1),
               width: 1.5,
@@ -1356,15 +1339,15 @@ class _DateField extends StatelessWidget {
             onPressed: onTapCalendar,
             icon: Icon(
               Icons.calendar_month_rounded,
-              size: 30,
-              color: const Color.fromARGB(255, 31, 77, 215),
+              size: 22,
+              color: Colors.grey.shade500,
             ),
-            splashRadius: 18,
+            splashRadius: 20,
           ),
         ),
       ),
       if (error != null) ...[
-        const SizedBox(height: 4),
+        const SizedBox(height: 5),
         Row(
           children: [
             const Icon(

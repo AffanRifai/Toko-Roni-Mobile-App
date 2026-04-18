@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "342036883846",
+    "project_id": "tokoroni-8eeeb",
+    "storage_bucket": "tokoroni-8eeeb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:342036883846:android:15b4968a7c1d5ea487a407",
+        "android_client_info": {
+          "package_name": "com.example.tokoronifrontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyABOesUT2KFU9o96V8J5fgJ5FKdG7mqLfs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

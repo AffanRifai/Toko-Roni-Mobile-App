@@ -1,10 +1,24 @@
 // lib/product/daftar_produk_page.dart
 import 'package:flutter/material.dart';
-import '../shared_widgets.dart';
+import 'package:tokoronifrontend/delivery/manajemen_pengiriman_page.dart';
+import 'package:tokoronifrontend/home/menu_pages.dart';
+import 'package:tokoronifrontend/report/laporan_penjualan_page.dart';
+import 'package:tokoronifrontend/transaction/riwayat_transaksi_page.dart';
+import '../core/services/product_service.dart';
+import '../widgets/shared_widgets.dart';
+import '../widgets/notifikasi_widget.dart';
+import '../widgets/profile_widget.dart';
+import '../widgets/semua_notifikasi_page.dart';
 import 'produk_model.dart';
-import 'produk_form_page.dart';
-import '/home/menu_pages.dart';
+import 'produk_form_page.dart' hide EditProdukPage;
+import 'edit_produk_page.dart';
 import '/home/beranda_page.dart';
+import '/category/manajemen_kategori_page.dart'
+    show KategoriData, ManajemenKategoriPage;
+import '/category/tambah_kategori_page.dart';
+import '/category/edit_kategori_page.dart';
+import '/user/manajemen_pengguna_page.dart';
+import '/member/daftar_member_page.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // DAFTAR PRODUK PAGE
@@ -18,9 +32,11 @@ class DaftarProdukPage extends StatefulWidget {
 
 class _DaftarProdukPageState extends State<DaftarProdukPage>
     with SingleTickerProviderStateMixin, SidebarMixin {
-  // Pakai ProdukItem dari produk_model.dart — tidak konflik dengan class lain
   late List<ProdukItem> _produkList;
   late List<KategoriItem> _kategoriList;
+  bool _isLoading = true;
+  bool _hasError = false;
+  String _errorMessage = '';
 
   final _searchCtrl = TextEditingController();
   String _filterKategori = 'Semua kategori';
@@ -31,9 +47,9 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
   void initState() {
     super.initState();
     initSidebar(this);
-    // Pakai dummy data dari produk_model.dart
-    _produkList = List.from(dummyProdukList);
-    _kategoriList = List.from(dummyKategoriList);
+    _produkList = [];
+    _kategoriList = [];
+    _loadAllData();
   }
 
   @override
@@ -41,6 +57,52 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
     disposeSidebar();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAllData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+      _errorMessage = '';
+    });
+
+    try {
+      final bundle = await ProductService.getProductsAndCategories();
+      if (!mounted) return;
+
+      final categories = bundle.categories.isNotEmpty
+          ? bundle.categories
+          : _buildCategoriesFromProducts(bundle.products);
+      final kategoriOptions = categories.map((e) => e.nama).toSet();
+
+      setState(() {
+        _produkList = bundle.products;
+        _kategoriList = categories;
+        if (!kategoriOptions.contains(_filterKategori)) {
+          _filterKategori = 'Semua kategori';
+        }
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  List<KategoriItem> _buildCategoriesFromProducts(List<ProdukItem> products) {
+    final unique =
+        products
+            .map((e) => e.kategori.trim())
+            .where((e) => e.isNotEmpty && e != '-')
+            .toSet()
+            .toList()
+          ..sort();
+    return unique.map((e) => KategoriItem(nama: e)).toList();
   }
 
   // ── Filter ────────────────────────────────────────────────────────────────
@@ -65,8 +127,12 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
   }).toList();
 
   List<String> get _kategoriOptions {
-    final set = _produkList.map((p) => p.kategori).toSet().toList()..sort();
-    return ['Semua kategori', ...set];
+    final set = <String>{
+      ..._produkList.map((p) => p.kategori.trim()),
+      ..._kategoriList.map((k) => k.nama.trim()),
+    }..removeWhere((e) => e.isEmpty || e == '-');
+    final list = set.toList()..sort();
+    return ['Semua kategori', ...list];
   }
 
   bool _kategoriHasProduk(String nama) =>
@@ -89,23 +155,126 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
     return buf.toString();
   }
 
-  // ── Navigasi sidebar ──────────────────────────────────────
+  DateTime? _parseExpiryDate(String source) {
+    final raw = source.trim();
+    if (raw.isEmpty || raw == '-') return null;
+
+    try {
+      return DateTime.parse(raw);
+    } catch (_) {}
+
+    final normalized = raw.replaceAll('/', '-');
+    final parts = normalized.split('-');
+    if (parts.length != 3) return null;
+
+    try {
+      if (parts[0].length == 4) {
+        return DateTime(
+          int.parse(parts[0]),
+          int.parse(parts[1]),
+          int.parse(parts[2]),
+        );
+      }
+      return DateTime(
+        int.parse(parts[2]),
+        int.parse(parts[1]),
+        int.parse(parts[0]),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  _ExpiryAlert? _expiryAlertOf(ProdukItem p) {
+    final expiry = _parseExpiryDate(p.kadaluarsa);
+    if (expiry == null) return null;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final expiryDate = DateTime(expiry.year, expiry.month, expiry.day);
+    final daysLeft = expiryDate.difference(today).inDays;
+
+    if (daysLeft < 0) {
+      return const _ExpiryAlert(
+        label: 'Expired',
+        color: Color(0xFFE53E3E),
+        icon: Icons.error_rounded,
+      );
+    }
+    if (daysLeft <= 30) {
+      return _ExpiryAlert(
+        label: daysLeft == 0 ? 'Kadaluarsa hari ini' : '$daysLeft hari lagi',
+        color: const Color(0xFFD69E2E),
+        icon: Icons.warning_amber_rounded,
+      );
+    }
+    return null;
+  }
+
+  Widget _buildHargaCell(ProdukItem p) {
+    final hargaText = _rupiah(p.harga);
+    return Text(
+      hargaText,
+      style: TextStyle(
+        fontSize: 11,
+        color: p.harga > 0 ? const Color(0xFF2D3748) : Colors.grey.shade600,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+
+  Widget _buildKadaluarsaCell(ProdukItem p) {
+    final alert = _expiryAlertOf(p);
+    final tgl = p.kadaluarsa.trim().isEmpty ? '-' : p.kadaluarsa;
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          tgl,
+          style: const TextStyle(fontSize: 11, color: Color(0xFF2D3748)),
+        ),
+        if (alert != null) ...[
+          const SizedBox(height: 3),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(alert.icon, size: 12, color: alert.color),
+              const SizedBox(width: 3),
+              Text(
+                alert.label,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: alert.color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ── Navigasi sidebar ──────────────────────────────────────────────────────
   void _handleMenuTap(String menu) {
-    closeSidebar();
-    if (menu == 'Produk') return;
+    if (menu == 'Produk') {
+      closeSidebar();
+      return;
+    }
     Widget? page;
     switch (menu) {
       case 'Dashboard':
         page = const BerandaPage();
         break;
       case 'Pengguna':
-        page = const PenggunaPage();
+        page = const ManajemenPenggunaPage();
         break;
       case 'Member':
-        page = const MemberPage();
+        page = const DaftarMemberPage();
         break;
       case 'Laporan':
-        page = const LaporanPage();
+        page = const LaporanPenjualanPage();
         break;
       case 'Riwayat Transaksi':
         page = const RiwayatTransaksiPage();
@@ -117,10 +286,13 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
         page = const DaftarProdukPage();
         break;
       case 'Kategori':
-        page = const KategoriPage();
+        page = const ManajemenKategoriPage();
+        break;
+      case 'Manajemen Pengiriman':
+        page = const ManajemenPengirimanPage();
         break;
       case 'Pengiriman':
-        page = const PengirimanPage();
+        page = const ManajemenPengirimanPage();
         break;
       case 'Kendaraan':
         page = const KendaraanPage();
@@ -130,7 +302,9 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
         break;
     }
     if (page != null) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => page!));
+      closeSidebarThenNavigate(
+        () => Navigator.push(context, MaterialPageRoute(builder: (_) => page!)),
+      );
     }
   }
 
@@ -160,10 +334,9 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
             child: const Text('Batal', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
-            onPressed: () {
-              setState(() => _produkList.remove(p));
+            onPressed: () async {
               Navigator.pop(context);
-              _showSnack('Produk "${p.nama}" dihapus', Colors.red);
+              await _deleteProduk(p);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFE53E3E),
@@ -235,24 +408,13 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
       backgroundColor: const Color(0xFFF3F4F8),
       body: Stack(
         children: [
-          SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 16),
-                _buildSummaryCards(),
-                const SizedBox(height: 20),
-                _buildFilterSection(),
-                const SizedBox(height: 16),
-                _buildActionButtons(),
-                const SizedBox(height: 20),
-                _buildProdukSection(filtered),
-                const SizedBox(height: 24),
-                _buildKategoriSection(),
-                const SizedBox(height: 40),
-              ],
-            ),
+          RefreshIndicator(
+            onRefresh: _loadAllData,
+            child: _isLoading
+                ? _buildLoadingState()
+                : (_hasError && _produkList.isEmpty)
+                ? _buildErrorState()
+                : _buildPageContent(filtered),
           ),
           ...buildSidebarLayer(activeMenu: 'Produk', onMenuTap: _handleMenuTap),
         ],
@@ -260,6 +422,168 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
     );
   }
 
+  Future<void> _deleteProduk(ProdukItem p) async {
+    if (p.id == null) {
+      setState(() => _produkList.remove(p));
+      _showSnack(
+        'Produk "${p.nama}" dihapus lokal (mode offline).',
+        const Color(0xFFE53E3E),
+      );
+      return;
+    }
+    try {
+      await ProductService.deleteProduct(productId: p.id!);
+      if (!mounted) return;
+      setState(() => _produkList.removeWhere((e) => e.id == p.id));
+      _showSnack(
+        'Produk "${p.nama}" berhasil dihapus',
+        const Color(0xFFE53E3E),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(
+        e.toString().replaceFirst('Exception: ', ''),
+        const Color(0xFFE53E3E),
+      );
+    }
+  }
+
+  Widget _buildPageContent(List<ProdukItem> filtered) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(),
+          const SizedBox(height: 16),
+          if (_hasError) _buildSyncWarning(),
+          _buildSummaryCards(),
+          const SizedBox(height: 20),
+          _buildFilterSection(),
+          const SizedBox(height: 16),
+          _buildActionButtons(),
+          const SizedBox(height: 20),
+          _buildProdukSection(filtered),
+          const SizedBox(height: 24),
+          _buildKategoriSection(),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() => RefreshIndicator(
+    onRefresh: _loadAllData,
+    child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height:
+            MediaQuery.of(context).size.height -
+            MediaQuery.of(context).padding.top -
+            MediaQuery.of(context).padding.bottom,
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Color(0xFF4169E1)),
+              SizedBox(height: 12),
+              Text(
+                'Memuat data produk...',
+                style: TextStyle(color: Color(0xFF4A5568)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _buildErrorState() => RefreshIndicator(
+    onRefresh: _loadAllData,
+    child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height:
+            MediaQuery.of(context).size.height -
+            MediaQuery.of(context).padding.top -
+            MediaQuery.of(context).padding.bottom,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 56, color: Colors.grey[400]),
+              const SizedBox(height: 12),
+              const Text(
+                'Gagal memuat data produk',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF2D3748),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _errorMessage.isEmpty
+                    ? 'Periksa koneksi ke server Laravel'
+                    : _errorMessage,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 18),
+              ElevatedButton.icon(
+                onPressed: _loadAllData,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Coba Lagi'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4169E1),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _buildSyncWarning() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF7E6),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFF6AD55).withOpacity(0.5)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline_rounded, color: Color(0xFFB7791F)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _errorMessage.isEmpty
+                    ? 'Data terakhir ditampilkan. Tarik ke bawah untuk sinkron ulang.'
+                    : 'Sinkronisasi gagal: $_errorMessage',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF744210)),
+              ),
+            ),
+            TextButton(onPressed: _loadAllData, child: const Text('Refresh')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── HEADER ────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       decoration: const BoxDecoration(
@@ -282,23 +606,25 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
                     children: [
                       BurgerMenuButton(onTap: openSidebar),
                       const Spacer(),
-                      const Text(
-                        'Hallo, Alex',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+
+                      // Notifikasi — load otomatis dari database via NotifikasiService
+                      NotifikasiBell(
+                        onLihatSemua: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SemuaNotifikasiPage(),
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      const CircleAvatar(
-                        radius: 22,
-                        backgroundColor: Colors.white24,
-                        child: Icon(
-                          Icons.person,
-                          color: Colors.white,
-                          size: 24,
-                        ),
+                      const SizedBox(width: 12),
+
+                      // ProfileWidget.fromAuth() load nama, role, foto
+                      // langsung dari SharedPreferences hasil login (sesuai DB)
+                      ProfileWidget.fromAuth(
+                        onTap: () {
+                          // Navigator.push(context, MaterialPageRoute(
+                          //     builder: (_) => const ProfilePage()));
+                        },
                       ),
                     ],
                   ),
@@ -349,7 +675,15 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
     );
   }
 
+  // ── SUMMARY CARDS ─────────────────────────────────────────────────────────
   Widget _buildSummaryCards() {
+    final totalProduk = _produkList.length;
+    final produkAktif = _produkList.where((p) => p.aktif).length;
+    final stokRendah = _produkList
+        .where((p) => p.stok > 0 && p.stok < 20)
+        .length;
+    final stokHabis = _produkList.where((p) => p.stok == 0).length;
+
     return SizedBox(
       height: 110,
       child: ListView(
@@ -357,35 +691,35 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
         padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
           SummaryCard(
-            label: 'Total Karyawan',
-            value: '15',
-            icon: Icons.people_alt_rounded,
-            color: const Color(0xFF6B9FFF),
+            label: 'Total Produk',
+            value: '$totalProduk',
+            icon: Icons.inventory_2_rounded,
+            color: const Color(0xFF4169E1),
           ),
           SummaryCard(
-            label: 'Total Produk',
-            value: '${_produkList.length}',
-            icon: Icons.inventory_2_rounded,
+            label: 'Produk Aktif',
+            value: '$produkAktif',
+            icon: Icons.check_circle_rounded,
             color: const Color(0xFF48BB78),
           ),
           SummaryCard(
-            label: 'Stok Hampir Habis',
-            value:
-                '${_produkList.where((p) => p.stok > 0 && p.stok < 20).length}',
+            label: 'Stok Rendah',
+            value: '$stokRendah',
             icon: Icons.warning_amber_rounded,
             color: const Color(0xFFECC94B),
           ),
-          const SummaryCard(
-            label: 'Akan Kadaluarsa',
-            value: '23',
-            icon: Icons.timer_rounded,
-            color: Color(0xFFFC8181),
+          SummaryCard(
+            label: 'Stok Habis',
+            value: '$stokHabis',
+            icon: Icons.close_rounded,
+            color: const Color(0xFFE53E3E),
           ),
         ],
       ),
     );
   }
 
+  // ── FILTER ────────────────────────────────────────────────────────────────
   Widget _buildFilterSection() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -538,6 +872,7 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
         ),
       );
 
+  // ── ACTION BUTTONS ────────────────────────────────────────────────────────
   Widget _buildActionButtons() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -545,10 +880,13 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
         children: [
           Expanded(
             child: ElevatedButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const TambahKategoriPage()),
-              ),
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TambahKategoriPage()),
+                );
+                if (mounted) _loadAllData();
+              },
               icon: const Icon(
                 Icons.label_rounded,
                 color: Colors.white,
@@ -571,11 +909,13 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
           const SizedBox(width: 12),
           Expanded(
             child: ElevatedButton.icon(
-              // ← Navigasi ke TambahProdukPage dari produk_form_page.dart
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const TambahProdukPage()),
-              ),
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TambahProdukPage()),
+                );
+                if (mounted) _loadAllData();
+              },
               icon: const Icon(
                 Icons.add_rounded,
                 color: Colors.white,
@@ -600,6 +940,7 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
     );
   }
 
+  // ── DAFTAR PRODUK ─────────────────────────────────────────────────────────
   Widget _buildProdukSection(List<ProdukItem> filtered) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -638,7 +979,7 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
                   ),
                   headingRowHeight: 44,
                   dataRowMinHeight: 58,
-                  dataRowMaxHeight: 66,
+                  dataRowMaxHeight: 76,
                   columnSpacing: 16,
                   headingTextStyle: const TextStyle(
                     fontSize: 11,
@@ -686,7 +1027,7 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
                         ),
                         DataCell(Text(p.kategori)),
                         DataCell(Text(p.jenis)),
-                        DataCell(Text(_rupiah(p.harga))),
+                        DataCell(_buildHargaCell(p)),
                         DataCell(
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -707,7 +1048,7 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
                             ),
                           ),
                         ),
-                        DataCell(Text(p.kadaluarsa)),
+                        DataCell(_buildKadaluarsaCell(p)),
                         DataCell(
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -786,17 +1127,19 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
                                 onTap: () => _showDetailModal(p),
                               ),
                               const SizedBox(width: 8),
-                              // ← EditProdukPage terima ProdukItem
                               _AksiBtn(
                                 icon: Icons.edit_rounded,
                                 color: const Color(0xFFD69E2E),
                                 label: 'Edit',
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => EditProdukPage(produk: p),
-                                  ),
-                                ),
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => EditProdukPage(produk: p),
+                                    ),
+                                  );
+                                  if (mounted) _loadAllData();
+                                },
                               ),
                               const SizedBox(width: 8),
                               _AksiBtn(
@@ -877,6 +1220,7 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
     ),
   );
 
+  // ── DAFTAR KATEGORI — 1 ROW (ListView) ───────────────────────────────────
   Widget _buildKategoriSection() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -906,17 +1250,13 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
             '${_kategoriList.length} kategori tersedia',
             style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
           ),
-          const SizedBox(height: 12),
-          GridView.builder(
+
+          // ← ListView 1 kolom penuh (bukan GridView 2 kolom)
+          ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 2.0,
-            ),
             itemCount: _kategoriList.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (_, i) {
               final k = _kategoriList[i];
               final hasProduk = _kategoriHasProduk(k.nama);
@@ -925,8 +1265,8 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
                   .length;
               return Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
+                  horizontal: 16,
+                  vertical: 14,
                 ),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -941,8 +1281,9 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
                 ),
                 child: Row(
                   children: [
+                    // Icon kategori
                     Container(
-                      padding: const EdgeInsets.all(9),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: const Color(0xFF4169E1).withOpacity(0.12),
                         borderRadius: BorderRadius.circular(10),
@@ -950,19 +1291,19 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
                       child: const Icon(
                         Icons.label_rounded,
                         color: Color(0xFF4169E1),
-                        size: 20,
+                        size: 22,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
+                    // Nama + jumlah produk
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             k.nama,
                             style: const TextStyle(
-                              fontSize: 14,
+                              fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: Color(0xFF2D3748),
                             ),
@@ -971,15 +1312,16 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
                           Text(
                             '$jumlah produk',
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 12,
                               color: Colors.grey.shade500,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    // Action buttons sejajar horizontal
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         _KatBtn(
                           icon: Icons.edit_rounded,
@@ -988,11 +1330,27 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => EditKategoriPage(kategori: k),
+                              builder: (_) => EditKategoriPage(
+                                // Konversi KategoriItem → KategoriData saat navigasi
+                                kategori: KategoriData(
+                                  id: k.id ?? 0,
+                                  nama: k.nama,
+                                  slug: k.nama.toLowerCase().replaceAll(
+                                    ' ',
+                                    '-',
+                                  ),
+                                  deskripsi: k.deskripsi,
+                                  aktif: true,
+                                  totalProduk: _produkList
+                                      .where((p) => p.kategori == k.nama)
+                                      .length,
+                                  terakhirDiperbarui: '-',
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(width: 8),
                         _KatBtn(
                           icon: Icons.delete_rounded,
                           color: hasProduk
@@ -1171,194 +1529,20 @@ class _DetailModal extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// TAMBAH / EDIT KATEGORI PAGES
-// ════════════════════════════════════════════════════════════════════════════
-class TambahKategoriPage extends StatefulWidget {
-  const TambahKategoriPage({super.key});
-  @override
-  State<TambahKategoriPage> createState() => _TambahKategoriPageState();
-}
-
-class _TambahKategoriPageState extends State<TambahKategoriPage> {
-  final _n = TextEditingController();
-  final _d = TextEditingController();
-  @override
-  Widget build(BuildContext context) => _KategoriScaffold(
-    title: 'Tambah Kategori',
-    color: const Color(0xFF6B5CE7),
-    btnLabel: 'Simpan Kategori',
-    namaCtrl: _n,
-    deskCtrl: _d,
-    onSave: () => Navigator.pop(context),
-  );
-}
-
-class EditKategoriPage extends StatefulWidget {
-  final KategoriItem kategori;
-  const EditKategoriPage({super.key, required this.kategori});
-  @override
-  State<EditKategoriPage> createState() => _EditKategoriPageState();
-}
-
-class _EditKategoriPageState extends State<EditKategoriPage> {
-  late TextEditingController _n;
-  final _d = TextEditingController();
-  @override
-  void initState() {
-    super.initState();
-    _n = TextEditingController(text: widget.kategori.nama);
-  }
-
-  @override
-  Widget build(BuildContext context) => _KategoriScaffold(
-    title: 'Edit Kategori',
-    color: const Color(0xFFD69E2E),
-    btnLabel: 'Update Kategori',
-    namaCtrl: _n,
-    deskCtrl: _d,
-    onSave: () => Navigator.pop(context),
-  );
-}
-
-class _KategoriScaffold extends StatelessWidget {
-  final String title, btnLabel;
-  final Color color;
-  final TextEditingController namaCtrl, deskCtrl;
-  final VoidCallback onSave;
-
-  const _KategoriScaffold({
-    required this.title,
-    required this.color,
-    required this.btnLabel,
-    required this.namaCtrl,
-    required this.deskCtrl,
-    required this.onSave,
-  });
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFFF3F4F8),
-    appBar: AppBar(
-      backgroundColor: color,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded),
-        onPressed: () => Navigator.pop(context),
-      ),
-    ),
-    body: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                _katField('Nama Kategori', namaCtrl, 'Contoh: Makanan'),
-                const SizedBox(height: 14),
-                _katField(
-                  'Deskripsi',
-                  deskCtrl,
-                  'Deskripsi (opsional)',
-                  maxLines: 3,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: onSave,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 15),
-              ),
-              child: Text(
-                btnLabel,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  Widget _katField(
-    String label,
-    TextEditingController ctrl,
-    String hint, {
-    int maxLines = 1,
-  }) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: Color(0xFF4A5568),
-        ),
-      ),
-      const SizedBox(height: 6),
-      TextField(
-        controller: ctrl,
-        maxLines: maxLines,
-        style: const TextStyle(fontSize: 13),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-          filled: true,
-          fillColor: const Color(0xFFF8F9FA),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 12,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: Color(0xFF4169E1), width: 1.5),
-          ),
-        ),
-      ),
-    ],
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
 // AKSI BUTTONS
 // ════════════════════════════════════════════════════════════════════════════
+class _ExpiryAlert {
+  final String label;
+  final Color color;
+  final IconData icon;
+
+  const _ExpiryAlert({
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
+}
+
 class _AksiBtn extends StatelessWidget {
   final IconData icon;
   final Color color;

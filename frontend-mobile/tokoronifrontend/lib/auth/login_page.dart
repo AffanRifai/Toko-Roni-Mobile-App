@@ -6,10 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import '../core/state/app_state.dart';
 
-import '../core/api_config.dart';
+import '../core/config/api_config.dart';
 import '../home/beranda_page.dart';
-import 'face_login.dart'; // sesuaikan path jika berbeda
+import 'face_login_page.dart'; // sesuaikan path jika berbeda
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -70,16 +71,20 @@ class _LoginPageState extends State<LoginPage> {
         await prefs.setString('user_name', user['name']?.toString() ?? '');
         await prefs.setString('user_email', user['email']?.toString() ?? '');
         await prefs.setString('user_role', user['role']?.toString() ?? '');
+        await prefs.setString('user_photo', user['avatar']?.toString() ?? '');
+        // Simpan user_id untuk WebSocket private channel subscription
+        await prefs.setString('user_id', user['id']?.toString() ?? '');
 
         if (!mounted) return;
 
         // Navigasi ke dashboard
+        // Init AppState dengan data fresh dari API
+        await AppState.instance.init();
+
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) =>
-                BerandaPage(userName: user['name']?.toString() ?? 'User'),
-          ),
+          MaterialPageRoute(builder: (_) => const BerandaPage()),
         );
       } else {
         // 401 email/password salah | 403 akun tidak aktif | 422 validasi

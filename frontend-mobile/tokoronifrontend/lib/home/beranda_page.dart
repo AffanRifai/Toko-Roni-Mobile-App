@@ -1,22 +1,29 @@
-// ============================================================
 // lib/home/beranda_page.dart
-// ============================================================
-
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '/shared_widgets.dart';
-import 'menu_pages.dart';
+import 'package:tokoronifrontend/profile/profile_page.dart';
+import 'package:tokoronifrontend/vechile/manajemen_kendaraan_page.dart';
 import '/product/daftar_produk_page.dart';
-import '/core/auth_service.dart';
-import '/core/dashboard_service.dart';
-import '/auth/login_page.dart'; // sesuaikan path
+import '../core/services/auth_service.dart';
+import '../core/services/dashboard_service.dart';
+import '/category/manajemen_kategori_page.dart';
+import '/auth/login_page.dart';
+import '/user/manajemen_pengguna_page.dart';
+import '/member/daftar_member_page.dart';
+import '/widgets/notifikasi_widget.dart';
+import '/widgets/semua_notifikasi_page.dart';
+import '/widgets/profile_widget.dart';
+import '../widgets/shared_widgets.dart';
+import '../report/laporan_penjualan_page.dart';
+import '../transaction/kasir_page.dart';
+import '/transaction/riwayat_transaksi_page.dart';
+import '/delivery/manajemen_pengiriman_page.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // BERANDA PAGE
 // ════════════════════════════════════════════════════════════════════════════
 class BerandaPage extends StatefulWidget {
-  final String userName;
-  const BerandaPage({super.key, this.userName = 'User'});
+  const BerandaPage({super.key});
 
   @override
   State<BerandaPage> createState() => _BerandaPageState();
@@ -24,13 +31,12 @@ class BerandaPage extends StatefulWidget {
 
 class _BerandaPageState extends State<BerandaPage>
     with SingleTickerProviderStateMixin, SidebarMixin {
-  // ── Waktu ──────────────────────────────────────────────────
   late Timer _timer;
   late DateTime _now;
 
-  // ── Data dashboard ─────────────────────────────────────────
   bool _isLoading = true;
   bool _hasError = false;
+  String _errorMessage = '';
   DashboardStats _stats = const DashboardStats();
   List<StokMenipisItem> _lowStock = [];
   List<KadaluarsaItem> _expiring = [];
@@ -47,7 +53,6 @@ class _BerandaPageState extends State<BerandaPage>
     _guardAndLoad();
   }
 
-  // ── Route guard + load data ───────────────────────────────
   Future<void> _guardAndLoad() async {
     final loggedIn = await AuthService.isLoggedIn();
     if (!loggedIn) {
@@ -62,8 +67,8 @@ class _BerandaPageState extends State<BerandaPage>
     setState(() {
       _isLoading = true;
       _hasError = false;
+      _errorMessage = '';
     });
-
     try {
       final results = await Future.wait([
         DashboardService.getStats(),
@@ -71,7 +76,6 @@ class _BerandaPageState extends State<BerandaPage>
         DashboardService.getExpiringProducts(),
         DashboardService.getRecentTransactions(),
       ]);
-
       if (!mounted) return;
       setState(() {
         _stats = results[0] as DashboardStats;
@@ -81,11 +85,22 @@ class _BerandaPageState extends State<BerandaPage>
         _isLoading = false;
       });
     } catch (e) {
+      final friendlyMessage = e.toString().replaceFirst('Exception: ', '').trim();
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _hasError = true;
+        _errorMessage = friendlyMessage.isEmpty
+            ? 'Periksa koneksi internet atau server, lalu coba lagi.'
+            : friendlyMessage;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_errorMessage),
+          backgroundColor: Colors.red.shade600,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -104,20 +119,24 @@ class _BerandaPageState extends State<BerandaPage>
     super.dispose();
   }
 
-  // ── Navigasi sidebar ──────────────────────────────────────
   void _handleMenuTap(String menu) {
-    closeSidebar();
-    if (menu == 'Dashboard') return;
+    if (menu == 'Dashboard') {
+      closeSidebar();
+      return;
+    }
     Widget? page;
     switch (menu) {
+      case 'Dashboard':
+        page = const BerandaPage();
+        break;
       case 'Pengguna':
-        page = const PenggunaPage();
+        page = const ManajemenPenggunaPage();
         break;
       case 'Member':
-        page = const MemberPage();
+        page = const DaftarMemberPage();
         break;
       case 'Laporan':
-        page = const LaporanPage();
+        page = const LaporanPenjualanPage();
         break;
       case 'Riwayat Transaksi':
         page = const RiwayatTransaksiPage();
@@ -129,20 +148,22 @@ class _BerandaPageState extends State<BerandaPage>
         page = const DaftarProdukPage();
         break;
       case 'Kategori':
-        page = const KategoriPage();
+        page = const ManajemenKategoriPage();
         break;
-      case 'Pengiriman':
-        page = const PengirimanPage();
+      case 'Manajemen Pengiriman':
+        page = const ManajemenPengirimanPage();
         break;
       case 'Kendaraan':
-        page = const KendaraanPage();
+        page = const ManajemenKendaraanPage();
         break;
       case 'Profile':
         page = const ProfilePage();
         break;
     }
     if (page != null) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => page!));
+      closeSidebarThenNavigate(
+        () => Navigator.push(context, MaterialPageRoute(builder: (_) => page!)),
+      );
     }
   }
 
@@ -188,10 +209,12 @@ class _BerandaPageState extends State<BerandaPage>
             child: _isLoading
                 ? _LoadingState()
                 : _hasError
-                ? _ErrorState(onRetry: _loadAllData)
+                ? _ErrorState(
+                    onRetry: _loadAllData,
+                    message: _errorMessage,
+                  )
                 : _BerandaContent(
                     now: _now,
-                    userName: widget.userName,
                     formatDate: _formatDate,
                     formatTime: _formatTime,
                     onMenuTap: openSidebar,
@@ -204,7 +227,6 @@ class _BerandaPageState extends State<BerandaPage>
           ...buildSidebarLayer(
             activeMenu: 'Dashboard',
             onMenuTap: _handleMenuTap,
-            // onLogout sudah punya default: navigasi ke LoginPage
           ),
         ],
       ),
@@ -212,62 +234,96 @@ class _BerandaPageState extends State<BerandaPage>
   }
 }
 
-// ── Loading ───────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// LOADING / ERROR
+// ════════════════════════════════════════════════════════════════════════════
 class _LoadingState extends StatelessWidget {
   @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(color: Color(0xFF4169E1)),
-          SizedBox(height: 16),
-          Text(
-            'Memuat dashboard...',
-            style: TextStyle(color: Color(0xFF4A5568)),
-          ),
-        ],
+  Widget build(BuildContext context) => SingleChildScrollView(
+    physics: const AlwaysScrollableScrollPhysics(),
+    child: SizedBox(
+      height:
+          MediaQuery.of(context).size.height -
+          MediaQuery.of(context).padding.top -
+          MediaQuery.of(context).padding.bottom,
+      child: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: Color(0xFF4169E1)),
+            SizedBox(height: 16),
+            Text(
+              'Memuat dashboard...',
+              style: TextStyle(color: Color(0xFF4A5568)),
+            ),
+          ],
+        ),
       ),
-    );
-  }
+    ),
+  );
 }
 
-// ── Error ─────────────────────────────────────────────────────────────────────
 class _ErrorState extends StatelessWidget {
   final VoidCallback onRetry;
-  const _ErrorState({required this.onRetry});
+  final String message;
+  const _ErrorState({required this.onRetry, required this.message});
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.cloud_off_rounded, size: 64, color: Colors.grey.shade400),
-          const SizedBox(height: 16),
-          const Text(
-            'Gagal memuat data',
-            style: TextStyle(fontSize: 16, color: Color(0xFF2D3748)),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Periksa koneksi ke server',
-            style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Coba Lagi'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4169E1),
-              foregroundColor: Colors.white,
+  Widget build(BuildContext context) => SingleChildScrollView(
+    physics: const AlwaysScrollableScrollPhysics(),
+    child: SizedBox(
+      height:
+          MediaQuery.of(context).size.height -
+          MediaQuery.of(context).padding.top -
+          MediaQuery.of(context).padding.bottom,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              size: 64,
+              color: Colors.grey.shade400,
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            const Text(
+              'Gagal memuat data dashboard',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2D3748),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message.isEmpty
+                  ? 'Periksa koneksi internet atau server lalu coba lagi'
+                  : message,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Coba Lagi'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4169E1),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -275,7 +331,6 @@ class _ErrorState extends StatelessWidget {
 // ════════════════════════════════════════════════════════════════════════════
 class _BerandaContent extends StatelessWidget {
   final DateTime now;
-  final String userName;
   final String Function(DateTime) formatDate;
   final String Function(DateTime) formatTime;
   final VoidCallback onMenuTap;
@@ -286,7 +341,6 @@ class _BerandaContent extends StatelessWidget {
 
   const _BerandaContent({
     required this.now,
-    required this.userName,
     required this.formatDate,
     required this.formatTime,
     required this.onMenuTap,
@@ -297,77 +351,92 @@ class _BerandaContent extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _BerandaHeader(
-            now: now,
-            userName: userName,
-            formatDate: formatDate,
-            formatTime: formatTime,
-            onMenuTap: onMenuTap,
-          ),
-          const SizedBox(height: 16),
-          _BerandaSummaryCards(stats: stats),
-          const SizedBox(height: 20),
-          _SectionCard(
-            title: 'Stok Menipis',
-            subtitle: 'Produk dengan stok di bawah minimum',
-            onLihatSemua: () {},
-            child: _StokMenipisTable(items: lowStock),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            title: 'Produk akan kadaluarsa',
-            subtitle: '30 hari ke depan',
-            onLihatSemua: () {},
-            child: _KadaluarsaTable(items: expiring),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            title: 'Grafik Penjualan & Pengeluaran Stok',
-            subtitle: 'Performa penjualan dan pergerakan stok harian',
-            child: const _GrafikSection(),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            title: 'Distribusi Stok',
-            child: _DistribusiStok(stats: stats),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            title: 'Transaksi Terbaru',
-            subtitle: 'Transaksi 7 hari terakhir',
-            onLihatSemua: () {},
-            child: _TransaksiTable(items: transaksi),
-          ),
-          const SizedBox(height: 32),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => SingleChildScrollView(
+    physics: const AlwaysScrollableScrollPhysics(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _BerandaHeader(
+          now: now,
+          formatDate: formatDate,
+          formatTime: formatTime,
+          onMenuTap: onMenuTap,
+        ),
+        const SizedBox(height: 16),
+        _BerandaSummaryCards(stats: stats),
+        const SizedBox(height: 20),
+        _SectionCard(
+          title: 'Stok Menipis',
+          subtitle: 'Produk dengan stok di bawah minimum',
+          onLihatSemua: () {},
+          child: _StokMenipisTable(items: lowStock),
+        ),
+        const SizedBox(height: 12),
+        _SectionCard(
+          title: 'Produk akan kadaluarsa',
+          subtitle: '30 hari ke depan',
+          onLihatSemua: () {},
+          child: _KadaluarsaTable(items: expiring),
+        ),
+        const SizedBox(height: 12),
+        _SectionCard(
+          title: 'Grafik Penjualan & Pengeluaran Stok',
+          subtitle: 'Performa penjualan dan pergerakan stok harian',
+          child: const _GrafikSection(),
+        ),
+        const SizedBox(height: 12),
+        _SectionCard(
+          title: 'Distribusi Stok',
+          child: _DistribusiStok(stats: stats),
+        ),
+        const SizedBox(height: 12),
+        _SectionCard(
+          title: 'Transaksi Terbaru',
+          subtitle: 'Transaksi 7 hari terakhir',
+          onLihatSemua: () {},
+          child: _TransaksiTable(items: transaksi),
+        ),
+        const SizedBox(height: 32),
+      ],
+    ),
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // HEADER
+// ── FIX: ProfileWidget.fromAuth() → nama/role/foto langsung dari database
 // ════════════════════════════════════════════════════════════════════════════
-class _BerandaHeader extends StatelessWidget {
+class _BerandaHeader extends StatefulWidget {
   final DateTime now;
-  final String userName;
   final String Function(DateTime) formatDate;
   final String Function(DateTime) formatTime;
   final VoidCallback onMenuTap;
 
   const _BerandaHeader({
     required this.now,
-    required this.userName,
     required this.formatDate,
     required this.formatTime,
     required this.onMenuTap,
   });
+
+  @override
+  State<_BerandaHeader> createState() => _BerandaHeaderState();
+}
+
+class _BerandaHeaderState extends State<_BerandaHeader> {
+  // Greeting "Hallo, X" juga dari database
+  String _greetingName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadName();
+  }
+
+  Future<void> _loadName() async {
+    final name = await AuthService.getUserName();
+    if (mounted) setState(() => _greetingName = name);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -388,34 +457,42 @@ class _BerandaHeader extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Top bar ─────────────────────────────────────────────────
                   Row(
                     children: [
-                      BurgerMenuButton(onTap: onMenuTap),
+                      BurgerMenuButton(onTap: widget.onMenuTap),
                       const Spacer(),
-                      Text(
-                        'Hallo, $userName',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+
+                      // Notifikasi — load otomatis dari database via NotifikasiService
+                      NotifikasiBell(
+                        onLihatSemua: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SemuaNotifikasiPage(),
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      const CircleAvatar(
-                        radius: 22,
-                        backgroundColor: Colors.white24,
-                        child: Icon(
-                          Icons.person,
-                          color: Colors.white,
-                          size: 24,
-                        ),
+                      const SizedBox(width: 12),
+
+                      // ── FIX: ProfileWidget.fromAuth() load nama, role, foto
+                      //    langsung dari SharedPreferences hasil login (sesuai DB)
+                      ProfileWidget.fromAuth(
+                        onTap: () {
+                          // Navigator.push(context, MaterialPageRoute(
+                          //     builder: (_) => const ProfilePage()));
+                        },
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 24),
-                  const Text(
-                    'Selamat Datang\ndi Toko Roni Juntinyuat',
-                    style: TextStyle(
+
+                  // ── Greeting dari database ───────────────────────────────────
+                  Text(
+                    _greetingName.isEmpty
+                        ? 'Selamat Datang\ndi Toko Roni Juntinyuat'
+                        : 'Hallo, $_greetingName!\nSelamat Datang di Toko Roni',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -423,20 +500,22 @@ class _BerandaHeader extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
+
+                  // ── Info tanggal & waktu ─────────────────────────────────────
                   Row(
                     children: [
                       _InfoCard(
                         icon: Icons.calendar_today_rounded,
                         iconBg: const Color(0xFF4A90D9),
                         label: 'Tanggal',
-                        value: formatDate(now),
+                        value: widget.formatDate(widget.now),
                       ),
                       const SizedBox(width: 12),
                       _InfoCard(
                         icon: Icons.access_time_rounded,
                         iconBg: Colors.green,
                         label: 'Waktu',
-                        value: formatTime(now),
+                        value: widget.formatTime(widget.now),
                       ),
                     ],
                   ),
@@ -453,9 +532,7 @@ class _BerandaHeader extends StatelessWidget {
 class _InfoCard extends StatelessWidget {
   final IconData icon;
   final Color iconBg;
-  final String label;
-  final String value;
-
+  final String label, value;
   const _InfoCard({
     required this.icon,
     required this.iconBg,
@@ -464,110 +541,105 @@ class _InfoCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.08),
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconBg,
+            borderRadius: BorderRadius.circular(8),
           ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(8),
+          child: Icon(icon, color: Colors.white, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
             ),
-            child: Icon(icon, color: Colors.white, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D3748),
               ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D3748),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SUMMARY CARDS — data dari API
+// SUMMARY CARDS
 // ════════════════════════════════════════════════════════════════════════════
 class _BerandaSummaryCards extends StatelessWidget {
   final DashboardStats stats;
   const _BerandaSummaryCards({required this.stats});
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 110,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        children: [
-          SummaryCard(
-            label: 'Total Karyawan',
-            value: stats.totalKaryawan.toString(),
-            icon: Icons.people_alt_rounded,
-            color: const Color(0xFF6B9FFF),
-          ),
-          SummaryCard(
-            label: 'Total Produk',
-            value: stats.totalProduk.toString(),
-            icon: Icons.inventory_2_rounded,
-            color: const Color(0xFF48BB78),
-          ),
-          SummaryCard(
-            label: 'Stok Hampir Habis',
-            value: stats.stokHampirHabis.toString(),
-            icon: Icons.warning_amber_rounded,
-            color: const Color(0xFFECC94B),
-          ),
-          SummaryCard(
-            label: 'Akan Kadaluarsa',
-            value: stats.akanKadaluarsa.toString(),
-            icon: Icons.timer_rounded,
-            color: const Color(0xFFFC8181),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => SizedBox(
+    height: 110,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      children: [
+        SummaryCard(
+          label: 'Total Karyawan',
+          value: stats.totalKaryawan.toString(),
+          icon: Icons.people_alt_rounded,
+          color: const Color(0xFF6B9FFF),
+        ),
+        SummaryCard(
+          label: 'Total Produk',
+          value: stats.totalProduk.toString(),
+          icon: Icons.inventory_2_rounded,
+          color: const Color(0xFF48BB78),
+        ),
+        SummaryCard(
+          label: 'Stok Hampir Habis',
+          value: stats.stokHampirHabis.toString(),
+          icon: Icons.warning_amber_rounded,
+          color: const Color(0xFFECC94B),
+        ),
+        SummaryCard(
+          label: 'Akan Kadaluarsa',
+          value: stats.akanKadaluarsa.toString(),
+          icon: Icons.timer_rounded,
+          color: const Color(0xFFFC8181),
+        ),
+      ],
+    ),
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SECTION CARD WRAPPER
+// SECTION CARD
 // ════════════════════════════════════════════════════════════════════════════
 class _SectionCard extends StatelessWidget {
   final String title;
   final String? subtitle;
   final VoidCallback? onLihatSemua;
   final Widget child;
-
   const _SectionCard({
     required this.title,
     this.subtitle,
@@ -576,85 +648,83 @@ class _SectionCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.symmetric(horizontal: 16),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2D3748),
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
                     Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D3748),
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
                       ),
                     ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey.shade500,
-                        ),
+                  ],
+                ],
+              ),
+            ),
+            if (onLihatSemua != null)
+              GestureDetector(
+                onTap: onLihatSemua,
+                child: const Row(
+                  children: [
+                    Text(
+                      'Lihat semua',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF4169E1),
+                        fontWeight: FontWeight.w500,
                       ),
-                    ],
+                    ),
+                    SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 14,
+                      color: Color(0xFF4169E1),
+                    ),
                   ],
                 ),
               ),
-              if (onLihatSemua != null)
-                GestureDetector(
-                  onTap: onLihatSemua,
-                  child: const Row(
-                    children: [
-                      Text(
-                        'Lihat semua',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF4169E1),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(width: 4),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 14,
-                        color: Color(0xFF4169E1),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+        const SizedBox(height: 12),
+        child,
+      ],
+    ),
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// STOK MENIPIS TABLE — dari API
+// STOK MENIPIS TABLE
 // ════════════════════════════════════════════════════════════════════════════
 class _StokMenipisTable extends StatelessWidget {
   final List<StokMenipisItem> items;
@@ -662,12 +732,11 @@ class _StokMenipisTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) {
+    if (items.isEmpty)
       return _PositiveEmptyState(
         icon: Icons.check_rounded,
         message: 'Semua produk dalam stok yang cukup',
       );
-    }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
@@ -713,7 +782,7 @@ class _StokMenipisTable extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// KADALUARSA TABLE — dari API
+// KADALUARSA TABLE
 // ════════════════════════════════════════════════════════════════════════════
 class _KadaluarsaTable extends StatelessWidget {
   final List<KadaluarsaItem> items;
@@ -721,12 +790,11 @@ class _KadaluarsaTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) {
+    if (items.isEmpty)
       return _PositiveEmptyState(
         icon: Icons.check_rounded,
         message: 'Tidak ada produk yang akan kadaluarsa',
       );
-    }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
@@ -786,11 +854,10 @@ class _KadaluarsaTable extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// GRAFIK — fetch dari API saat filter berubah
+// GRAFIK
 // ════════════════════════════════════════════════════════════════════════════
 class _GrafikSection extends StatefulWidget {
   const _GrafikSection();
-
   @override
   State<_GrafikSection> createState() => _GrafikSectionState();
 }
@@ -800,27 +867,6 @@ class _GrafikSectionState extends State<_GrafikSection> {
   bool _loading = true;
   ChartData? _data;
 
-  // ── Konfigurasi per filter ────────────────────────────────────────────────
-  // Mendeskripsikan apa yang ditampilkan dan lebar per kolom chart
-  static const _config = {
-    '7 Hari': {
-      'desc': 'Data per hari — 7 hari terakhir',
-      'colWidth': 110.0,
-      'xRotate': false,
-    },
-    '30 Hari': {
-      'desc': 'Data per minggu — 5 minggu terakhir',
-      'colWidth': 140.0,
-      'xRotate': false,
-    },
-    '90 Hari': {
-      'desc': 'Data per 10 hari — 90 hari terakhir',
-      'colWidth': 110.0,
-      'xRotate': false,
-    },
-  };
-
-  // ── Fallback data (rupiah mentah) ─────────────────────────────────────────
   static final _fallback = {
     '7 Hari': ChartData(
       labels: ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'],
@@ -876,17 +922,15 @@ class _GrafikSectionState extends State<_GrafikSection> {
   Future<void> _fetchChart() async {
     setState(() => _loading = true);
     final result = await DashboardService.getChartData(_filter);
-    if (mounted) {
+    if (mounted)
       setState(() {
         _data = (result != null && !result.isEmpty)
             ? result
             : _fallback[_filter];
         _loading = false;
       });
-    }
   }
 
-  // ── Subtitle periode — sinkron dengan grouping backend ───────────────────
   String _periodeText() {
     final now = DateTime.now();
     const m = [
@@ -904,33 +948,25 @@ class _GrafikSectionState extends State<_GrafikSection> {
       'Des',
     ];
     String fmt(DateTime d) => '${d.day} ${m[d.month - 1]} ${d.year}';
-
     switch (_filter) {
       case '30 Hari':
-        // 5 minggu terakhir
-        final start = now.subtract(const Duration(days: 34));
-        return '${fmt(start)} – ${fmt(now)}  (per minggu)';
+        return '${fmt(now.subtract(const Duration(days: 34)))} – ${fmt(now)}  (per minggu)';
       case '90 Hari':
-        // 90 hari terakhir, per 10 hari
-        final start90 = now.subtract(const Duration(days: 89));
-        return '${fmt(start90)} – ${fmt(now)}  (per 10 hari)';
-      default: // 7 Hari
-        final start = now.subtract(const Duration(days: 6));
-        return '${fmt(start)} – ${fmt(now)}  (per hari)';
+        return '${fmt(now.subtract(const Duration(days: 89)))} – ${fmt(now)}  (per 10 hari)';
+      default:
+        return '${fmt(now.subtract(const Duration(days: 6)))}  – ${fmt(now)}  (per hari)';
     }
   }
 
-  double get _colWidth => (_config[_filter]?['colWidth'] as double?) ?? 110.0;
+  double get _colWidth => _filter == '30 Hari' ? 140.0 : 110.0;
 
   @override
   Widget build(BuildContext context) {
     final data = _data;
     final chartWidth = data != null ? (data.labels.length * _colWidth) : 0.0;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Legend + Dropdown ──
         Row(
           children: [
             const Expanded(
@@ -965,18 +1001,12 @@ class _GrafikSectionState extends State<_GrafikSection> {
             ),
           ],
         ),
-
         const SizedBox(height: 6),
-
-        // ── Periode subtitle ──
         Text(
           _periodeText(),
           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
-
         const SizedBox(height: 12),
-
-        // ── Chart ──
         if (_loading)
           const SizedBox(
             height: 220,
@@ -1019,29 +1049,25 @@ class _LegendDot extends StatelessWidget {
   final Color color;
   final String label;
   const _LegendDot({required this.color, required this.label});
-
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11, color: Color(0xFF4A5568)),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Row(
+    children: [
+      Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 5),
+      Text(
+        label,
+        style: const TextStyle(fontSize: 11, color: Color(0xFF4A5568)),
+      ),
+    ],
+  );
 }
 
 class _LineChartPainter extends CustomPainter {
-  final List<double> penjualan;
-  final List<double> stokKeluar;
+  final List<double> penjualan, stokKeluar;
   final List<String> days;
   const _LineChartPainter({
     required this.penjualan,
@@ -1055,14 +1081,14 @@ class _LineChartPainter extends CustomPainter {
     const pl = 55.0, pr = 55.0, pb = 55.0, pt = 20.0;
     final w = size.width - pl - pr;
     final h = size.height - pb - pt;
-    final double rawMaxP = penjualan.isNotEmpty
+    final rawMaxP = penjualan.isNotEmpty
         ? penjualan.reduce((a, b) => a > b ? a : b)
         : 0.0;
-    final double rawMaxS = stokKeluar.isNotEmpty
+    final rawMaxS = stokKeluar.isNotEmpty
         ? stokKeluar.reduce((a, b) => a > b ? a : b)
         : 0.0;
-    final double maxP = rawMaxP > 0 ? rawMaxP : 1.0;
-    final double maxS = rawMaxS > 0 ? rawMaxS : 1.0;
+    final maxP = rawMaxP > 0 ? rawMaxP : 1.0;
+    final maxS = rawMaxS > 0 ? rawMaxS : 1.0;
 
     canvas.drawRect(
       Rect.fromLTWH(pl, pt, w, h),
@@ -1072,10 +1098,12 @@ class _LineChartPainter extends CustomPainter {
       ..color = const Color(0xFFE5E7EB)
       ..strokeWidth = 0.7;
     for (int i = 0; i <= 4; i++) {
-      final y = pt + h - (i / 4) * h;
-      canvas.drawLine(Offset(pl, y), Offset(size.width - pr, y), grid);
+      canvas.drawLine(
+        Offset(pl, pt + h - (i / 4) * h),
+        Offset(size.width - pr, pt + h - (i / 4) * h),
+        grid,
+      );
     }
-
     _drawYAxis(canvas, pl, pt, h, true, maxP);
     _drawYAxis(canvas, size.width - pr, pt, h, false, maxS);
     if (penjualan.length > 1) {
@@ -1124,33 +1152,25 @@ class _LineChartPainter extends CustomPainter {
     );
     final tp = TextPainter(textDirection: TextDirection.ltr);
     for (int i = 0; i <= 4; i++) {
-      // Label Y-axis dinamis — penjualan dalam rupiah mentah
       final val = (i / 4) * maxVal;
       String label;
       if (left) {
-        // Format rupiah: 0 / ribuan / jutaan / miliaran
-        if (val == 0) {
+        if (val == 0)
           label = 'Rp 0';
-        } else if (val < 1000) {
+        else if (val < 1000)
           label = 'Rp ${val.toStringAsFixed(0)}';
-        } else if (val < 1000000) {
+        else if (val < 1000000)
           label = 'Rp ${(val / 1000).toStringAsFixed(0)}rb';
-        } else if (val < 1000000000) {
-          final jt = val / 1000000;
-          label =
-              'Rp ${jt >= 10 ? jt.toStringAsFixed(0) : jt.toStringAsFixed(1)}jt';
-        } else {
+        else if (val < 1000000000)
+          label = 'Rp ${(val / 1000000).toStringAsFixed(1)}jt';
+        else
           label = 'Rp ${(val / 1000000000).toStringAsFixed(1)}M';
-        }
       } else {
-        // Stok keluar dalam unit
-        if (val == 0) {
-          label = '0 unit';
-        } else if (val < 1000) {
-          label = '${val.toStringAsFixed(0)} unit';
-        } else {
-          label = '${(val / 1000).toStringAsFixed(1)}k unit';
-        }
+        label = val == 0
+            ? '0 unit'
+            : val < 1000
+            ? '${val.toStringAsFixed(0)} unit'
+            : '${(val / 1000).toStringAsFixed(1)}k unit';
       }
       tp.text = TextSpan(
         text: label,
@@ -1185,8 +1205,6 @@ class _LineChartPainter extends CustomPainter {
     final tick = Paint()
       ..color = const Color(0xFFD1D5DB)
       ..strokeWidth = 0.8;
-
-    // Garis X-axis
     c.drawLine(
       Offset(pl, pt + h),
       Offset(size.width - pl, pt + h),
@@ -1194,22 +1212,14 @@ class _LineChartPainter extends CustomPainter {
         ..color = const Color(0xFFD1D5DB)
         ..strokeWidth = 1.2,
     );
-
-    // Lebar per kolom — tentukan apakah label perlu disingkat
     final colWidth = days.length > 1 ? w / (days.length - 1) : w;
-
     for (int i = 0; i < days.length; i++) {
       final x = pl + (days.length == 1 ? w / 2 : (i / (days.length - 1)) * w);
-
-      // Singkat label jika tidak cukup ruang (misal "Minggu 1" → "M1")
       String label = days[i];
-      if (colWidth < 70 && label.length > 4) {
-        // Untuk bulan: ambil 3 karakter pertama
-        label = label.substring(0, label.length > 3 ? 3 : label.length);
-      } else if (colWidth < 50) {
-        label = label.substring(0, 1); // Hanya inisial
-      }
-
+      if (colWidth < 70 && label.length > 4)
+        label = label.substring(0, 3);
+      else if (colWidth < 50)
+        label = label.substring(0, 1);
       tp.text = TextSpan(
         text: label,
         style: const TextStyle(
@@ -1219,16 +1229,14 @@ class _LineChartPainter extends CustomPainter {
         ),
       );
       tp.layout();
-
-      // Pastikan label tidak terpotong di tepi
-      final labelX = (x - tp.width / 2).clamp(pl, size.width - pl - tp.width);
-
-      tp.paint(c, Offset(labelX, size.height - pb + 12));
-
-      // Tick mark
+      tp.paint(
+        c,
+        Offset(
+          (x - tp.width / 2).clamp(pl, size.width - pl - tp.width),
+          size.height - pb + 12,
+        ),
+      );
       c.drawLine(Offset(x, pt + h), Offset(x, pt + h + 5), tick);
-
-      // Garis vertikal grid tipis
       c.drawLine(
         Offset(x, pt),
         Offset(x, pt + h),
@@ -1256,11 +1264,11 @@ class _LineChartPainter extends CustomPainter {
       final y = t + h - (data[i] / maxVal) * h;
       if (i == 0) {
         path.moveTo(x, y);
-      } else {
-        final px = l + ((i - 1) / (data.length - 1)) * w;
-        final py = t + h - (data[i - 1] / maxVal) * h;
-        path.cubicTo(px + (x - px) / 2, py, px + (x - px) / 2, y, x, y);
+        continue;
       }
+      final px = l + ((i - 1) / (data.length - 1)) * w;
+      final py = t + h - (data[i - 1] / maxVal) * h;
+      path.cubicTo(px + (x - px) / 2, py, px + (x - px) / 2, y, x, y);
     }
     path.lineTo(l + w, t + h);
     path.lineTo(l, t + h);
@@ -1289,11 +1297,11 @@ class _LineChartPainter extends CustomPainter {
       final y = t + h - (data[i] / maxVal) * h;
       if (i == 0) {
         path.moveTo(x, y);
-      } else {
-        final px = l + ((i - 1) / (data.length - 1)) * w;
-        final py = t + h - (data[i - 1] / maxVal) * h;
-        path.cubicTo(px + (x - px) / 2, py, px + (x - px) / 2, y, x, y);
+        continue;
       }
+      final px = l + ((i - 1) / (data.length - 1)) * w;
+      final py = t + h - (data[i - 1] / maxVal) * h;
+      path.cubicTo(px + (x - px) / 2, py, px + (x - px) / 2, y, x, y);
     }
     c.drawPath(
       path,
@@ -1325,101 +1333,94 @@ class _LineChartPainter extends CustomPainter {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// DISTRIBUSI STOK — dari stats API
+// DISTRIBUSI STOK
 // ════════════════════════════════════════════════════════════════════════════
 class _DistribusiStok extends StatelessWidget {
   final DashboardStats stats;
   const _DistribusiStok({required this.stats});
 
   @override
-  Widget build(BuildContext context) {
-    final total = stats.totalProduk == 0 ? 1 : stats.totalProduk;
-    return Column(
-      children: [
-        SizedBox(
-          height: 160,
-          child: CustomPaint(
-            size: const Size(double.infinity, 160),
-            painter: _DonutPainter(
-              normal: stats.stokNormal,
-              hampirHabis: stats.stokHampirHabis,
-              kritis: stats.stokKritis,
-              total: stats.totalProduk,
-            ),
+  Widget build(BuildContext context) => Column(
+    children: [
+      SizedBox(
+        height: 160,
+        child: CustomPaint(
+          size: const Size(double.infinity, 160),
+          painter: _DonutPainter(
+            normal: stats.stokNormal,
+            hampirHabis: stats.stokHampirHabis,
+            kritis: stats.stokKritis,
+            total: stats.totalProduk,
           ),
         ),
-        const SizedBox(height: 8),
-        const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _LegendDot(color: Color(0xFF48BB78), label: 'Stok Normal'),
-            SizedBox(width: 16),
-            _LegendDot(color: Color(0xFFECC94B), label: 'Hampir Habis'),
-            SizedBox(width: 16),
-            _LegendDot(color: Color(0xFFFC8181), label: 'Kritis'),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _DistribusiRow(
-          color: const Color(0xFF48BB78),
-          label: 'Stok Normal',
-          value: '${stats.stokNormal} produk',
-        ),
-        _DistribusiRow(
-          color: const Color(0xFFECC94B),
-          label: 'Hampir Habis',
-          value: '${stats.stokHampirHabis} produk',
-        ),
-        _DistribusiRow(
-          color: const Color(0xFFFC8181),
-          label: 'Kritis',
-          value: '${stats.stokKritis} produk',
-        ),
-      ],
-    );
-  }
+      ),
+      const SizedBox(height: 8),
+      const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _LegendDot(color: Color(0xFF48BB78), label: 'Stok Normal'),
+          SizedBox(width: 16),
+          _LegendDot(color: Color(0xFFECC94B), label: 'Hampir Habis'),
+          SizedBox(width: 16),
+          _LegendDot(color: Color(0xFFFC8181), label: 'Kritis'),
+        ],
+      ),
+      const SizedBox(height: 16),
+      _DistribusiRow(
+        color: const Color(0xFF48BB78),
+        label: 'Stok Normal',
+        value: '${stats.stokNormal} produk',
+      ),
+      _DistribusiRow(
+        color: const Color(0xFFECC94B),
+        label: 'Hampir Habis',
+        value: '${stats.stokHampirHabis} produk',
+      ),
+      _DistribusiRow(
+        color: const Color(0xFFFC8181),
+        label: 'Kritis',
+        value: '${stats.stokKritis} produk',
+      ),
+    ],
+  );
 }
 
 class _DistribusiRow extends StatelessWidget {
   final Color color;
-  final String label;
-  final String value;
+  final String label, value;
   const _DistribusiRow({
     required this.color,
     required this.label,
     required this.value,
   });
-
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF4A5568)),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 13, color: Color(0xFF4A5568)),
-            ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF2D3748),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF2D3748),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
 }
 
 class _DonutPainter extends CustomPainter {
@@ -1430,11 +1431,9 @@ class _DonutPainter extends CustomPainter {
     required this.kritis,
     required this.total,
   });
-
   @override
   void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
+    final cx = size.width / 2, cy = size.height / 2;
     final radius = size.height * 0.42;
     final t = total == 0 ? 1 : total;
     final data = [
@@ -1467,7 +1466,7 @@ class _DonutPainter extends CustomPainter {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// TRANSAKSI TABLE — dari API
+// TRANSAKSI TABLE
 // ════════════════════════════════════════════════════════════════════════════
 class _TransaksiTable extends StatelessWidget {
   final List<TransaksiItem> items;
@@ -1475,12 +1474,11 @@ class _TransaksiTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) {
+    if (items.isEmpty)
       return _PositiveEmptyState(
         icon: Icons.receipt_long_rounded,
         message: 'Tidak ada transaksi terbaru',
       );
-    }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
@@ -1547,37 +1545,34 @@ class _PositiveEmptyState extends StatelessWidget {
   final IconData icon;
   final String message;
   const _PositiveEmptyState({required this.icon, required this.message});
-
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 60,
-              height: 60,
-              decoration: const BoxDecoration(
-                color: Color(0xFF48BB78),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: Colors.white, size: 32),
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: const BoxDecoration(
+              color: Color(0xFF48BB78),
+              shape: BoxShape.circle,
             ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF2D3748),
-              ),
+            child: Icon(icon, color: Colors.white, size: 32),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF2D3748),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }
