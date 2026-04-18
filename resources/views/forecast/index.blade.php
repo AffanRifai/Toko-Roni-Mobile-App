@@ -1,12 +1,12 @@
 @extends('layouts.app')
 
-@section('title', 'AI Sales Forecasting')
+@section('title', 'AI Sales Forecasting & Restock Planner')
 
 @section('content')
 <div class="container mx-auto px-4 py-8">
     <div class="mb-8 flex justify-between items-center">
         <div>
-            <h1 class="text-3xl font-bold text-gray-800">AI Sales Forecasting</h1>
+            <h1 class="text-3xl font-bold text-gray-800">AI Sales Forecasting & Restock Planner</h1>
             <p class="text-gray-600">Prediksi penjualan dan rekomendasi restock berdasarkan data historis transaksi.</p>
         </div>
         <div class="bg-indigo-100 p-3 rounded-lg flex items-center shadow-sm">
