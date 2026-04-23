@@ -40,9 +40,16 @@ class ApiConfig {
   // Sementara pakai stats endpoint, expiring diambil dari sana
   static const String dashboardNotifications = '$baseUrl/dashboard/stats';
   static const String notifications = '$baseUrl/notifications/unread';
+  static const String realtimeConfig = '$baseUrl/utils/realtime';
 
   // ─── Transaction endpoints ───────────────────────────────
+  static const String transactionIndex = '$baseUrl/transactions';
   static const String transactionsRecent = '$baseUrl/transactions/recent';
+  static String transactionDetail(int transactionId) =>
+      '$transactionIndex/$transactionId';
+
+  // Report endpoints
+  static const String reportExportPdf = '$baseUrl/reports/export/pdf';
 
   // ─── Product endpoints ───────────────────────────────────
   static const String productIndex = '$baseUrl/products';
@@ -80,4 +87,31 @@ class ApiConfig {
       '$baseUrl/users/$userId/face-register';
   static String userFaceRegisterLegacy(int userId) =>
       '$baseUrl/pengguna/$userId/face-register';
+
+  // Delivery management endpoints
+  static const String deliveryIndex = '$baseUrl/deliveries';
+  static const String deliveryAvailableDrivers =
+      '$baseUrl/deliveries/available-drivers';
+  static const String deliveryAvailableVehicles =
+      '$baseUrl/deliveries/available-vehicles';
+
+  static String deliveryDetail(int deliveryId) =>
+      '$baseUrl/deliveries/$deliveryId';
+  static String deliveryAssign(int deliveryId) =>
+      '$baseUrl/deliveries/$deliveryId/assign';
+  static String deliveryUpdateStatus(int deliveryId) =>
+      '$baseUrl/deliveries/$deliveryId/status';
+
+  // Vehicle management endpoints
+  static const String vehicleIndex = '$baseUrl/vehicles';
+  static const String vehicleAvailable = '$baseUrl/vehicles/available';
+  static const String vehicleInMaintenance = '$baseUrl/vehicles/in-maintenance';
+  static const String vehicleStatistics =
+      '$baseUrl/vehicles/statistics/overview';
+
+  static String vehicleDetail(int vehicleId) => '$baseUrl/vehicles/$vehicleId';
+  static String vehicleSetMaintenance(int vehicleId) =>
+      '$baseUrl/vehicles/$vehicleId/maintenance';
+  static String vehicleSetAvailable(int vehicleId) =>
+      '$baseUrl/vehicles/$vehicleId/available';
 }

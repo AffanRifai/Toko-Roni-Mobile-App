@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import '/product/produk_model.dart';
+import '../../models/produk_model.dart';
 import '../config/api_config.dart';
 import 'auth_service.dart';
+import 'notification_refresh_helper.dart';
 
 class ProductBundle {
   final List<ProdukItem> products;
@@ -78,12 +79,11 @@ class ProductService {
           .timeout(const Duration(seconds: 20)),
     );
 
-    final json = _decode(
-      response,
-      fallbackMessage: 'Gagal menambah produk',
-    );
+    final json = _decode(response, fallbackMessage: 'Gagal menambah produk');
     final data = _asMap(json['data']);
-    return ProdukItem.fromJson(data);
+    final created = ProdukItem.fromJson(data);
+    await NotificationRefreshHelper.refreshSafely();
+    return created;
   }
 
   static Future<ProdukItem> updateProduct({
@@ -103,12 +103,11 @@ class ProductService {
           .timeout(const Duration(seconds: 20)),
     );
 
-    final json = _decode(
-      response,
-      fallbackMessage: 'Gagal memperbarui produk',
-    );
+    final json = _decode(response, fallbackMessage: 'Gagal memperbarui produk');
     final data = _asMap(json['data']);
-    return ProdukItem.fromJson(data);
+    final updated = ProdukItem.fromJson(data);
+    await NotificationRefreshHelper.refreshSafely();
+    return updated;
   }
 
   static Future<void> deleteProduct({required int productId}) async {
@@ -126,6 +125,7 @@ class ProductService {
       fallbackMessage: 'Gagal menghapus produk',
       allowEmptyBody: true,
     );
+    await NotificationRefreshHelper.refreshSafely();
   }
 
   static Map<String, dynamic> _decode(
@@ -144,7 +144,9 @@ class ProductService {
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(_buildErrorMessage(body, fallbackMessage, response.statusCode));
+      throw Exception(
+        _buildErrorMessage(body, fallbackMessage, response.statusCode),
+      );
     }
 
     if (body.isEmpty && !allowEmptyBody) {
@@ -154,7 +156,9 @@ class ProductService {
 
     final isSuccess = body['success'];
     if (isSuccess is bool && !isSuccess) {
-      throw Exception(_buildErrorMessage(body, fallbackMessage, response.statusCode));
+      throw Exception(
+        _buildErrorMessage(body, fallbackMessage, response.statusCode),
+      );
     }
 
     return body;
@@ -170,7 +174,9 @@ class ProductService {
         'Koneksi ke server timeout. Periksa koneksi internet lalu coba lagi.',
       );
     } on SocketException {
-      throw Exception('Tidak ada koneksi internet atau server tidak dapat dijangkau.');
+      throw Exception(
+        'Tidak ada koneksi internet atau server tidak dapat dijangkau.',
+      );
     } on http.ClientException {
       throw Exception(
         'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.',

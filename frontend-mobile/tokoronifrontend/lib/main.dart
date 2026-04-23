@@ -4,7 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'core/state/app_state.dart';
-import '/splash_page.dart'; // SplashPage cek token & route ke login/dashboard
+import 'features/splash/splash_page.dart'; // SplashPage cek token & route ke login/dashboard
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

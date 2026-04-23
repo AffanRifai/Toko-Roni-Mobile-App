@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import 'auth_service.dart';
+import 'notification_refresh_helper.dart';
 
 class CategoryRecord {
   final int id;
@@ -125,12 +126,14 @@ class CategoryService {
       );
 
       if (_isSuccessStatus(response.statusCode)) {
-        return _recordFromMutationResponse(
+        final created = _recordFromMutationResponse(
           response: response,
           fallbackMessage: 'Gagal menambah kategori',
           fallbackRecord: body,
           fallbackId: 0,
         );
+        await NotificationRefreshHelper.refreshSafely();
+        return created;
       }
 
       lastResponse = response;
@@ -182,12 +185,14 @@ class CategoryService {
       );
 
       if (_isSuccessStatus(response.statusCode)) {
-        return _recordFromMutationResponse(
+        final updated = _recordFromMutationResponse(
           response: response,
           fallbackMessage: 'Gagal memperbarui kategori',
           fallbackRecord: body,
           fallbackId: categoryId,
         );
+        await NotificationRefreshHelper.refreshSafely();
+        return updated;
       }
 
       lastResponse = response;
@@ -215,6 +220,7 @@ class CategoryService {
       fallbackMessage: 'Gagal menghapus kategori',
       allowEmptyBody: true,
     );
+    await NotificationRefreshHelper.refreshSafely();
   }
 
   static Future<http.Response> _performRequest(

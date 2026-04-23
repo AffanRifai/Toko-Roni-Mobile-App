@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import 'auth_service.dart';
+import 'notification_refresh_helper.dart';
 
 class MemberRecord {
   final int id;
@@ -172,7 +173,7 @@ class MemberService {
     final data = _asMap(parsed['data']);
 
     if (data.isEmpty) {
-      return MemberRecord.fromJson({
+      final created = MemberRecord.fromJson({
         'id': 0,
         'kode_member': '',
         'nama': payload['nama'],
@@ -187,9 +188,13 @@ class MemberService {
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       });
+      await NotificationRefreshHelper.refreshSafely();
+      return created;
     }
 
-    return MemberRecord.fromJson(data);
+    final created = MemberRecord.fromJson(data);
+    await NotificationRefreshHelper.refreshSafely();
+    return created;
   }
 
   static Future<MemberRecord> updateMember({
@@ -228,7 +233,7 @@ class MemberService {
     final data = _asMap(parsed['data']);
 
     if (data.isEmpty) {
-      return MemberRecord.fromJson({
+      final updated = MemberRecord.fromJson({
         'id': memberId,
         'kode_member': '',
         'nama': payload['nama'],
@@ -242,9 +247,13 @@ class MemberService {
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       });
+      await NotificationRefreshHelper.refreshSafely();
+      return updated;
     }
 
-    return MemberRecord.fromJson(data);
+    final updated = MemberRecord.fromJson(data);
+    await NotificationRefreshHelper.refreshSafely();
+    return updated;
   }
 
   static Future<bool> toggleMemberStatus({required int memberId}) async {
@@ -264,12 +273,20 @@ class MemberService {
     final data = _asMap(parsed['data']);
 
     if (data.containsKey('is_active')) {
-      return _toBool(data['is_active'], defaultValue: false);
+      final value = _toBool(data['is_active'], defaultValue: false);
+      await NotificationRefreshHelper.refreshSafely();
+      return value;
     }
 
     final message = (parsed['message'] ?? '').toString().toLowerCase();
-    if (message.contains('diaktifkan')) return true;
-    if (message.contains('dinonaktifkan')) return false;
+    if (message.contains('diaktifkan')) {
+      await NotificationRefreshHelper.refreshSafely();
+      return true;
+    }
+    if (message.contains('dinonaktifkan')) {
+      await NotificationRefreshHelper.refreshSafely();
+      return false;
+    }
     throw Exception(
       'Status member tidak dapat dipastikan dari respons server.',
     );

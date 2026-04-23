@@ -257,13 +257,44 @@ class TransaksiItem {
         ? 'Rp ${_fmtRupiah(rawTotal.toInt())}'
         : rawTotal.toString();
 
-    // Status: bisa 'LUNAS'/'lunas'/'success'/'completed'
-    final status = d['status']?.toString().toLowerCase() ?? '';
-    final success =
-        status == 'success' ||
-        status == 'completed' ||
-        status == 'lunas' ||
-        status == '1';
+    // Status transaksi (bukan status pembayaran):
+    // - Dukung payload baru: is_success / transaction_status
+    // - Kompatibel payload lama: status = pending untuk transaksi kredit
+    final status = d['status']?.toString().toLowerCase().trim() ?? '';
+    final paymentStatus =
+        d['payment_status']?.toString().toLowerCase().trim() ?? '';
+    final transactionStatus =
+        d['transaction_status']?.toString().toLowerCase().trim() ?? '';
+    final successFlag = d['is_success'];
+
+    bool success;
+    if (successFlag is bool) {
+      success = successFlag;
+    } else {
+      final failedTokens = {'failed', 'gagal', 'cancelled', 'canceled', 'void'};
+      final successTokens = {
+        'success',
+        'completed',
+        'lunas',
+        'paid',
+        'pending',
+        'processing',
+        'belum lunas',
+        '1',
+      };
+
+      if (failedTokens.contains(transactionStatus) ||
+          failedTokens.contains(status)) {
+        success = false;
+      } else if (successTokens.contains(transactionStatus) ||
+          successTokens.contains(status) ||
+          successTokens.contains(paymentStatus)) {
+        success = true;
+      } else {
+        // Hindari false-negative untuk transaksi kredit pada payload lama.
+        success = true;
+      }
+    }
 
     return TransaksiItem(
       id:
@@ -320,36 +351,54 @@ class DashboardService {
   }
 
   // ── Stok menipis ─────────────────────────────────────────────────────────
-  static Future<List<StokMenipisItem>> getLowStockProducts() async {
+  static Future<List<StokMenipisItem>> getLowStockProducts({
+    int limit = 5,
+  }) async {
+    final safeLimit = limit <= 0 ? 5 : limit;
     final json = await _getJson(
-      ApiConfig.productLowStock,
+      '${ApiConfig.productLowStock}?limit=$safeLimit',
       fallbackMessage: 'Gagal memuat data stok menipis',
     );
     final list = _extractList(json['data']);
-    return list.map((e) => StokMenipisItem.fromJson(_asMap(e))).toList();
+    return list
+        .map((e) => StokMenipisItem.fromJson(_asMap(e)))
+        .take(safeLimit)
+        .toList();
   }
 
   // ── Produk akan kadaluarsa ────────────────────────────────────────────────
   // Menggunakan endpoint getDashboardStats — field expiring ada di alerts
   // atau di notifications. Kalau belum ada, return list kosong.
-  static Future<List<KadaluarsaItem>> getExpiringProducts() async {
+  static Future<List<KadaluarsaItem>> getExpiringProducts({
+    int limit = 5,
+  }) async {
+    final safeLimit = limit <= 0 ? 5 : limit;
     final json = await _getJson(
       ApiConfig.dashboardStats,
       fallbackMessage: 'Gagal memuat data produk kadaluarsa',
     );
     final data = _asMap(json['data']);
     final list = _extractList(data['expiring_products']);
-    return list.map((e) => KadaluarsaItem.fromJson(_asMap(e))).toList();
+    return list
+        .map((e) => KadaluarsaItem.fromJson(_asMap(e)))
+        .take(safeLimit)
+        .toList();
   }
 
   // ── Transaksi terbaru ────────────────────────────────────────────────────
-  static Future<List<TransaksiItem>> getRecentTransactions() async {
+  static Future<List<TransaksiItem>> getRecentTransactions({
+    int limit = 5,
+  }) async {
+    final safeLimit = limit <= 0 ? 5 : limit;
     final json = await _getJson(
-      ApiConfig.transactionsRecent,
+      '${ApiConfig.transactionsRecent}?limit=$safeLimit',
       fallbackMessage: 'Gagal memuat transaksi terbaru',
     );
     final list = _extractList(json['data']);
-    return list.map((e) => TransaksiItem.fromJson(_asMap(e))).toList();
+    return list
+        .map((e) => TransaksiItem.fromJson(_asMap(e)))
+        .take(safeLimit)
+        .toList();
   }
 
   // ── Chart penjualan & stok keluar ────────────────────────────────────────
@@ -377,7 +426,9 @@ class DashboardService {
       // Backend kirim rupiah mentah — TIDAK dikonversi ke jutaan
       // Flutter handle format label di Y-axis secara dinamis
       final penjualan =
-          (data['penjualan'] as List?)?.map((e) => (e as num).toDouble()).toList() ??
+          (data['penjualan'] as List?)
+              ?.map((e) => (e as num).toDouble())
+              .toList() ??
           [];
 
       final stokKeluar =
@@ -445,7 +496,9 @@ class DashboardService {
         'Koneksi ke server timeout. Periksa koneksi internet lalu coba lagi.',
       );
     } on SocketException {
-      throw Exception('Tidak ada koneksi internet atau server tidak dapat dijangkau.');
+      throw Exception(
+        'Tidak ada koneksi internet atau server tidak dapat dijangkau.',
+      );
     } on http.ClientException {
       throw Exception(
         'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.',

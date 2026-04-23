@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import 'auth_service.dart';
+import 'notification_refresh_helper.dart';
 
 class UserRecord {
   final int id;
@@ -228,6 +229,7 @@ class UserService {
           if (data.isNotEmpty) {
             final created = UserRecord.fromJson(data);
             await _upsertUsersCache(created);
+            await NotificationRefreshHelper.refreshSafely();
             return created;
           }
           final created = UserRecord.fromJson({
@@ -242,6 +244,7 @@ class UserService {
             'created_at': DateTime.now().toIso8601String(),
           });
           await _upsertUsersCache(created);
+          await NotificationRefreshHelper.refreshSafely();
           return created;
         }
 
@@ -339,6 +342,7 @@ class UserService {
             if (data.isNotEmpty) {
               final updated = UserRecord.fromJson(data);
               await _upsertUsersCache(updated);
+              await NotificationRefreshHelper.refreshSafely();
               return updated;
             }
             final updated = UserRecord.fromJson({
@@ -353,6 +357,7 @@ class UserService {
               'updated_at': DateTime.now().toIso8601String(),
             });
             await _upsertUsersCache(updated);
+            await NotificationRefreshHelper.refreshSafely();
             return updated;
           }
 
@@ -413,6 +418,7 @@ class UserService {
             allowEmptyBody: true,
           );
           await _removeUsersCache(userId);
+          await NotificationRefreshHelper.refreshSafely();
           return;
         }
 

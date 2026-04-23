@@ -28,23 +28,31 @@ class AuthService {
   // ── Ambil info user ──────────────────────────────────────
   static Future<String> getUserName() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_kName) ?? 'User';
+    final raw = prefs.getString(_kName) ?? '';
+    final cleaned = raw.trim();
+    return cleaned.isEmpty ? 'User' : cleaned;
   }
 
   static Future<String> getUserEmail() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_kEmail) ?? '-';
+    final raw = prefs.getString(_kEmail) ?? '';
+    final cleaned = raw.trim();
+    return cleaned.isEmpty ? '-' : cleaned;
   }
 
   static Future<String> getUserRole() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_kRole) ?? '';
+    return (prefs.getString(_kRole) ?? '').trim();
   }
 
   // ── Ambil foto profil user (URL dari backend) ─────────────────────────────
   static Future<String?> getUserPhoto() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('user_photo');
+    final raw = prefs.getString('user_photo');
+    if (raw == null) return null;
+    final cleaned = raw.trim();
+    if (cleaned.isEmpty || cleaned.toLowerCase() == 'null') return null;
+    return cleaned;
   }
 
   static Future<String> getUserId() async {
