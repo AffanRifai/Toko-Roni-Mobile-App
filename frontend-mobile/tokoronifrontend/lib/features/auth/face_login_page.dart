@@ -34,7 +34,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tokoronifrontend/features/auth/login_page.dart';
 import 'package:tokoronifrontend/core/config/api_config.dart';
 import 'package:tokoronifrontend/core/state/app_state.dart';
-import 'package:tokoronifrontend/features/home/dashboard_page.dart';
+import 'package:tokoronifrontend/features/home/dashboard_router.dart';
 
 // Uncomment saat halaman sudah siap dihubungkan:
 // import '../home/beranda_page.dart';
@@ -1130,7 +1130,7 @@ class _FaceLoginPageState extends State<FaceLoginPage>
 
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const BerandaPage()),
+      MaterialPageRoute(builder: (_) => DashboardRouter.pageForCurrentUser()),
       (_) => false,
     );
   }

@@ -18,7 +18,7 @@
 import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/state/app_state.dart';
-import '../home/dashboard_page.dart'; // BerandaPage
+import '../home/dashboard_router.dart';
 import '../auth/login_page.dart'; // LoginPage — sesuaikan path
 
 class SplashPage extends StatefulWidget {
@@ -44,14 +44,13 @@ class _SplashPageState extends State<SplashPage> {
     final loggedIn = await AuthService.isLoggedIn();
 
     if (loggedIn) {
-      final name = await AuthService.getUserName();
       if (!mounted) return;
       // Pastikan AppState sudah init (fetch fresh dari API)
       await AppState.instance.init();
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const BerandaPage()),
+        MaterialPageRoute(builder: (_) => DashboardRouter.pageForCurrentUser()),
       );
     } else {
       if (!mounted) return;

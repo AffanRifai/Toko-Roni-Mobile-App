@@ -6,6 +6,8 @@ import 'package:tokoronifrontend/features/report/laporan_penjualan_page.dart';
 import 'package:tokoronifrontend/features/transaction/kasir_page.dart';
 import 'package:tokoronifrontend/features/transaction/riwayat_transaksi_page.dart';
 import 'package:tokoronifrontend/features/vehicle/manajemen_kendaraan_page.dart';
+import '../../core/access/role_access.dart';
+import '../../core/state/app_state.dart';
 import '../../core/services/product_service.dart';
 import '../../shared/widgets/shared_widgets.dart';
 import '../../shared/widgets/notifikasi_widget.dart';
@@ -14,7 +16,7 @@ import '../../shared/widgets/semua_notifikasi_page.dart';
 import '../../models/produk_model.dart';
 import 'produk_form_page.dart' hide EditProdukPage;
 import 'edit_produk_page.dart';
-import '../home/dashboard_page.dart';
+import '../home/dashboard_router.dart';
 import '../category/manajemen_kategori_page.dart';
 import '../category/tambah_kategori_page.dart';
 import '../category/edit_kategori_page.dart';
@@ -43,6 +45,9 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
   String _filterKategori = 'Semua kategori';
   String _filterStatus = 'Semua status';
   String _filterStok = 'Semua stok';
+
+  String get _currentRole => AppState.instance.userRole.value;
+  bool get _isProdukReadOnly => RoleAccess.isProdukReadOnlyRole(_currentRole);
 
   @override
   void initState() {
@@ -266,7 +271,7 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
     Widget? page;
 switch (menu) {
       case 'Dashboard':
-        page = const BerandaPage();
+        page = DashboardRouter.pageForCurrentUser();
         break;
       case 'Pengguna':
         page = const ManajemenPenggunaPage();
@@ -459,8 +464,10 @@ switch (menu) {
           const SizedBox(height: 20),
           _buildFilterSection(),
           const SizedBox(height: 16),
-          _buildActionButtons(),
-          const SizedBox(height: 20),
+          if (!_isProdukReadOnly) ...[
+            _buildActionButtons(),
+            const SizedBox(height: 20),
+          ],
           _buildProdukSection(filtered),
           const SizedBox(height: 24),
           _buildKategoriSection(),
@@ -1124,28 +1131,31 @@ switch (menu) {
                                 label: 'Detail',
                                 onTap: () => _showDetailModal(p),
                               ),
-                              const SizedBox(width: 8),
-                              _AksiBtn(
-                                icon: Icons.edit_rounded,
-                                color: const Color(0xFFD69E2E),
-                                label: 'Edit',
-                                onTap: () async {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => EditProdukPage(produk: p),
-                                    ),
-                                  );
-                                  if (mounted) _loadAllData();
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              _AksiBtn(
-                                icon: Icons.delete_rounded,
-                                color: const Color(0xFFE53E3E),
-                                label: 'Hapus',
-                                onTap: () => _showHapusProdukDialog(p),
-                              ),
+                              if (!_isProdukReadOnly) ...[
+                                const SizedBox(width: 8),
+                                _AksiBtn(
+                                  icon: Icons.edit_rounded,
+                                  color: const Color(0xFFD69E2E),
+                                  label: 'Edit',
+                                  onTap: () async {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            EditProdukPage(produk: p),
+                                      ),
+                                    );
+                                    if (mounted) _loadAllData();
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                _AksiBtn(
+                                  icon: Icons.delete_rounded,
+                                  color: const Color(0xFFE53E3E),
+                                  label: 'Hapus',
+                                  onTap: () => _showHapusProdukDialog(p),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -1321,48 +1331,50 @@ switch (menu) {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _KatBtn(
-                          icon: Icons.edit_rounded,
-                          color: const Color(0xFFD69E2E),
-                          label: 'edit',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => EditKategoriPage(
-                                // Konversi KategoriItem → KategoriData saat navigasi
-                                kategori: KategoriData(
-                                  id: k.id ?? 0,
-                                  nama: k.nama,
-                                  slug: k.nama.toLowerCase().replaceAll(
-                                    ' ',
-                                    '-',
+                        if (!_isProdukReadOnly) ...[
+                          _KatBtn(
+                            icon: Icons.edit_rounded,
+                            color: const Color(0xFFD69E2E),
+                            label: 'edit',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EditKategoriPage(
+                                  // Konversi KategoriItem → KategoriData saat navigasi
+                                  kategori: KategoriData(
+                                    id: k.id ?? 0,
+                                    nama: k.nama,
+                                    slug: k.nama.toLowerCase().replaceAll(
+                                      ' ',
+                                      '-',
+                                    ),
+                                    deskripsi: k.deskripsi,
+                                    aktif: true,
+                                    totalProduk: _produkList
+                                        .where((p) => p.kategori == k.nama)
+                                        .length,
+                                    terakhirDiperbarui: '-',
                                   ),
-                                  deskripsi: k.deskripsi,
-                                  aktif: true,
-                                  totalProduk: _produkList
-                                      .where((p) => p.kategori == k.nama)
-                                      .length,
-                                  terakhirDiperbarui: '-',
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        _KatBtn(
-                          icon: Icons.delete_rounded,
-                          color: hasProduk
-                              ? Colors.grey.shade300
-                              : const Color(0xFFE53E3E),
-                          label: 'hapus',
-                          disabled: hasProduk,
-                          onTap: hasProduk
-                              ? () => _showSnack(
-                                  'Kategori tidak bisa dihapus karena masih punya produk',
-                                  const Color(0xFFE53E3E),
-                                )
-                              : () => _showHapusKategoriDialog(k),
-                        ),
+                          const SizedBox(width: 8),
+                          _KatBtn(
+                            icon: Icons.delete_rounded,
+                            color: hasProduk
+                                ? Colors.grey.shade300
+                                : const Color(0xFFE53E3E),
+                            label: 'hapus',
+                            disabled: hasProduk,
+                            onTap: hasProduk
+                                ? () => _showSnack(
+                                    'Kategori tidak bisa dihapus karena masih punya produk',
+                                    const Color(0xFFE53E3E),
+                                  )
+                                : () => _showHapusKategoriDialog(k),
+                          ),
+                        ],
                       ],
                     ),
                   ],

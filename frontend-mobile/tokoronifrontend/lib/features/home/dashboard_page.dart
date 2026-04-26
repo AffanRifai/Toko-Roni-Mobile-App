@@ -18,6 +18,7 @@ import '../../shared/widgets/shared_widgets.dart';
 import '../report/laporan_penjualan_page.dart';
 import '../transaction/kasir_page.dart';
 import '../transaction/riwayat_transaksi_page.dart';
+import 'dashboard_router.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // BERANDA PAGE
@@ -130,7 +131,7 @@ class _BerandaPageState extends State<BerandaPage>
     Widget? page;
     switch (menu) {
       case 'Dashboard':
-        page = const BerandaPage();
+        page = DashboardRouter.pageForCurrentUser();
         break;
       case 'Pengguna':
         page = const ManajemenPenggunaPage();

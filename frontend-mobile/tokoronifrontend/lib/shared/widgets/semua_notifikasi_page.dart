@@ -65,7 +65,9 @@ class _SemuaNotifikasiPageState extends State<SemuaNotifikasiPage>
   List<NotifItem> get _belumDibaca =>
       _list.where((n) => !n.sudahDibaca).toList();
   List<NotifItem> get _penting => _list
-      .where((n) => ['stock', 'expiry', 'receivable'].contains(n.tipe))
+      .where(
+        (n) => ['stock', 'expiry', 'receivable', 'report'].contains(n.tipe),
+      )
       .toList();
   int get _unreadCount => _belumDibaca.length;
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tokoronifrontend/features/category/manajemen_kategori_page.dart';
-import 'package:tokoronifrontend/features/home/dashboard_page.dart';
+import 'package:tokoronifrontend/features/home/dashboard_router.dart';
 import 'package:tokoronifrontend/features/member/daftar_member_page.dart';
 import 'package:tokoronifrontend/features/product/daftar_produk_page.dart';
 import 'package:tokoronifrontend/features/profile/profile_page.dart';
@@ -9,6 +9,9 @@ import 'package:tokoronifrontend/features/transaction/kasir_page.dart';
 import 'package:tokoronifrontend/features/transaction/riwayat_transaksi_page.dart';
 import 'package:tokoronifrontend/features/user/manajemen_pengguna_page.dart';
 import 'package:tokoronifrontend/features/vehicle/manajemen_kendaraan_page.dart';
+import '../../core/access/role_access.dart';
+import '../../core/state/app_state.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/delivery_service.dart';
 import '../../shared/widgets/notifikasi_widget.dart';
 import '../../shared/widgets/profile_widget.dart';
@@ -48,6 +51,8 @@ class ManajemenPengirimanPage extends StatefulWidget {
 class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
     with SingleTickerProviderStateMixin, SidebarMixin {
   static const _blue = Color(0xFF3B6FE8);
+  bool get _isStaffLogistik =>
+      RoleAccess.isStaffLogistik(AppState.instance.userRole.value);
 
   final _searchCtrl = TextEditingController();
   final _dariCtrl = TextEditingController();
@@ -91,7 +96,20 @@ class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
     });
 
     try {
-      final deliveries = await DeliveryService.getDeliveries(perPage: 300);
+      List<PengirimanItem> deliveries;
+      if (_isStaffLogistik) {
+        try {
+          deliveries = await DeliveryService.getMyDeliveries(perPage: 300);
+        } catch (_) {
+          deliveries = await DeliveryService.getDeliveries(perPage: 300);
+          final userId = int.tryParse(await AuthService.getUserId()) ?? 0;
+          if (userId > 0) {
+            deliveries = deliveries.where((d) => d.kurirId == userId).toList();
+          }
+        }
+      } else {
+        deliveries = await DeliveryService.getDeliveries(perPage: 300);
+      }
       List<DeliveryDriverOption> drivers = [];
       List<DeliveryVehicleOption> vehicles = [];
 
@@ -186,14 +204,14 @@ class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
       .length;
 
   void _handleMenuTap(String menu) {
-    if (menu == 'Manajemen Pengiriman') {
+    if (menu == 'Pengiriman') {
       closeSidebar();
       return;
     }
     Widget? page;
-switch (menu) {
+    switch (menu) {
       case 'Dashboard':
-        page = const BerandaPage();
+        page = DashboardRouter.pageForCurrentUser();
         break;
       case 'Pengguna':
         page = const ManajemenPenggunaPage();
@@ -874,101 +892,105 @@ switch (menu) {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        final result = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const TambahPengirimanPage(),
+                if (!_isStaffLogistik)
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const TambahPengirimanPage(),
+                            ),
+                          );
+                          if (!mounted) return;
+                          if (result is String && result.isNotEmpty) {
+                            _snack(result, const Color(0xFF48BB78));
+                          }
+                          if (result != null) await _loadAllData();
+                        },
+                        icon: const Icon(Icons.add_rounded, size: 16),
+                        label: const Text(
+                          'Tambah Pengiriman',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
-                        );
-                        if (!mounted) return;
-                        if (result is String && result.isNotEmpty) {
-                          _snack(result, const Color(0xFF48BB78));
-                        }
-                        if (result != null) await _loadAllData();
-                      },
-                      icon: const Icon(Icons.add_rounded, size: 16),
-                      label: const Text(
-                        'Tambah Pengiriman',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF2B55D0),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 9,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          elevation: 0,
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF2B55D0),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 9,
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          _snack(
+                            'Mengarahkan ke Tambah Pengguna...',
+                            const Color(0xFF48BB78),
+                          );
+                        },
+                        icon: const Icon(Icons.person_add_rounded, size: 16),
+                        label: const Text(
+                          'Tambah Kurir',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        elevation: 0,
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        _snack(
-                          'Mengarahkan ke Tambah Pengguna...',
-                          const Color(0xFF48BB78),
-                        );
-                      },
-                      icon: const Icon(Icons.person_add_rounded, size: 16),
-                      label: const Text(
-                        'Tambah Kurir',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.85),
-                        foregroundColor: const Color(0xFF2B55D0),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 9,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        elevation: 0,
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () => _snack(
-                        'Fitur tambah kendaraan sedang dikembangkan',
-                        const Color(0xFFECC94B),
-                      ),
-                      icon: const Icon(Icons.directions_car_rounded, size: 16),
-                      label: const Text(
-                        'Tambah Kendaraan',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white.withOpacity(0.85),
+                          foregroundColor: const Color(0xFF2B55D0),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 9,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          elevation: 0,
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.70),
-                        foregroundColor: const Color(0xFF4A5568),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 9,
+                      ElevatedButton.icon(
+                        onPressed: () => _snack(
+                          'Fitur tambah kendaraan sedang dikembangkan',
+                          const Color(0xFFECC94B),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
+                        icon: const Icon(
+                          Icons.directions_car_rounded,
+                          size: 16,
                         ),
-                        elevation: 0,
+                        label: const Text(
+                          'Tambah Kendaraan',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white.withOpacity(0.70),
+                          foregroundColor: const Color(0xFF4A5568),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 9,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          elevation: 0,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -1290,6 +1312,23 @@ switch (menu) {
                     rows: list.asMap().entries.map((entry) {
                       final index = entry.key;
                       final p = entry.value;
+                      final invoiceText = (() {
+                        final inv = p.invoice.trim();
+                        if (inv.isNotEmpty && inv != '-') return inv;
+                        if (p.transactionId != null && p.transactionId! > 0) {
+                          return 'TRX#${p.transactionId}';
+                        }
+                        return '-';
+                      })();
+                      final kurirText = (() {
+                        final name = (p.namaKurir ?? '').trim();
+                        if (name.isNotEmpty) return name;
+                        if (_isStaffLogistik && p.kurirId != null) {
+                          final me = AppState.instance.userName.value.trim();
+                          return me.isEmpty ? 'Staff Logistik' : me;
+                        }
+                        return '';
+                      })();
                       return DataRow(
                         cells: [
                           DataCell(
@@ -1326,7 +1365,7 @@ switch (menu) {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
-                                    p.invoice,
+                                    invoiceText,
                                     style: const TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
@@ -1359,7 +1398,7 @@ switch (menu) {
                           DataCell(
                             SizedBox(
                               width: 145,
-                              child: p.namaKurir != null
+                              child: kurirText.isNotEmpty
                                   ? Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -1367,7 +1406,7 @@ switch (menu) {
                                           MainAxisAlignment.center,
                                       children: [
                                         Text(
-                                          p.namaKurir!,
+                                          kurirText,
                                           style: const TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
@@ -1418,8 +1457,9 @@ switch (menu) {
                                     }
                                   },
                                 ),
-                                if (p.status == 'Pending' ||
-                                    p.status == 'Diproses') ...[
+                                if (!_isStaffLogistik &&
+                                    (p.status == 'Pending' ||
+                                        p.status == 'Diproses')) ...[
                                   const SizedBox(width: 8),
                                   _AksiBtn(
                                     icon: Icons.person_add_rounded,
@@ -1435,7 +1475,8 @@ switch (menu) {
                                   label: 'Cetak',
                                   onTap: () => _cetakSuratJalan(p),
                                 ),
-                                if (p.status != 'Terkirim' &&
+                                if (!_isStaffLogistik &&
+                                    p.status != 'Terkirim' &&
                                     p.status != 'Dibatalkan' &&
                                     p.status != 'Gagal') ...[
                                   const SizedBox(width: 8),

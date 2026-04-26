@@ -3,6 +3,7 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
+import '../../core/access/role_access.dart';
 import '../../core/state/app_state.dart';
 import '../../features/auth/login_page.dart'; // sesuaikan path
 
@@ -225,19 +226,19 @@ class AppSidebar extends StatefulWidget {
     required this.onLogout,
   });
 
-  static const _menus = <Map<String, Object>>[
-    {'label': 'Dashboard', 'icon': Icons.home_rounded},
-    {'label': 'Pengguna', 'icon': Icons.group_rounded},
-    {'label': 'Member', 'icon': Icons.people_alt_rounded},
-    {'label': 'Laporan', 'icon': Icons.show_chart_rounded},
-    {'label': 'Riwayat Transaksi', 'icon': Icons.history_rounded},
-    {'label': 'Kasir', 'icon': Icons.computer_rounded},
-    {'label': 'Produk', 'icon': Icons.inventory_2_rounded},
-    {'label': 'Kategori', 'icon': Icons.label_rounded},
-    {'label': 'Pengiriman', 'icon': Icons.local_shipping_rounded},
-    {'label': 'Kendaraan', 'icon': Icons.directions_car_rounded},
-    {'label': 'Profile', 'icon': Icons.person_rounded},
-  ];
+  static const _menuIcons = <String, IconData>{
+    'Dashboard': Icons.home_rounded,
+    'Pengguna': Icons.group_rounded,
+    'Member': Icons.people_alt_rounded,
+    'Laporan': Icons.show_chart_rounded,
+    'Riwayat Transaksi': Icons.history_rounded,
+    'Kasir': Icons.computer_rounded,
+    'Produk': Icons.inventory_2_rounded,
+    'Kategori': Icons.label_rounded,
+    'Pengiriman': Icons.local_shipping_rounded,
+    'Kendaraan': Icons.directions_car_rounded,
+    'Profile': Icons.person_rounded,
+  };
 
   @override
   State<AppSidebar> createState() => _AppSidebarState();
@@ -247,6 +248,7 @@ class _AppSidebarState extends State<AppSidebar> {
   // ── Data dari database (via SharedPreferences hasil login) ────────────────
   String _userName = '';
   String _userEmail = '';
+  String _userRoleRaw = '';
   String _userRole = '';
   String? _photoUrl;
   bool _loggingOut = false;
@@ -272,7 +274,8 @@ class _AppSidebarState extends State<AppSidebar> {
     setState(() {
       _userName = AppState.instance.userName.value.trim();
       _userEmail = AppState.instance.userEmail.value.trim();
-      _userRole = _formatRole(AppState.instance.userRole.value);
+      _userRoleRaw = AppState.instance.userRole.value;
+      _userRole = _formatRole(_userRoleRaw);
       _photoUrl = AppState.instance.userPhoto.value;
     });
 
@@ -288,7 +291,8 @@ class _AppSidebarState extends State<AppSidebar> {
     setState(() {
       _userName = AppState.instance.userName.value.trim();
       _userEmail = AppState.instance.userEmail.value.trim();
-      _userRole = _formatRole(AppState.instance.userRole.value);
+      _userRoleRaw = AppState.instance.userRole.value;
+      _userRole = _formatRole(_userRoleRaw);
       _photoUrl = AppState.instance.userPhoto.value;
     });
   }
@@ -298,14 +302,19 @@ class _AppSidebarState extends State<AppSidebar> {
     switch (raw.toLowerCase()) {
       case 'owner':
         return 'Owner';
+      case 'manager':
+        return 'Manager';
       case 'kasir':
         return 'Kasir';
       case 'kepala_gudang':
+      case 'gudang':
         return 'Kepala Gudang';
       case 'checker':
-        return 'Checker';
+      case 'checker_barang':
+        return 'Checker Barang';
       case 'logistik':
-        return 'Logistik';
+      case 'staff_logistik':
+        return 'Staff Logistik';
       case 'kurir':
         return 'Kurir';
       case 'admin':
@@ -314,6 +323,8 @@ class _AppSidebarState extends State<AppSidebar> {
         return raw.isNotEmpty ? raw[0].toUpperCase() + raw.substring(1) : '-';
     }
   }
+
+  List<String> _menusByRole() => RoleAccess.sidebarMenusForRole(_userRoleRaw);
 
   Future<void> _handleLogout() async {
     final confirm = await showDialog<bool>(
@@ -485,9 +496,8 @@ class _AppSidebarState extends State<AppSidebar> {
                 child: ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   physics: const BouncingScrollPhysics(),
-                  children: AppSidebar._menus.map((m) {
-                    final label = m['label'] as String;
-                    final icon = m['icon'] as IconData;
+                  children: _menusByRole().map((label) {
+                    final icon = AppSidebar._menuIcons[label] ?? Icons.circle;
                     return AppSidebarItem(
                       label: label,
                       icon: icon,

@@ -14,7 +14,7 @@ import '../../shared/widgets/profile_widget.dart';
 import '../../shared/widgets/semua_notifikasi_page.dart';
 import 'tambah_kategori_page.dart';
 import 'edit_kategori_page.dart';
-import '../home/dashboard_page.dart'; // BerandaPage
+import '../home/dashboard_router.dart';
 import '../product/daftar_produk_page.dart'; // DaftarProdukPage
 import '../member/daftar_member_page.dart';
 
@@ -150,7 +150,7 @@ class _ManajemenKategoriPageState extends State<ManajemenKategoriPage>
     Widget? page;
 switch (menu) {
       case 'Dashboard':
-        page = const BerandaPage();
+        page = DashboardRouter.pageForCurrentUser();
         break;
       case 'Pengguna':
         page = const ManajemenPenggunaPage();

@@ -9,7 +9,7 @@ import 'dart:convert';
 import '../../core/state/app_state.dart';
 
 import '../../core/config/api_config.dart';
-import '../home/dashboard_page.dart';
+import '../home/dashboard_router.dart';
 import 'face_login_page.dart'; // sesuaikan path jika berbeda
 
 class LoginPage extends StatefulWidget {
@@ -96,7 +96,9 @@ class _LoginPageState extends State<LoginPage> {
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const BerandaPage()),
+          MaterialPageRoute(
+            builder: (_) => DashboardRouter.pageForCurrentUser(),
+          ),
         );
       } else {
         // 401 email/password salah | 403 akun tidak aktif | 422 validasi

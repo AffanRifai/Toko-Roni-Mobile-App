@@ -44,6 +44,80 @@ class DeliveryService {
         .toList();
   }
 
+  static Future<List<PengirimanItem>> getMyDeliveries({
+    int perPage = 300,
+  }) async {
+    final uri = Uri.parse(
+      ApiConfig.deliveryMyDeliveries,
+    ).replace(queryParameters: {'per_page': '$perPage'});
+
+    final response = await _performRequest(
+      () async => http
+          .get(uri, headers: await AuthService.authHeaders())
+          .timeout(const Duration(seconds: 20)),
+    );
+
+    final parsed = _decode(
+      response,
+      fallbackMessage: 'Gagal memuat pengiriman saya',
+      allowEmptyBody: false,
+    );
+
+    final list = _extractList(parsed['data']).isNotEmpty
+        ? _extractList(parsed['data'])
+        : _extractList(parsed);
+
+    final basicItems = list
+        .map(_asMap)
+        .where((e) => e.isNotEmpty)
+        .map(PengirimanItem.fromJson)
+        .toList();
+
+    if (basicItems.isEmpty) return basicItems;
+
+    final shouldEnrich = basicItems.any(
+      (item) =>
+          _isMissingText(item.invoice) ||
+          _isMissingText(item.namaKurir) ||
+          _isMissingText(item.tujuan) ||
+          _isMissingText(item.namaCustomer),
+    );
+    if (!shouldEnrich) return basicItems;
+
+    try {
+      final richItems = await getDeliveries(perPage: perPage);
+      if (richItems.isEmpty) return basicItems;
+
+      final richById = {for (final item in richItems) item.id: item};
+      return basicItems.map((item) {
+        final rich = richById[item.id];
+        if (rich == null) return item;
+        return item.copyWith(
+          invoice: _pickString(item.invoice, rich.invoice),
+          tujuan: _pickString(item.tujuan, rich.tujuan),
+          asal: _pickString(item.asal, rich.asal),
+          namaCustomer: _pickString(item.namaCustomer, rich.namaCustomer),
+          totalBelanja: item.totalBelanja > 0
+              ? item.totalBelanja
+              : rich.totalBelanja,
+          totalItem: item.totalItem > 0 ? item.totalItem : rich.totalItem,
+          kurirId: item.kurirId ?? rich.kurirId,
+          kendaraanId: item.kendaraanId ?? rich.kendaraanId,
+          namaKurir: _pickNullableString(item.namaKurir, rich.namaKurir),
+          nomorKurir: _pickNullableString(item.nomorKurir, rich.nomorKurir),
+          kendaraan: _pickNullableString(item.kendaraan, rich.kendaraan),
+          estimatedDeliveryRaw: _pickString(
+            item.estimatedDeliveryRaw,
+            rich.estimatedDeliveryRaw,
+          ),
+          deliveredAtRaw: _pickString(item.deliveredAtRaw, rich.deliveredAtRaw),
+        );
+      }).toList();
+    } catch (_) {
+      return basicItems;
+    }
+  }
+
   static Future<PengirimanItem?> getDeliveryByTransactionId({
     required int transactionId,
   }) async {
@@ -427,5 +501,19 @@ class DeliveryService {
       return raw.map((k, v) => MapEntry(k.toString(), v));
     }
     return {};
+  }
+
+  static bool _isMissingText(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return true;
+    return text == '-' || text.toLowerCase() == 'null';
+  }
+
+  static String _pickString(String current, String fallback) {
+    return _isMissingText(current) ? fallback : current;
+  }
+
+  static String? _pickNullableString(String? current, String? fallback) {
+    return _isMissingText(current) ? fallback : current;
   }
 }

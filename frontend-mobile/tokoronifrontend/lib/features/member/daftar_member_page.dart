@@ -14,7 +14,7 @@ import '../../shared/widgets/semua_notifikasi_page.dart';
 import '../../models/member_model.dart';
 import 'tambah_member_page.dart';
 import 'edit_member_page.dart';
-import '../home/dashboard_page.dart';
+import '../home/dashboard_router.dart';
 import '../category/manajemen_kategori_page.dart';
 import '../product/daftar_produk_page.dart';
 import '../user/manajemen_pengguna_page.dart';
@@ -83,7 +83,7 @@ class _DaftarMemberPageState extends State<DaftarMemberPage>
     Widget? page;
 switch (menu) {
       case 'Dashboard':
-        page = const BerandaPage();
+        page = DashboardRouter.pageForCurrentUser();
         break;
       case 'Pengguna':
         page = const ManajemenPenggunaPage();

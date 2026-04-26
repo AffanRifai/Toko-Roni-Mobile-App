@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/access/role_access.dart';
+import '../../core/state/app_state.dart';
 import '../../core/services/delivery_service.dart';
 import '../../models/pengiriman_model.dart';
 
@@ -42,6 +44,8 @@ class _DetailPengirimanPageState extends State<DetailPengirimanPage> {
   bool _isSubmitting = false;
   bool _hasChanges = false;
   String _errorMessage = '';
+  bool get _isStaffLogistik =>
+      RoleAccess.isStaffLogistik(AppState.instance.userRole.value);
 
   @override
   void initState() {
@@ -487,6 +491,14 @@ class _DetailPengirimanPageState extends State<DetailPengirimanPage> {
     return '$dd/$mm/${dt.year} $hh:$mi';
   }
 
+  String _fmtEstimatedArrival(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return '-';
+    final parsed = DateTime.tryParse(text)?.toLocal();
+    if (parsed == null) return '-';
+    return _fmtDateTime(parsed);
+  }
+
   List<_TimelineStep> get _steps {
     final idx = _statusRank(_p.statusApi);
     final createdAtText = '${_p.tanggalDibuat} ${_p.jamDibuat}';
@@ -713,48 +725,49 @@ class _DetailPengirimanPageState extends State<DetailPengirimanPage> {
         ),
         _statusChip(_p.status),
         const Spacer(),
-        Wrap(
-          spacing: 8,
-          children: [
-            if (_p.status == 'Pending' || _p.status == 'Diproses')
-              _actionBtn(
-                'Assign Kurir',
-                Icons.person_add_rounded,
-                const Color(0xFF3B6FE8),
-                _isSubmitting ? null : _showAssignKurir,
-              ),
-            if (_p.status == 'Assigned')
-              _actionBtn(
-                'Paket Diambil',
-                Icons.inventory_2_rounded,
-                const Color(0xFF6B5CE7),
-                _isSubmitting ? null : _paketDiambil,
-              ),
-            if (_p.status == 'Diambil')
-              _actionBtn(
-                'Mulai Pengiriman',
-                Icons.local_shipping_rounded,
-                const Color(0xFFED8936),
-                _isSubmitting ? null : _mulaiPengiriman,
-              ),
-            if (_p.status != 'Terkirim' &&
-                _p.status != 'Dibatalkan' &&
-                _p.status != 'Gagal')
-              _actionBtn(
-                'Selesaikan',
-                Icons.check_circle_rounded,
-                _green,
-                _isSubmitting ? null : _selesaikan,
-              ),
-            if (isBatalable)
-              _actionBtn(
-                'Batalkan',
-                Icons.cancel_rounded,
-                const Color(0xFFE53E3E),
-                _isSubmitting ? null : _batalkan,
-              ),
-          ],
-        ),
+        if (!_isStaffLogistik)
+          Wrap(
+            spacing: 8,
+            children: [
+              if (_p.status == 'Pending' || _p.status == 'Diproses')
+                _actionBtn(
+                  'Assign Kurir',
+                  Icons.person_add_rounded,
+                  const Color(0xFF3B6FE8),
+                  _isSubmitting ? null : _showAssignKurir,
+                ),
+              if (_p.status == 'Assigned')
+                _actionBtn(
+                  'Paket Diambil',
+                  Icons.inventory_2_rounded,
+                  const Color(0xFF6B5CE7),
+                  _isSubmitting ? null : _paketDiambil,
+                ),
+              if (_p.status == 'Diambil')
+                _actionBtn(
+                  'Mulai Pengiriman',
+                  Icons.local_shipping_rounded,
+                  const Color(0xFFED8936),
+                  _isSubmitting ? null : _mulaiPengiriman,
+                ),
+              if (_p.status != 'Terkirim' &&
+                  _p.status != 'Dibatalkan' &&
+                  _p.status != 'Gagal')
+                _actionBtn(
+                  'Selesaikan',
+                  Icons.check_circle_rounded,
+                  _green,
+                  _isSubmitting ? null : _selesaikan,
+                ),
+              if (isBatalable)
+                _actionBtn(
+                  'Batalkan',
+                  Icons.cancel_rounded,
+                  const Color(0xFFE53E3E),
+                  _isSubmitting ? null : _batalkan,
+                ),
+            ],
+          ),
       ],
     ),
   );
@@ -953,6 +966,51 @@ class _DetailPengirimanPageState extends State<DetailPengirimanPage> {
           child: Text(
             _p.tujuan,
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEEF2FF),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFC7D2FE)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.schedule_rounded,
+                size: 16,
+                color: Color(0xFF3B6FE8),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Estimasi Pengiriman Akan Tiba',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E40AF),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _fmtEstimatedArrival(_p.estimatedDeliveryRaw),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF2D3748),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ],

@@ -15,7 +15,7 @@ import '../../shared/widgets/semua_notifikasi_page.dart';
 import '../../models/pengguna_model.dart';
 import 'tambah_pengguna_page.dart';
 import 'edit_pengguna_page.dart'; // SidebarMixin
-import '../home/dashboard_page.dart'; // BerandaPage
+import '../home/dashboard_router.dart';
 import '../product/daftar_produk_page.dart'; // DaftarProdukPage
 import '../category/manajemen_kategori_page.dart'; // ManajemenKategoriPage
 import '../member/daftar_member_page.dart';
@@ -76,7 +76,7 @@ class _ManajemenPenggunaPageState extends State<ManajemenPenggunaPage>
     Widget? page;
     switch (menu) {
       case 'Dashboard':
-        page = const BerandaPage();
+        page = DashboardRouter.pageForCurrentUser();
         break;
       case 'Pengguna':
         page = const ManajemenPenggunaPage();

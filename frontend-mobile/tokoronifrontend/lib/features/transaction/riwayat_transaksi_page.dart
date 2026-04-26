@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:tokoronifrontend/features/delivery/manajemen_pengiriman_page.dart';
 import 'package:tokoronifrontend/features/profile/profile_page.dart';
 import 'package:tokoronifrontend/features/vehicle/manajemen_kendaraan_page.dart';
+import '../../core/access/role_access.dart';
+import '../../core/state/app_state.dart';
 import '../../shared/widgets/shared_widgets.dart';
 import '../../shared/widgets/notifikasi_widget.dart';
 import '../../shared/widgets/semua_notifikasi_page.dart';
@@ -13,7 +15,7 @@ import '../product/daftar_produk_page.dart';
 import '../category/manajemen_kategori_page.dart';
 import '../member/daftar_member_page.dart';
 import '../user/manajemen_pengguna_page.dart';
-import '../home/dashboard_page.dart';
+import '../home/dashboard_router.dart';
 import '../report/laporan_penjualan_page.dart';
 import '../../core/services/transaction_service.dart';
 import '../../models/transaction_api_model.dart';
@@ -271,6 +273,7 @@ class RiwayatTransaksiPage extends StatefulWidget {
 class _RiwayatTransaksiPageState extends State<RiwayatTransaksiPage>
     with SingleTickerProviderStateMixin, SidebarMixin {
   static const _blue = Color(0xFF3B6FE8);
+  bool get _isKasirRole => RoleAccess.isKasir(AppState.instance.userRole.value);
 
   // ── State ─────────────────────────────────────────────────────────────────
   late List<RiwayatTransaksiItem> _data;
@@ -436,7 +439,7 @@ class _RiwayatTransaksiPageState extends State<RiwayatTransaksiPage>
     Widget? page;
     switch (menu) {
       case 'Dashboard':
-        page = const BerandaPage();
+        page = DashboardRouter.pageForCurrentUser();
         break;
       case 'Pengguna':
         page = const ManajemenPenggunaPage();
@@ -1101,14 +1104,16 @@ class _RiwayatTransaksiPageState extends State<RiwayatTransaksiPage>
                                         label: 'Cetak',
                                         onTap: () => _showStruk(t),
                                       ),
-                                      const SizedBox(width: 6),
-                                      // Hapus
-                                      _AksiBtn(
-                                        icon: Icons.delete_rounded,
-                                        color: const Color(0xFFE53E3E),
-                                        label: 'Hapus',
-                                        onTap: () => _showHapusDialog(t),
-                                      ),
+                                      if (!_isKasirRole) ...[
+                                        const SizedBox(width: 6),
+                                        // Hapus
+                                        _AksiBtn(
+                                          icon: Icons.delete_rounded,
+                                          color: const Color(0xFFE53E3E),
+                                          label: 'Hapus',
+                                          onTap: () => _showHapusDialog(t),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),

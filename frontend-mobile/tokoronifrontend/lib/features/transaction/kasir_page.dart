@@ -13,7 +13,7 @@ import '../../shared/widgets/semua_notifikasi_page.dart';
 import '../../shared/widgets/profile_widget.dart';
 import '../../models/produk_model.dart';
 import '../../models/member_model.dart';
-import '../home/dashboard_page.dart';
+import '../home/dashboard_router.dart';
 import '../product/daftar_produk_page.dart';
 import '../category/manajemen_kategori_page.dart';
 import '../user/manajemen_pengguna_page.dart';
@@ -209,7 +209,7 @@ class _KasirPageState extends State<KasirPage>
     Widget? page;
     switch (menu) {
       case 'Dashboard':
-        page = const BerandaPage();
+        page = DashboardRouter.pageForCurrentUser();
         break;
       case 'Pengguna':
         page = const ManajemenPenggunaPage();

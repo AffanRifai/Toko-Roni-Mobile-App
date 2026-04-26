@@ -2,7 +2,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:tokoronifrontend/features/delivery/manajemen_pengiriman_page.dart';
-import 'package:tokoronifrontend/features/home/dashboard_page.dart';
+import 'package:tokoronifrontend/features/home/dashboard_router.dart';
 import 'package:tokoronifrontend/features/profile/profile_page.dart';
 import 'package:tokoronifrontend/features/transaction/kasir_page.dart';
 import 'package:tokoronifrontend/features/transaction/riwayat_transaksi_page.dart';
@@ -326,7 +326,7 @@ class _LaporanPenjualanPageState extends State<LaporanPenjualanPage>
     Widget? page;
     switch (menu) {
       case 'Dashboard':
-        page = const BerandaPage();
+        page = DashboardRouter.pageForCurrentUser();
         break;
       case 'Pengguna':
         page = const ManajemenPenggunaPage();

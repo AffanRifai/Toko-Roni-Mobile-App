@@ -10,7 +10,7 @@ class ApiConfig {
   // Kalau pakai device fisik      → http://IP_KOMPUTER_KAMU:8000/api
   // Kalau sudah deploy ke server  → https://domain-kamu.com/api
   //
-  static const String baseUrl = 'http://192.168.1.6:8000/api/v1';
+  static const String baseUrl = 'http://192.168.1.4:8000/api/v1';
 
   // Face biometrics mode:
   // - true  : backend adalah sumber kebenaran descriptor (direkomendasikan)
@@ -58,8 +58,12 @@ class ApiConfig {
   static const String productCategories = '$baseUrl/products/categories';
   static const String productStatistics =
       '$baseUrl/products/statistics/overview';
+  static const String checkerReportIndex = '$baseUrl/checker/reports';
 
   static const String categoryIndex = '$baseUrl/categories';
+
+  static String productReport(int productId) =>
+      '$baseUrl/products/$productId/report';
 
   // Member management endpoints
   static const String memberIndex = '$baseUrl/members';
@@ -90,6 +94,9 @@ class ApiConfig {
 
   // Delivery management endpoints
   static const String deliveryIndex = '$baseUrl/deliveries';
+  static const String deliveryTodayStats = '$baseUrl/deliveries/today-stats';
+  static const String deliveryMyDeliveries =
+      '$baseUrl/deliveries/my-deliveries';
   static const String deliveryAvailableDrivers =
       '$baseUrl/deliveries/available-drivers';
   static const String deliveryAvailableVehicles =

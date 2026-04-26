@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tokoronifrontend/features/category/manajemen_kategori_page.dart';
 import 'package:tokoronifrontend/features/delivery/manajemen_pengiriman_page.dart';
-import 'package:tokoronifrontend/features/home/dashboard_page.dart';
+import 'package:tokoronifrontend/features/home/dashboard_router.dart';
 import 'package:tokoronifrontend/features/member/daftar_member_page.dart';
 import 'package:tokoronifrontend/features/product/daftar_produk_page.dart';
 import 'package:tokoronifrontend/features/profile/profile_page.dart';
@@ -10,6 +10,8 @@ import 'package:tokoronifrontend/features/transaction/kasir_page.dart';
 import 'package:tokoronifrontend/features/transaction/riwayat_transaksi_page.dart';
 import 'package:tokoronifrontend/features/user/manajemen_pengguna_page.dart';
 
+import '../../core/access/role_access.dart';
+import '../../core/state/app_state.dart';
 import '../../core/services/vehicle_service.dart';
 import '../../shared/widgets/notifikasi_widget.dart';
 import '../../shared/widgets/profile_widget.dart';
@@ -37,6 +39,8 @@ class ManajemenKendaraanPage extends StatefulWidget {
 class _ManajemenKendaraanPageState extends State<ManajemenKendaraanPage>
     with SingleTickerProviderStateMixin, SidebarMixin {
   final _searchCtrl = TextEditingController();
+  bool get _isStaffLogistik =>
+      RoleAccess.isStaffLogistik(AppState.instance.userRole.value);
 
   List<KendaraanItem> _data = [];
   bool _isLoading = true;
@@ -120,7 +124,7 @@ class _ManajemenKendaraanPageState extends State<ManajemenKendaraanPage>
     Widget? page;
     switch (menu) {
       case 'Dashboard':
-        page = const BerandaPage();
+        page = DashboardRouter.pageForCurrentUser();
         break;
       case 'Pengguna':
         page = const ManajemenPenggunaPage();
@@ -426,32 +430,33 @@ class _ManajemenKendaraanPageState extends State<ManajemenKendaraanPage>
                   ),
                 ),
                 const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton.icon(
-                    onPressed: _goTambah,
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text(
-                      'Tambah Kendaraan',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                if (!_isStaffLogistik)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      onPressed: _goTambah,
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text(
+                        'Tambah Kendaraan',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF2B55D0),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF2B55D0),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        elevation: 0,
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      elevation: 0,
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -710,14 +715,15 @@ class _ManajemenKendaraanPageState extends State<ManajemenKendaraanPage>
                       fontSize: 12,
                       color: Color(0xFF2D3748),
                     ),
-                    columns: const [
-                      DataColumn(label: Text('KODE')),
-                      DataColumn(label: Text('KENDARAAN')),
-                      DataColumn(label: Text('PLAT')),
-                      DataColumn(label: Text('JENIS')),
-                      DataColumn(label: Text('MAINTENANCE')),
-                      DataColumn(label: Text('STATUS')),
-                      DataColumn(label: Text('AKSI')),
+                    columns: [
+                      const DataColumn(label: Text('KODE')),
+                      const DataColumn(label: Text('KENDARAAN')),
+                      const DataColumn(label: Text('PLAT')),
+                      const DataColumn(label: Text('JENIS')),
+                      const DataColumn(label: Text('MAINTENANCE')),
+                      const DataColumn(label: Text('STATUS')),
+                      if (!_isStaffLogistik)
+                        const DataColumn(label: Text('AKSI')),
                     ],
                     rows: list
                         .map(
@@ -795,33 +801,34 @@ class _ManajemenKendaraanPageState extends State<ManajemenKendaraanPage>
                                 ),
                               ),
                               DataCell(_statusBadge(k.status)),
-                              DataCell(
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    _AksiBtn(
-                                      icon: Icons.visibility_rounded,
-                                      color: const Color(0xFF4169E1),
-                                      label: 'Detail',
-                                      onTap: () => _goDetail(k),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _AksiBtn(
-                                      icon: Icons.edit_rounded,
-                                      color: const Color(0xFF48BB78),
-                                      label: 'Edit',
-                                      onTap: () => _goEdit(k),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _AksiBtn(
-                                      icon: Icons.delete_rounded,
-                                      color: const Color(0xFFE53E3E),
-                                      label: 'Hapus',
-                                      onTap: () => _hapus(k),
-                                    ),
-                                  ],
+                              if (!_isStaffLogistik)
+                                DataCell(
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _AksiBtn(
+                                        icon: Icons.visibility_rounded,
+                                        color: const Color(0xFF4169E1),
+                                        label: 'Detail',
+                                        onTap: () => _goDetail(k),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _AksiBtn(
+                                        icon: Icons.edit_rounded,
+                                        color: const Color(0xFF48BB78),
+                                        label: 'Edit',
+                                        onTap: () => _goEdit(k),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _AksiBtn(
+                                        icon: Icons.delete_rounded,
+                                        color: const Color(0xFFE53E3E),
+                                        label: 'Hapus',
+                                        onTap: () => _hapus(k),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                         )

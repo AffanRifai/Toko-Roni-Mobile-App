@@ -49,45 +49,70 @@ class PengirimanItem {
 
   factory PengirimanItem.fromJson(Map<String, dynamic> json) {
     final transaction = _asMap(json['transaction']);
+    final member = _asMap(transaction['member']);
     final user = _asMap(json['user']);
     final vehicle = _asMap(json['vehicle']);
 
     final createdAtRaw = (json['created_at'] ?? '').toString().trim();
     final createdAt = _parseDateTime(createdAtRaw) ?? DateTime.now();
 
-    final tujuan = (json['destination'] ?? json['delivery_address'] ?? '')
-        .toString();
+    final tujuan =
+        (json['destination'] ??
+                json['delivery_address'] ??
+                transaction['delivery_address'] ??
+                '')
+            .toString();
     final asal = (json['origin'] ?? '').toString();
 
     final statusApi = (json['status'] ?? '').toString().trim().toLowerCase();
-    final userRole = (user['role'] ?? '').toString().trim().toLowerCase();
-    final showAssignedInfo = const {
-      'assigned',
-      'picked_up',
-      'on_delivery',
-      'delivered',
-    }.contains(statusApi);
-    final isDeliveryRole = const {
-      'kurir',
-      'logistik',
-      'staff_logistik',
-    }.contains(userRole);
-    final namaVehicle = (vehicle['name'] ?? '').toString().trim();
-    final plate = (vehicle['license_plate'] ?? '').toString().trim();
+    final namaVehicle =
+        (vehicle['name'] ??
+                json['vehicle_name'] ??
+                json['nama_kendaraan'] ??
+                '')
+            .toString()
+            .trim();
+    final plate =
+        (vehicle['license_plate'] ??
+                json['vehicle_plate'] ??
+                json['plate_number'] ??
+                json['plat_nomor'] ??
+                '')
+            .toString()
+            .trim();
     final vehicleLabel = _joinVehicleLabel(
       name: namaVehicle,
       plate: plate,
-      type: (vehicle['type'] ?? '').toString().trim(),
+      type:
+          (vehicle['type'] ??
+                  json['vehicle_type'] ??
+                  json['jenis_kendaraan'] ??
+                  '')
+              .toString()
+              .trim(),
+    );
+    final vehicleText = _nullableTrim(
+      json['vehicle_label'] ?? json['vehicle'] ?? json['kendaraan'],
     );
 
     final invoice =
-        (transaction['invoice_number'] ?? json['invoice_number'] ?? '-')
+        (transaction['invoice_number'] ??
+                transaction['invoice'] ??
+                json['invoice_number'] ??
+                json['invoice'] ??
+                json['transaction_invoice'] ??
+                json['no_invoice'] ??
+                '-')
             .toString()
             .trim();
     final customerName =
         (transaction['customer_name'] ??
+                transaction['recipient_name'] ??
+                transaction['member_name'] ??
+                member['nama'] ??
                 json['recipient_name'] ??
                 json['customer_name'] ??
+                json['member_name'] ??
                 'Pelanggan Umum')
             .toString()
             .trim();
@@ -117,24 +142,40 @@ class PengirimanItem {
       jamDibuat: _formatTime(createdAt),
       namaCustomer: customerName.isEmpty ? 'Pelanggan Umum' : customerName,
       totalBelanja: totalBelanja,
-      totalItem: _toInt(json['total_items'] ?? 0),
+      totalItem: _toInt(
+        json['total_items'] ??
+            transaction['total_items'] ??
+            transaction['items_count'] ??
+            json['items_count'] ??
+            0,
+      ),
       status: deliveryStatusLabelFromApi(statusApi),
       statusApi: statusApi.isEmpty ? 'pending' : statusApi,
-      kurirId: showAssignedInfo
-          ? _toNullableInt(json['user_id'] ?? user['id'])
-          : null,
-      kendaraanId: showAssignedInfo
-          ? _toNullableInt(json['vehicle_id'] ?? vehicle['id'])
-          : null,
-      namaKurir: showAssignedInfo && isDeliveryRole
-          ? _nullableTrim(user['name'])
-          : null,
-      nomorKurir: showAssignedInfo && isDeliveryRole
-          ? _nullableTrim(user['phone'])
-          : null,
-      kendaraan: showAssignedInfo ? vehicleLabel : null,
+      kurirId: _toNullableInt(
+        json['user_id'] ??
+            json['driver_id'] ??
+            json['courier_id'] ??
+            user['id'],
+      ),
+      kendaraanId: _toNullableInt(json['vehicle_id'] ?? vehicle['id']),
+      namaKurir: _nullableTrim(
+        user['name'] ??
+            json['driver_name'] ??
+            json['courier_name'] ??
+            json['kurir_name'] ??
+            json['user_name'],
+      ),
+      nomorKurir: _nullableTrim(
+        user['phone'] ??
+            json['driver_phone'] ??
+            json['courier_phone'] ??
+            json['kurir_phone'],
+      ),
+      kendaraan: vehicleLabel ?? vehicleText,
       catatan: (json['notes'] ?? '').toString(),
-      estimatedDeliveryRaw: (json['estimated_delivery_time'] ?? '').toString(),
+      estimatedDeliveryRaw:
+          (json['estimated_delivery_time'] ?? json['estimated_arrival'] ?? '')
+              .toString(),
       deliveredAtRaw: (json['delivered_at'] ?? '').toString(),
     );
   }

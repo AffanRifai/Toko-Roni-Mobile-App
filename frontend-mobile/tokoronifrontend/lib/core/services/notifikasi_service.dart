@@ -43,14 +43,20 @@ class NotifItem {
     final dataMessage = data['message']?.toString().trim() ?? '';
     final dataBody = data['body']?.toString().trim() ?? '';
 
-    final judul = rootTitle.isNotEmpty
+    final defaultJudul = rootTitle.isNotEmpty
         ? rootTitle
         : (dataTitle.isNotEmpty ? dataTitle : _judulFromTipe(tipe));
-    final pesan = rootMessage.isNotEmpty
+    final defaultPesan = rootMessage.isNotEmpty
         ? rootMessage
         : (dataMessage.isNotEmpty
               ? dataMessage
               : (dataBody.isNotEmpty ? dataBody : '-'));
+    final judul = tipe == 'report'
+        ? _buildReportTitle(data: data, fallbackTitle: defaultJudul)
+        : defaultJudul;
+    final pesan = tipe == 'report'
+        ? _buildReportMessage(data: data, fallbackMessage: defaultPesan)
+        : defaultPesan;
 
     return NotifItem(
       id: (json['id'] ?? '').toString(),
@@ -204,6 +210,98 @@ class NotifItem {
         return 'Laporan';
       default:
         return 'Notifikasi';
+    }
+  }
+
+  static String _buildReportMessage({
+    required Map<String, dynamic> data,
+    required String fallbackMessage,
+  }) {
+    final productName = (data['product_name'] ?? data['nama_produk'] ?? '')
+        .toString()
+        .trim();
+    final reportTypeLabel =
+        (data['report_type_label'] ?? data['report_type'] ?? '')
+            .toString()
+            .trim();
+    final notes = (data['notes'] ?? '').toString().trim();
+    final qtyRaw = (data['quantity'] ?? '').toString().trim();
+    final quantity = int.tryParse(qtyRaw);
+    final reportedBy = (data['reported_by'] ?? data['reported_by_name'] ?? '')
+        .toString()
+        .trim();
+
+    final normalizedType = _normalizeReportType(reportTypeLabel);
+    if (productName.isEmpty &&
+        normalizedType.isEmpty &&
+        notes.isEmpty &&
+        quantity == null &&
+        reportedBy.isEmpty) {
+      return fallbackMessage;
+    }
+
+    final lines = <String>[
+      if (productName.isNotEmpty) 'Produk: $productName',
+      if (normalizedType.isNotEmpty) 'Jenis Laporan: $normalizedType',
+      if (quantity != null && quantity > 0) 'Jumlah: $quantity',
+      if (notes.isNotEmpty) 'Catatan Checker: $notes',
+      if (reportedBy.isNotEmpty) 'Pelapor: $reportedBy',
+    ];
+
+    if (lines.isEmpty) {
+      return fallbackMessage;
+    }
+
+    return lines.join('\n');
+  }
+
+  static String _buildReportTitle({
+    required Map<String, dynamic> data,
+    required String fallbackTitle,
+  }) {
+    final productName = (data['product_name'] ?? data['nama_produk'] ?? '')
+        .toString()
+        .trim();
+    final reportTypeLabel =
+        (data['report_type_label'] ?? data['report_type'] ?? '')
+            .toString()
+            .trim();
+    final normalizedType = _normalizeReportType(reportTypeLabel);
+
+    if (normalizedType.isNotEmpty && productName.isNotEmpty) {
+      return 'Produk: $normalizedType - $productName';
+    }
+    if (normalizedType.isNotEmpty) {
+      return 'Produk: $normalizedType';
+    }
+    if (productName.isNotEmpty) {
+      return 'Produk: Laporan Produk - $productName';
+    }
+    return fallbackTitle;
+  }
+
+  static String _normalizeReportType(String raw) {
+    final value = raw.trim().toLowerCase();
+    if (value.isEmpty) return '';
+    switch (value) {
+      case 'low_stock':
+      case 'stok rendah':
+        return 'Stok Rendah';
+      case 'expiring':
+      case 'akan kadaluarsa':
+        return 'Akan Kadaluarsa';
+      case 'expired':
+      case 'sudah kadaluarsa':
+      case 'kadaluarsa':
+        return 'Sudah Kadaluarsa';
+      case 'damaged':
+      case 'produk rusak':
+        return 'Produk Rusak';
+      case 'other':
+      case 'lainnya':
+        return 'Lainnya';
+      default:
+        return raw.trim();
     }
   }
 
