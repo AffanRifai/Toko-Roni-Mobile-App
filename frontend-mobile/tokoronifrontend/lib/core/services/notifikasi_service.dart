@@ -14,6 +14,8 @@ class NotifItem {
   final String pesan;
   final String waktu;
   final String tipe;
+  final String priority;
+  final bool isImportant;
   bool sudahDibaca;
 
   NotifItem({
@@ -24,6 +26,8 @@ class NotifItem {
     required this.pesan,
     required this.waktu,
     required this.tipe,
+    this.priority = 'normal',
+    this.isImportant = false,
     this.sudahDibaca = false,
   });
 
@@ -57,6 +61,11 @@ class NotifItem {
     final pesan = tipe == 'report'
         ? _buildReportMessage(data: data, fallbackMessage: defaultPesan)
         : defaultPesan;
+    final priority = _resolvePriority(json: json, data: data, tipe: tipe);
+    final isImportant =
+        json['is_important'] == true ||
+        data['is_important'] == true ||
+        _isImportantPriority(priority);
 
     return NotifItem(
       id: (json['id'] ?? '').toString(),
@@ -68,6 +77,8 @@ class NotifItem {
         json['created_at']?.toString() ?? data['created_at']?.toString(),
       ),
       tipe: tipe,
+      priority: priority,
+      isImportant: isImportant,
       sudahDibaca: isRead,
     );
   }
@@ -303,6 +314,31 @@ class NotifItem {
       default:
         return raw.trim();
     }
+  }
+
+  static String _resolvePriority({
+    required Map<String, dynamic> json,
+    required Map<String, dynamic> data,
+    required String tipe,
+  }) {
+    final fromRoot = (json['priority'] ?? '').toString().trim().toLowerCase();
+    if (_isValidPriority(fromRoot)) return fromRoot;
+
+    final fromData = (data['priority'] ?? '').toString().trim().toLowerCase();
+    if (_isValidPriority(fromData)) return fromData;
+
+    if (['report', 'receivable', 'payment', 'stock', 'expiry'].contains(tipe)) {
+      return 'high';
+    }
+    return 'normal';
+  }
+
+  static bool _isValidPriority(String value) {
+    return ['low', 'normal', 'high', 'critical'].contains(value);
+  }
+
+  static bool _isImportantPriority(String priority) {
+    return ['high', 'critical'].contains(priority.toLowerCase().trim());
   }
 
   static String _formatWaktu(String? iso) {

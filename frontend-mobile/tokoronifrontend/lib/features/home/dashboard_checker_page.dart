@@ -192,6 +192,8 @@ class _DashboardCheckerPageState extends State<DashboardCheckerPage>
             '${report.productName} (${report.reportTypeLabel}) tersimpan dan menunggu sinkronisasi server.',
         waktu: 'Baru saja',
         tipe: 'report',
+        priority: 'high',
+        isImportant: true,
         sudahDibaca: false,
       ),
     );

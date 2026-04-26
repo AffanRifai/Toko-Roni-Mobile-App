@@ -50,10 +50,7 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
   @override
   void initState() {
     super.initState();
-    _model = ProdukFormModel(
-      kode: generateKodeProduk(),
-      barcode: generateBarcode(),
-    );
+    _model = ProdukFormModel(kode: generateKodeProduk());
     _ctrls = _FormCtrls.fromModel(_model);
     _loadKategori();
   }
@@ -129,8 +126,6 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
       e['hargaJual'] = 'Harga jual wajib diisi';
     if (_ctrls.stokAwal.text.trim().isEmpty)
       e['stokAwal'] = 'Stok awal wajib diisi';
-    if (_ctrls.barcode.text.trim().isEmpty)
-      e['barcode'] = 'Barcode wajib diisi';
     if (_model.kadaluarsa == null)
       e['kadaluarsa'] = 'Tanggal kadaluarsa wajib diisi';
     setState(
@@ -153,10 +148,7 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
       confirmColor: const Color(0xFFE67E22),
       onConfirm: () {
         setState(() {
-          _model = ProdukFormModel(
-            kode: generateKodeProduk(),
-            barcode: generateBarcode(),
-          );
+          _model = ProdukFormModel(kode: generateKodeProduk());
           _errors.clear();
         });
         _ctrls.resetToModel(_model);
@@ -831,10 +823,10 @@ class _ProdukFormBody extends StatelessWidget {
               const SizedBox(height: 16),
 
               // Barcode
-              _FieldLabel(label: 'Barcode', required: true),
+              _FieldLabel(label: 'Barcode', required: false),
               _FFieldAction(
                 ctrl: ctrls.barcode,
-                hint: '0',
+                hint: 'Kosongkan jika tidak ada',
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 error: errors['barcode'],

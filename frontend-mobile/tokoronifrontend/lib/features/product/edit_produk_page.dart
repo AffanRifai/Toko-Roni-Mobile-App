@@ -45,6 +45,7 @@ class EditProdukPage extends StatefulWidget {
 
 class _EditProdukPageState extends State<EditProdukPage> {
   List<KategoriItem> _kategoriItems = [];
+  late final String _initialKategoriRaw;
   bool _isSubmitting = false;
   // ── Daftar kategori & satuan ──────────────────────────────────────────────
   // Diambil dari API — pastikan semua kategori produk ada di backend
@@ -87,14 +88,12 @@ class _EditProdukPageState extends State<EditProdukPage> {
   void initState() {
     super.initState();
     final p = widget.produk;
-
-    // ── Validasi kategori: kalau tidak ada di list, kosongkan ──
-    final validKategori = _findKategoriMatch(p.kategori) ?? '';
+    _initialKategoriRaw = p.kategori;
 
     // ── Validasi satuan: kalau tidak ada di list, fallback ke 'Pcs' ──
     final validSatuan = _findSatuanMatch(p.jenis) ?? 'Pcs';
 
-    _kategori = validKategori;
+    _kategori = p.kategori.trim();
     _satuan = validSatuan;
     _aktif = p.aktif;
 
@@ -113,9 +112,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
     _stokMinCtrl = TextEditingController(
       text: p.stokMinimum > 0 ? p.stokMinimum.toString() : '',
     );
-    _barcodeCtrl = TextEditingController(
-      text: p.barcode.trim().isEmpty ? _genBarcode() : p.barcode.trim(),
-    );
+    _barcodeCtrl = TextEditingController(text: p.barcode.trim());
     _beratCtrl = TextEditingController(text: p.berat);
     _dimensiCtrl = TextEditingController(text: p.dimensi);
     _kadaluarsaCtrl = TextEditingController(
@@ -130,16 +127,22 @@ class _EditProdukPageState extends State<EditProdukPage> {
       if (!mounted || fromApi.isEmpty) return;
       setState(() {
         _kategoriItems = fromApi;
-        _kategori = _findKategoriMatch(_kategori) ?? '';
+        _kategori =
+            _findKategoriMatch(_initialKategoriRaw) ??
+            _findKategoriMatch(_kategori) ??
+            '';
       });
     } catch (_) {}
   }
 
+  String _normalizeKategori(String raw) =>
+      raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
   String? _findKategoriMatch(String raw) {
-    final needle = raw.trim().toLowerCase();
-    if (needle.isEmpty) return null;
+    final needle = _normalizeKategori(raw);
+    if (needle.isEmpty || needle == '-') return null;
     for (final k in _kategoriItems) {
-      if (k.nama.trim().toLowerCase() == needle) return k.nama;
+      if (_normalizeKategori(k.nama) == needle) return k.nama;
     }
     return null;
   }
@@ -261,7 +264,6 @@ class _EditProdukPageState extends State<EditProdukPage> {
       e['hargaJual'] = 'Harga jual wajib diisi';
     if (_stokAwalCtrl.text.trim().isEmpty)
       e['stokAwal'] = 'Stok awal wajib diisi';
-    if (_barcodeCtrl.text.trim().isEmpty) e['barcode'] = 'Barcode wajib diisi';
     if (_kadaluarsa == null) e['kadaluarsa'] = 'Tanggal kadaluarsa wajib diisi';
     setState(
       () => _errors
@@ -300,9 +302,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
               : '';
           _stokAwalCtrl.text = p.stok.toString();
           _stokMinCtrl.text = p.stokMinimum > 0 ? p.stokMinimum.toString() : '';
-          _barcodeCtrl.text = p.barcode.trim().isEmpty
-              ? _genBarcode()
-              : p.barcode.trim();
+          _barcodeCtrl.text = p.barcode.trim();
           _beratCtrl.text = p.berat;
           _dimensiCtrl.text = p.dimensi;
           _kadaluarsaCtrl.text = _kadaluarsa != null
@@ -575,10 +575,10 @@ class _EditProdukPageState extends State<EditProdukPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  _label('Barcode', required: true),
+                  _label('Barcode', required: false),
                   _fieldWithAction(
                     ctrl: _barcodeCtrl,
-                    hint: '0',
+                    hint: 'Kosongkan jika tidak ada',
                     error: _errors['barcode'],
                     onChanged: (_) => _clearErr('barcode'),
                     icon: Icons.barcode_reader,
