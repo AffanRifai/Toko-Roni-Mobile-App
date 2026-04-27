@@ -633,7 +633,7 @@ switch (menu) {
               scrollDirection: Axis.horizontal,
               child: DataTable(
                 headingRowColor: WidgetStateProperty.all(
-                  const Color(0xFFF7F8FA),
+                  const Color.fromARGB(255, 74, 134, 255),
                 ),
                 headingRowHeight: 42,
                 dataRowMinHeight: 52,
@@ -642,7 +642,7 @@ switch (menu) {
                 headingTextStyle: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF4A5568),
+                  color: Color.fromARGB(255, 255, 255, 255),
                 ),
                 dataTextStyle: const TextStyle(
                   fontSize: 12,

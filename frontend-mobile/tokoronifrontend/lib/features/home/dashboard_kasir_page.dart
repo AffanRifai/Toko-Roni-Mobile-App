@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/dashboard_kasir_service.dart';
 import '../../core/state/app_state.dart';
+import '../../core/ui/live_clock_controller.dart';
 import '../../shared/widgets/notifikasi_widget.dart';
 import '../../shared/widgets/profile_widget.dart';
 import '../../shared/widgets/semua_notifikasi_page.dart';
@@ -29,6 +30,8 @@ class DashboardKasirPage extends StatefulWidget {
 
 class _DashboardKasirPageState extends State<DashboardKasirPage>
     with SingleTickerProviderStateMixin, SidebarMixin {
+  late final LiveClockController _clock;
+
   bool _isLoading = true;
   bool _hasError = false;
   String _errorMessage = '';
@@ -40,6 +43,7 @@ class _DashboardKasirPageState extends State<DashboardKasirPage>
   void initState() {
     super.initState();
     initSidebar(this);
+    _clock = LiveClockController();
 
     AppState.instance.userName.addListener(_onUserNameChanged);
     AppState.instance.dashboardRefreshTick.addListener(_onDashboardRefresh);
@@ -49,6 +53,7 @@ class _DashboardKasirPageState extends State<DashboardKasirPage>
 
   @override
   void dispose() {
+    _clock.dispose();
     AppState.instance.userName.removeListener(_onUserNameChanged);
     AppState.instance.dashboardRefreshTick.removeListener(_onDashboardRefresh);
     disposeSidebar();
@@ -86,7 +91,7 @@ class _DashboardKasirPageState extends State<DashboardKasirPage>
     try {
       final results = await Future.wait([
         DashboardKasirService.getSummary(),
-        DashboardKasirService.getRecentTransactions(limit: 8),
+        DashboardKasirService.getRecentTransactions(limit: 10),
       ]);
 
       if (!mounted) return;
@@ -132,8 +137,47 @@ class _DashboardKasirPageState extends State<DashboardKasirPage>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const KasirPage()),
+    ).then((_) => _loadDashboard(showLoading: false));
+  }
+
+  void _openRiwayatTransaksi() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const RiwayatTransaksiPage()),
     );
   }
+
+  String _formatDate(DateTime dt) {
+    const days = [
+      'Minggu',
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+    ];
+    const months = [
+      '',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+
+    return '${days[dt.weekday % 7]}, ${dt.day} ${months[dt.month]} ${dt.year}';
+  }
+
+  String _formatTime(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}.${dt.minute.toString().padLeft(2, '0')}';
 
   void _handleMenuTap(String menu) {
     if (menu == 'Dashboard') {
@@ -203,10 +247,14 @@ class _DashboardKasirPageState extends State<DashboardKasirPage>
                 ? _ErrorState(onRetry: _loadDashboard, message: _errorMessage)
                 : _KasirDashboardContent(
                     userName: greetingName,
+                    clock: _clock,
+                    formatDate: _formatDate,
+                    formatTime: _formatTime,
                     summary: _summary,
                     recentTransactions: _recentTransactions,
                     onMenuTap: openSidebar,
                     onTransaksiBaruTap: _openKasirPage,
+                    onLihatSemuaTransaksiTap: _openRiwayatTransaksi,
                   ),
           ),
           ...buildSidebarLayer(
@@ -316,54 +364,75 @@ class _ErrorState extends StatelessWidget {
 
 class _KasirDashboardContent extends StatelessWidget {
   final String userName;
+  final LiveClockController clock;
+  final String Function(DateTime) formatDate;
+  final String Function(DateTime) formatTime;
   final DashboardKasirSummary summary;
   final List<DashboardKasirTransaction> recentTransactions;
   final VoidCallback onMenuTap;
   final VoidCallback onTransaksiBaruTap;
+  final VoidCallback onLihatSemuaTransaksiTap;
 
   const _KasirDashboardContent({
     required this.userName,
+    required this.clock,
+    required this.formatDate,
+    required this.formatTime,
     required this.summary,
     required this.recentTransactions,
     required this.onMenuTap,
     required this.onTransaksiBaruTap,
+    required this.onLihatSemuaTransaksiTap,
   });
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    physics: const AlwaysScrollableScrollPhysics(),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _KasirHeader(
-          userName: userName,
-          onMenuTap: onMenuTap,
-          onTransaksiBaruTap: onTransaksiBaruTap,
-        ),
-        const SizedBox(height: 16),
-        _KasirSummarySlider(summary: summary),
-        const SizedBox(height: 14),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _SectionCard(
-            title: 'Transaksi Terbaru',
-            subtitle: 'Data transaksi terbaru dari kasir',
-            child: _KasirTransactionTable(items: recentTransactions),
+  Widget build(BuildContext context) {
+    final topTransactions = recentTransactions.take(10).toList();
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _KasirHeader(
+            userName: userName,
+            clock: clock,
+            formatDate: formatDate,
+            formatTime: formatTime,
+            onMenuTap: onMenuTap,
+            onTransaksiBaruTap: onTransaksiBaruTap,
           ),
-        ),
-        const SizedBox(height: 28),
-      ],
-    ),
-  );
+          const SizedBox(height: 16),
+          _KasirSummarySlider(summary: summary),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _SectionCard(
+              title: 'Transaksi Terbaru',
+              subtitle: 'Data transaksi terbaru dari kasir',
+              onLihatSemua: onLihatSemuaTransaksiTap,
+              child: _KasirTransactionTable(items: topTransactions),
+            ),
+          ),
+          const SizedBox(height: 28),
+        ],
+      ),
+    );
+  }
 }
 
 class _KasirHeader extends StatelessWidget {
   final String userName;
+  final LiveClockController clock;
+  final String Function(DateTime) formatDate;
+  final String Function(DateTime) formatTime;
   final VoidCallback onMenuTap;
   final VoidCallback onTransaksiBaruTap;
 
   const _KasirHeader({
     required this.userName,
+    required this.clock,
+    required this.formatDate,
+    required this.formatTime,
     required this.onMenuTap,
     required this.onTransaksiBaruTap,
   });
@@ -423,6 +492,27 @@ class _KasirHeader extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
+                  ValueListenableBuilder<DateTime>(
+                    valueListenable: clock,
+                    builder: (context, now, child) => Row(
+                      children: [
+                        _HeaderInfoCard(
+                          icon: Icons.calendar_today_rounded,
+                          iconBg: const Color(0xFF4A90D9),
+                          label: 'Tanggal',
+                          value: formatDate(now),
+                        ),
+                        const SizedBox(width: 12),
+                        _HeaderInfoCard(
+                          icon: Icons.access_time_rounded,
+                          iconBg: const Color(0xFF38A169),
+                          label: 'Waktu',
+                          value: formatTime(now),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   SizedBox(
                     height: 44,
                     child: ElevatedButton.icon(
@@ -451,6 +541,68 @@ class _KasirHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HeaderInfoCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final String label;
+  final String value;
+
+  const _HeaderInfoCard({
+    required this.icon,
+    required this.iconBg,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.08),
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconBg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: Colors.white, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D3748),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 }
 
 class _KasirSummarySlider extends StatelessWidget {
@@ -598,9 +750,15 @@ class _KasirMetricCard extends StatelessWidget {
 class _SectionCard extends StatelessWidget {
   final String title;
   final String? subtitle;
+  final VoidCallback? onLihatSemua;
   final Widget child;
 
-  const _SectionCard({required this.title, this.subtitle, required this.child});
+  const _SectionCard({
+    required this.title,
+    this.subtitle,
+    this.onLihatSemua,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -621,25 +779,58 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1F2937),
-            ),
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              subtitle!,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade500,
-                fontWeight: FontWeight.w500,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              if (onLihatSemua != null)
+                GestureDetector(
+                  onTap: onLihatSemua,
+                  child: const Row(
+                    children: [
+                      Text(
+                        'Lihat semua',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF4169E1),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 14,
+                        color: Color(0xFF4169E1),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -676,19 +867,22 @@ class _KasirTransactionTable extends StatelessWidget {
         ),
         dataTextStyle: const TextStyle(fontSize: 11, color: Color(0xFF2D3748)),
         columns: const [
+          DataColumn(label: Text('NO')),
           DataColumn(label: Text('Transaksi')),
           DataColumn(label: Text('Produk')),
           DataColumn(label: Text('Waktu')),
           DataColumn(label: Text('Total')),
           DataColumn(label: Text('Status')),
         ],
-        rows: items.map((item) {
+        rows: List.generate(items.length, (index) {
+          final item = items[index];
           final statusBg = item.isSuccess
               ? const Color(0xFF48BB78)
               : const Color(0xFFE53E3E);
 
           return DataRow(
             cells: [
+              DataCell(Text('${index + 1}')),
               DataCell(
                 Text(item.invoiceNumber, style: const TextStyle(fontSize: 10)),
               ),
@@ -717,7 +911,7 @@ class _KasirTransactionTable extends StatelessWidget {
               ),
             ],
           );
-        }).toList(),
+        }),
       ),
     );
   }

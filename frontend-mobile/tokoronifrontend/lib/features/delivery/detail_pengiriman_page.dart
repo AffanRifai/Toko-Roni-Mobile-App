@@ -164,13 +164,20 @@ class _DetailPengirimanPageState extends State<DetailPengirimanPage> {
   }
 
   void _showAssignKurir() {
-    if (_drivers.isEmpty) {
+    final driverOptions = _uniqueDriverOptions(_drivers);
+    final vehicleOptions = _uniqueVehicleOptions(_vehicles);
+
+    if (driverOptions.isEmpty) {
       _snack('Daftar kurir tidak tersedia', const Color(0xFFE53E3E));
       return;
     }
 
-    int? selectedDriverId = _p.kurirId;
-    int? selectedVehicleId = _p.kendaraanId;
+    int? selectedDriverId = driverOptions.any((d) => d.id == _p.kurirId)
+        ? _p.kurirId
+        : null;
+    int? selectedVehicleId = vehicleOptions.any((v) => v.id == _p.kendaraanId)
+        ? _p.kendaraanId
+        : null;
 
     showDialog(
       context: context,
@@ -251,7 +258,7 @@ class _DetailPengirimanPageState extends State<DetailPengirimanPage> {
                         fontSize: 13,
                       ),
                     ),
-                    items: _drivers
+                    items: driverOptions
                         .map(
                           (d) => DropdownMenuItem<int>(
                             value: d.id,
@@ -281,7 +288,7 @@ class _DetailPengirimanPageState extends State<DetailPengirimanPage> {
                     value: selectedVehicleId,
                     isExpanded: true,
                     hint: Text(
-                      _vehicles.isEmpty
+                      vehicleOptions.isEmpty
                           ? 'Tidak ada kendaraan tersedia'
                           : '-- Pilih Kendaraan --',
                       style: TextStyle(
@@ -289,7 +296,7 @@ class _DetailPengirimanPageState extends State<DetailPengirimanPage> {
                         fontSize: 13,
                       ),
                     ),
-                    items: _vehicles
+                    items: vehicleOptions
                         .map(
                           (v) => DropdownMenuItem<int>(
                             value: v.id,
@@ -301,7 +308,7 @@ class _DetailPengirimanPageState extends State<DetailPengirimanPage> {
                           ),
                         )
                         .toList(),
-                    onChanged: _vehicles.isEmpty
+                    onChanged: vehicleOptions.isEmpty
                         ? null
                         : (v) => setS(() => selectedVehicleId = v),
                   ),
@@ -412,6 +419,28 @@ class _DetailPengirimanPageState extends State<DetailPengirimanPage> {
     ),
     child: child,
   );
+
+  List<DeliveryDriverOption> _uniqueDriverOptions(
+    List<DeliveryDriverOption> source,
+  ) {
+    final byId = <int, DeliveryDriverOption>{};
+    for (final driver in source) {
+      if (driver.id <= 0) continue;
+      byId.putIfAbsent(driver.id, () => driver);
+    }
+    return byId.values.toList();
+  }
+
+  List<DeliveryVehicleOption> _uniqueVehicleOptions(
+    List<DeliveryVehicleOption> source,
+  ) {
+    final byId = <int, DeliveryVehicleOption>{};
+    for (final vehicle in source) {
+      if (vehicle.id <= 0) continue;
+      byId.putIfAbsent(vehicle.id, () => vehicle);
+    }
+    return byId.values.toList();
+  }
 
   Widget _iRow(String label, String val) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 2),
@@ -717,17 +746,23 @@ class _DetailPengirimanPageState extends State<DetailPengirimanPage> {
         ),
       ],
     ),
-    child: Row(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Status: ',
-          style: TextStyle(fontSize: 13, color: Color(0xFF4A5568)),
+        Row(
+          children: [
+            const Text(
+              'Status: ',
+              style: TextStyle(fontSize: 13, color: Color(0xFF4A5568)),
+            ),
+            _statusChip(_p.status),
+          ],
         ),
-        _statusChip(_p.status),
-        const Spacer(),
-        if (!_isStaffLogistik)
+        if (!_isStaffLogistik) ...[
+          const SizedBox(height: 10),
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: [
               if (_p.status == 'Pending' || _p.status == 'Diproses')
                 _actionBtn(
@@ -768,6 +803,7 @@ class _DetailPengirimanPageState extends State<DetailPengirimanPage> {
                 ),
             ],
           ),
+        ],
       ],
     ),
   );

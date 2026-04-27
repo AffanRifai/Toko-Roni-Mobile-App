@@ -1,9 +1,9 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/services/auth_service.dart';
 import '../../core/services/dashboard_checker_service.dart';
 import '../../core/state/app_state.dart';
+import '../../core/ui/live_clock_controller.dart';
 import '../../shared/widgets/notifikasi_widget.dart';
 import '../../shared/widgets/profile_widget.dart';
 import '../../shared/widgets/semua_notifikasi_page.dart';
@@ -30,8 +30,7 @@ class DashboardCheckerPage extends StatefulWidget {
 
 class _DashboardCheckerPageState extends State<DashboardCheckerPage>
     with SingleTickerProviderStateMixin, SidebarMixin {
-  late Timer _timer;
-  DateTime _now = DateTime.now();
+  late final LiveClockController _clock;
 
   bool _isLoading = true;
   bool _hasError = false;
@@ -49,10 +48,7 @@ class _DashboardCheckerPageState extends State<DashboardCheckerPage>
   void initState() {
     super.initState();
     initSidebar(this);
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _now = DateTime.now());
-    });
+    _clock = LiveClockController();
 
     AppState.instance.userName.addListener(_onUserNameChanged);
     AppState.instance.dashboardRefreshTick.addListener(_onDashboardRefresh);
@@ -61,7 +57,7 @@ class _DashboardCheckerPageState extends State<DashboardCheckerPage>
 
   @override
   void dispose() {
-    _timer.cancel();
+    _clock.dispose();
     AppState.instance.userName.removeListener(_onUserNameChanged);
     AppState.instance.dashboardRefreshTick.removeListener(_onDashboardRefresh);
     disposeSidebar();
@@ -327,7 +323,7 @@ class _DashboardCheckerPageState extends State<DashboardCheckerPage>
                 ? _ErrorState(onRetry: _loadDashboard, message: _errorMessage)
                 : _CheckerDashboardContent(
                     userName: greetingName,
-                    now: _now,
+                    clock: _clock,
                     formatDate: _formatDate,
                     formatTime: _formatTime,
                     summary: _summary,
@@ -451,7 +447,7 @@ class _ErrorState extends StatelessWidget {
 
 class _CheckerDashboardContent extends StatelessWidget {
   final String userName;
-  final DateTime now;
+  final LiveClockController clock;
   final String Function(DateTime) formatDate;
   final String Function(DateTime) formatTime;
   final DashboardCheckerSummary summary;
@@ -467,7 +463,7 @@ class _CheckerDashboardContent extends StatelessWidget {
 
   const _CheckerDashboardContent({
     required this.userName,
-    required this.now,
+    required this.clock,
     required this.formatDate,
     required this.formatTime,
     required this.summary,
@@ -483,91 +479,95 @@ class _CheckerDashboardContent extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    physics: const AlwaysScrollableScrollPhysics(),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _CheckerHeader(
-          userName: userName,
-          now: now,
-          formatDate: formatDate,
-          formatTime: formatTime,
-          onMenuTap: onMenuTap,
-        ),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _CheckerSummarySlider(summary: summary),
-        ),
-        const SizedBox(height: 14),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _SectionCard(
-            title: 'Stok Rendah / Menipis',
-            subtitle: 'Produk yang perlu tindakan restok',
-            onLihatSemua: onOpenProducts,
-            child: _LowStockPanel(
-              items: lowStockItems,
-              onReportTap: onReportTap,
-              isSubmitting: isSubmitting,
+  Widget build(BuildContext context) {
+    final topLowStockItems = lowStockItems.take(10).toList();
+    final topExpiringItems = expiringItems.take(10).toList();
+    final topExpiredItems = expiredItems.take(10).toList();
+    final topReports = reports.take(10).toList();
+
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CheckerHeader(
+            userName: userName,
+            clock: clock,
+            formatDate: formatDate,
+            formatTime: formatTime,
+            onMenuTap: onMenuTap,
+          ),
+          const SizedBox(height: 16),
+          _CheckerSummaryCards(summary: summary),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _SectionCard(
+              title: 'Stok Rendah / Menipis',
+              subtitle: 'Produk yang perlu tindakan restok',
+              onLihatSemua: onOpenProducts,
+              child: _LowStockPanel(
+                items: topLowStockItems,
+                onReportTap: onReportTap,
+                isSubmitting: isSubmitting,
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _SectionCard(
-            title: 'Produk Akan Kadaluarsa',
-            subtitle: 'Produk yang akan kadaluarsa dalam 30 hari',
-            onLihatSemua: onOpenProducts,
-            child: _ExpiringPanel(
-              items: expiringItems,
-              onReportTap: onReportTap,
-              isSubmitting: isSubmitting,
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _SectionCard(
+              title: 'Produk Akan Kadaluarsa',
+              subtitle: 'Produk yang akan kadaluarsa dalam 30 hari',
+              onLihatSemua: onOpenProducts,
+              child: _ExpiringPanel(
+                items: topExpiringItems,
+                onReportTap: onReportTap,
+                isSubmitting: isSubmitting,
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _SectionCard(
-            title: 'Produk Sudah Kadaluarsa',
-            subtitle: 'Perlu tindakan urgent',
-            onLihatSemua: onOpenProducts,
-            child: _ExpiredPanel(
-              items: expiredItems,
-              onReportTap: onReportTap,
-              isSubmitting: isSubmitting,
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _SectionCard(
+              title: 'Produk Sudah Kadaluarsa',
+              subtitle: 'Perlu tindakan urgent',
+              onLihatSemua: onOpenProducts,
+              child: _ExpiredPanel(
+                items: topExpiredItems,
+                onReportTap: onReportTap,
+                isSubmitting: isSubmitting,
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _SectionCard(
-            title: 'Laporan Terbaru',
-            subtitle: 'Riwayat laporan checker barang',
-            onLihatSemua: onOpenReportsInfo,
-            child: _LatestReportsPanel(items: reports),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _SectionCard(
+              title: 'Laporan Terbaru',
+              subtitle: 'Riwayat laporan checker barang',
+              onLihatSemua: onOpenReportsInfo,
+              child: _LatestReportsPanel(items: topReports),
+            ),
           ),
-        ),
-        const SizedBox(height: 28),
-      ],
-    ),
-  );
+          const SizedBox(height: 28),
+        ],
+      ),
+    );
+  }
 }
 
 class _CheckerHeader extends StatelessWidget {
   final String userName;
-  final DateTime now;
+  final LiveClockController clock;
   final String Function(DateTime) formatDate;
   final String Function(DateTime) formatTime;
   final VoidCallback onMenuTap;
 
   const _CheckerHeader({
     required this.userName,
-    required this.now,
+    required this.clock,
     required this.formatDate,
     required this.formatTime,
     required this.onMenuTap,
@@ -627,47 +627,23 @@ class _CheckerHeader extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
+                  const SizedBox(height: 20),
+                  ValueListenableBuilder<DateTime>(
+                    valueListenable: clock,
+                    builder: (context, now, child) => Row(
                       children: [
-                        const Icon(
-                          Icons.calendar_today_rounded,
-                          size: 14,
-                          color: Colors.white,
+                        _HeaderInfoCard(
+                          icon: Icons.calendar_today_rounded,
+                          iconBg: const Color(0xFF4A90D9),
+                          label: 'Tanggal',
+                          value: formatDate(now),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            formatDate(now),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const Icon(
-                          Icons.access_time_rounded,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          '${formatTime(now)} WIB',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        const SizedBox(width: 12),
+                        _HeaderInfoCard(
+                          icon: Icons.access_time_rounded,
+                          iconBg: const Color(0xFF38A169),
+                          label: 'Waktu',
+                          value: formatTime(now),
                         ),
                       ],
                     ),
@@ -682,108 +658,128 @@ class _CheckerHeader extends StatelessWidget {
   }
 }
 
-class _CheckerSummarySlider extends StatefulWidget {
-  final DashboardCheckerSummary summary;
+class _HeaderInfoCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final String label;
+  final String value;
 
-  const _CheckerSummarySlider({required this.summary});
+  const _HeaderInfoCard({
+    required this.icon,
+    required this.iconBg,
+    required this.label,
+    required this.value,
+  });
 
   @override
-  State<_CheckerSummarySlider> createState() => _CheckerSummarySliderState();
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.08),
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconBg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: Colors.white, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D3748),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 }
 
-class _CheckerSummarySliderState extends State<_CheckerSummarySlider> {
-  late final PageController _controller;
-  int _currentPage = 0;
+class _CheckerSummaryCards extends StatelessWidget {
+  final DashboardCheckerSummary summary;
 
-  @override
-  void initState() {
-    super.initState();
-    _controller = PageController(viewportFraction: 0.84);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  const _CheckerSummaryCards({required this.summary});
 
   @override
   Widget build(BuildContext context) {
     final cards = [
       _SummaryCardData(
         label: 'Stok Rendah',
-        value: _formatThousands(widget.summary.stokRendah),
+        value: _formatThousands(summary.stokRendah),
         icon: Icons.warning_amber_rounded,
         color: const Color(0xFFF59E0B),
       ),
       _SummaryCardData(
         label: 'Akan Kadaluarsa',
-        value: _formatThousands(widget.summary.akanKadaluarsa),
+        value: _formatThousands(summary.akanKadaluarsa),
         icon: Icons.schedule_rounded,
         color: const Color(0xFF3B82F6),
       ),
       _SummaryCardData(
         label: 'Sudah Kadaluarsa',
-        value: _formatThousands(widget.summary.sudahKadaluarsa),
+        value: _formatThousands(summary.sudahKadaluarsa),
         icon: Icons.error_rounded,
         color: const Color(0xFFEF4444),
       ),
       _SummaryCardData(
         label: 'Produk Aktif',
-        value: _formatThousands(widget.summary.produkAktif),
+        value: _formatThousands(summary.produkAktif),
         icon: Icons.check_circle_rounded,
         color: const Color(0xFF10B981),
       ),
       _SummaryCardData(
         label: 'Total Kategori',
-        value: _formatThousands(widget.summary.totalKategori),
+        value: _formatThousands(summary.totalKategori),
         icon: Icons.category_rounded,
         color: const Color(0xFF8B5CF6),
       ),
       _SummaryCardData(
         label: 'Rasio Stok Rendah',
-        value: '${widget.summary.rasioStokRendah.toStringAsFixed(1)}%',
+        value: '${summary.rasioStokRendah.toStringAsFixed(1)}%',
         icon: Icons.pie_chart_rounded,
         color: const Color(0xFF0EA5E9),
       ),
     ];
 
-    return Column(
-      children: [
-        SizedBox(
-          height: 146,
-          child: PageView.builder(
-            controller: _controller,
-            itemCount: cards.length,
-            onPageChanged: (index) => setState(() => _currentPage = index),
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: _SummaryCard(data: cards[index]),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(cards.length, (index) {
-            final active = index == _currentPage;
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: active ? 18 : 7,
-              height: 7,
-              decoration: BoxDecoration(
-                color: active
-                    ? const Color(0xFF4169E1)
-                    : const Color(0xFFD1D5DB),
-                borderRadius: BorderRadius.circular(99),
-              ),
-            );
-          }),
-        ),
-      ],
+    return SizedBox(
+      height: 120,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: cards.length,
+        itemBuilder: (context, index) {
+          final data = cards[index];
+          return Padding(
+            padding: EdgeInsets.only(right: index < cards.length - 1 ? 10 : 0),
+            child: _SummaryCard(data: data),
+          );
+        },
+      ),
     );
   }
 
@@ -820,6 +816,7 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: 150,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -964,7 +961,7 @@ class _LowStockPanel extends StatelessWidget {
     }
 
     return Column(
-      children: items.take(6).map((item) {
+      children: items.take(10).map((item) {
         final minStock = item.stokMinimum <= 0 ? 10 : item.stokMinimum;
         final ratio = minStock <= 0
             ? 0.0
@@ -1128,7 +1125,7 @@ class _ExpiringPanel extends StatelessWidget {
     }
 
     return Column(
-      children: items.take(6).map((item) {
+      children: items.take(10).map((item) {
         final left = item.daysLeft ?? 0;
         final ratio = (left / 30).clamp(0.0, 1.0).toDouble();
         final dateText = item.expiryDate == null
@@ -1342,7 +1339,7 @@ class _ExpiredPanel extends StatelessWidget {
     }
 
     return Column(
-      children: items.take(6).map((item) {
+      children: items.take(10).map((item) {
         final daysExpired = item.daysExpired ?? 0;
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
@@ -1469,7 +1466,7 @@ class _LatestReportsPanel extends StatelessWidget {
     final sorted = [...items]
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return Column(
-      children: sorted.take(8).map((item) {
+      children: sorted.take(10).map((item) {
         final statusColor = _statusColor(item.status);
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
@@ -1617,6 +1614,8 @@ class _ReportProductDialog extends StatefulWidget {
 class _ReportProductDialogState extends State<_ReportProductDialog> {
   final _notesCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController();
+  final _notesFocusNode = FocusNode();
+  final _qtyFocusNode = FocusNode();
   final _formKey = GlobalKey<FormState>();
 
   @override
@@ -1631,6 +1630,8 @@ class _ReportProductDialogState extends State<_ReportProductDialog> {
   void dispose() {
     _notesCtrl.dispose();
     _qtyCtrl.dispose();
+    _notesFocusNode.dispose();
+    _qtyFocusNode.dispose();
     super.dispose();
   }
 
@@ -1687,8 +1688,12 @@ class _ReportProductDialogState extends State<_ReportProductDialog> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _notesCtrl,
+                focusNode: _notesFocusNode,
                 minLines: 4,
                 maxLines: 5,
+                textInputAction: TextInputAction.next,
+                onEditingComplete: () =>
+                    FocusScope.of(context).requestFocus(_qtyFocusNode),
                 style: const TextStyle(fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Jelaskan kondisi produk...',
@@ -1728,7 +1733,10 @@ class _ReportProductDialogState extends State<_ReportProductDialog> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _qtyCtrl,
+                focusNode: _qtyFocusNode,
                 keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                onEditingComplete: () => FocusScope.of(context).unfocus(),
                 style: const TextStyle(fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Masukkan jumlah',

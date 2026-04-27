@@ -393,7 +393,10 @@ class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
   }
 
   void _showAssignKurir(PengirimanItem p) {
-    if (_drivers.isEmpty) {
+    final driverOptions = _uniqueDriverOptions(_drivers);
+    final vehicleOptions = _uniqueVehicleOptions(_vehicles);
+
+    if (driverOptions.isEmpty) {
       _snack(
         'Daftar kurir tidak tersedia. Coba refresh lalu ulangi.',
         const Color(0xFFE53E3E),
@@ -401,8 +404,12 @@ class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
       return;
     }
 
-    int? selectedDriverId = p.kurirId;
-    int? selectedVehicleId = p.kendaraanId;
+    int? selectedDriverId = driverOptions.any((d) => d.id == p.kurirId)
+        ? p.kurirId
+        : null;
+    int? selectedVehicleId = vehicleOptions.any((v) => v.id == p.kendaraanId)
+        ? p.kendaraanId
+        : null;
 
     showDialog(
       context: context,
@@ -507,7 +514,7 @@ class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
                           fontSize: 13,
                         ),
                       ),
-                      items: _drivers
+                      items: driverOptions
                           .map(
                             (d) => DropdownMenuItem<int>(
                               value: d.id,
@@ -563,7 +570,7 @@ class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
                           fontSize: 13,
                         ),
                       ),
-                      items: _vehicles
+                      items: vehicleOptions
                           .map(
                             (v) => DropdownMenuItem<int>(
                               value: v.id,
@@ -575,7 +582,7 @@ class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
                             ),
                           )
                           .toList(),
-                      onChanged: _vehicles.isEmpty
+                      onChanged: vehicleOptions.isEmpty
                           ? null
                           : (v) => setModalState(() => selectedVehicleId = v),
                     ),
@@ -602,7 +609,7 @@ class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
                           vehicleId: selectedVehicleId,
                         );
                         if (!mounted) return;
-                        final driver = _drivers.firstWhere(
+                        final driver = driverOptions.firstWhere(
                           (d) => d.id == selectedDriverId,
                           orElse: () => const DeliveryDriverOption(
                             id: 0,
@@ -610,7 +617,7 @@ class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
                             phone: '',
                           ),
                         );
-                        final vehicle = _vehicles.firstWhere(
+                        final vehicle = vehicleOptions.firstWhere(
                           (v) => v.id == selectedVehicleId,
                           orElse: () => const DeliveryVehicleOption(
                             id: 0,
@@ -716,6 +723,28 @@ class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
       ],
     ),
   );
+
+  List<DeliveryDriverOption> _uniqueDriverOptions(
+    List<DeliveryDriverOption> source,
+  ) {
+    final byId = <int, DeliveryDriverOption>{};
+    for (final driver in source) {
+      if (driver.id <= 0) continue;
+      byId.putIfAbsent(driver.id, () => driver);
+    }
+    return byId.values.toList();
+  }
+
+  List<DeliveryVehicleOption> _uniqueVehicleOptions(
+    List<DeliveryVehicleOption> source,
+  ) {
+    final byId = <int, DeliveryVehicleOption>{};
+    for (final vehicle in source) {
+      if (vehicle.id <= 0) continue;
+      byId.putIfAbsent(vehicle.id, () => vehicle);
+    }
+    return byId.values.toList();
+  }
 
   void _cetakSuratJalan(PengirimanItem p) {
     _snack(
@@ -1284,7 +1313,7 @@ class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
                     headingRowColor: WidgetStateProperty.all(
-                      const Color(0xFFF7F8FA),
+                      const Color.fromARGB(255, 69, 131, 255),
                     ),
                     headingRowHeight: 48,
                     dataRowMinHeight: 72,
@@ -1294,7 +1323,7 @@ class _ManajemenPengirimanPageState extends State<ManajemenPengirimanPage>
                     headingTextStyle: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF4A5568),
+                      color: Color.fromARGB(255, 255, 255, 255),
                     ),
                     dataTextStyle: const TextStyle(
                       fontSize: 12,

@@ -22,6 +22,8 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emailFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -29,11 +31,15 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
   // ── Handle Login ─────────────────────────────────────────
   Future<void> _handleLogin() async {
+    FocusScope.of(context).unfocus();
+
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -138,6 +144,8 @@ class _LoginPageState extends State<LoginPage> {
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: ConstrainedBox(
@@ -180,8 +188,13 @@ class _LoginPageState extends State<LoginPage> {
                           const SizedBox(height: 6),
                           _buildTextField(
                             controller: _emailController,
+                            focusNode: _emailFocusNode,
                             hint: 'masukan email anda',
                             inputType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            onEditingComplete: () => FocusScope.of(
+                              context,
+                            ).requestFocus(_passwordFocusNode),
                           ),
                           const SizedBox(height: 16),
 
@@ -190,8 +203,11 @@ class _LoginPageState extends State<LoginPage> {
                           const SizedBox(height: 6),
                           _buildTextField(
                             controller: _passwordController,
+                            focusNode: _passwordFocusNode,
                             hint: 'masukan password anda',
                             obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.done,
+                            onEditingComplete: _isLoading ? null : _handleLogin,
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword
@@ -340,15 +356,21 @@ class _LoginPageState extends State<LoginPage> {
 
   Widget _buildTextField({
     required TextEditingController controller,
+    FocusNode? focusNode,
     required String hint,
     TextInputType inputType = TextInputType.text,
     bool obscureText = false,
+    TextInputAction textInputAction = TextInputAction.done,
+    VoidCallback? onEditingComplete,
     Widget? suffixIcon,
   }) {
     return TextField(
       controller: controller,
+      focusNode: focusNode,
       keyboardType: inputType,
       obscureText: obscureText,
+      textInputAction: textInputAction,
+      onEditingComplete: onEditingComplete,
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),

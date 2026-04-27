@@ -178,7 +178,7 @@ class DashboardGudangService {
       ),
       lowStockItems: lowStockItems,
       categoryItems: categories,
-      stockUpdates: stockUpdates.take(8).toList(),
+      stockUpdates: stockUpdates.take(10).toList(),
     );
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/dashboard_gudang_service.dart';
 import '../../core/state/app_state.dart';
+import '../../core/ui/live_clock_controller.dart';
 import '../../shared/widgets/notifikasi_widget.dart';
 import '../../shared/widgets/profile_widget.dart';
 import '../../shared/widgets/semua_notifikasi_page.dart';
@@ -30,6 +31,8 @@ class DashboardGudangPage extends StatefulWidget {
 
 class _DashboardGudangPageState extends State<DashboardGudangPage>
     with SingleTickerProviderStateMixin, SidebarMixin {
+  late final LiveClockController _clock;
+
   bool _isLoading = true;
   bool _hasError = false;
   String _errorMessage = '';
@@ -43,6 +46,7 @@ class _DashboardGudangPageState extends State<DashboardGudangPage>
   void initState() {
     super.initState();
     initSidebar(this);
+    _clock = LiveClockController();
 
     AppState.instance.userName.addListener(_onUserNameChanged);
     AppState.instance.dashboardRefreshTick.addListener(_onDashboardRefresh);
@@ -52,6 +56,7 @@ class _DashboardGudangPageState extends State<DashboardGudangPage>
 
   @override
   void dispose() {
+    _clock.dispose();
     AppState.instance.userName.removeListener(_onUserNameChanged);
     AppState.instance.dashboardRefreshTick.removeListener(_onDashboardRefresh);
     disposeSidebar();
@@ -139,6 +144,52 @@ class _DashboardGudangPageState extends State<DashboardGudangPage>
     });
   }
 
+  void _openDaftarProduk() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const DaftarProdukPage()),
+    ).then((_) => _loadDashboard(showLoading: false));
+  }
+
+  void _openDaftarKategori() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ManajemenKategoriPage()),
+    ).then((_) => _loadDashboard(showLoading: false));
+  }
+
+  String _formatDate(DateTime dt) {
+    const days = [
+      'Minggu',
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+    ];
+    const months = [
+      '',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+
+    return '${days[dt.weekday % 7]}, ${dt.day} ${months[dt.month]} ${dt.year}';
+  }
+
+  String _formatTime(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}.${dt.minute.toString().padLeft(2, '0')}';
+
   void _handleMenuTap(String menu) {
     if (menu == 'Dashboard') {
       closeSidebar();
@@ -207,12 +258,18 @@ class _DashboardGudangPageState extends State<DashboardGudangPage>
                 ? _ErrorState(onRetry: _loadDashboard, message: _errorMessage)
                 : _GudangDashboardContent(
                     userName: greetingName,
+                    clock: _clock,
+                    formatDate: _formatDate,
+                    formatTime: _formatTime,
                     summary: _summary,
                     lowStockItems: _lowStockItems,
                     categoryItems: _categoryItems,
                     stockUpdates: _stockUpdates,
                     onMenuTap: openSidebar,
                     onTambahProdukTap: _openTambahProduk,
+                    onLihatSemuaLowStockTap: _openDaftarProduk,
+                    onLihatSemuaKategoriTap: _openDaftarKategori,
+                    onLihatSemuaStockUpdateTap: _openDaftarProduk,
                   ),
           ),
           ...buildSidebarLayer(
@@ -322,79 +379,106 @@ class _ErrorState extends StatelessWidget {
 
 class _GudangDashboardContent extends StatelessWidget {
   final String userName;
+  final LiveClockController clock;
+  final String Function(DateTime) formatDate;
+  final String Function(DateTime) formatTime;
   final DashboardGudangSummary summary;
   final List<DashboardGudangLowStockItem> lowStockItems;
   final List<DashboardGudangCategoryItem> categoryItems;
   final List<DashboardGudangStockUpdateItem> stockUpdates;
   final VoidCallback onMenuTap;
   final VoidCallback onTambahProdukTap;
+  final VoidCallback onLihatSemuaLowStockTap;
+  final VoidCallback onLihatSemuaKategoriTap;
+  final VoidCallback onLihatSemuaStockUpdateTap;
 
   const _GudangDashboardContent({
     required this.userName,
+    required this.clock,
+    required this.formatDate,
+    required this.formatTime,
     required this.summary,
     required this.lowStockItems,
     required this.categoryItems,
     required this.stockUpdates,
     required this.onMenuTap,
     required this.onTambahProdukTap,
+    required this.onLihatSemuaLowStockTap,
+    required this.onLihatSemuaKategoriTap,
+    required this.onLihatSemuaStockUpdateTap,
   });
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    physics: const AlwaysScrollableScrollPhysics(),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _GudangHeader(
-          userName: userName,
-          onMenuTap: onMenuTap,
-          onTambahProdukTap: onTambahProdukTap,
-        ),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _GudangSummarySlider(summary: summary),
-        ),
-        const SizedBox(height: 14),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _SectionCard(
-            title: 'Produk Stok Rendah',
-            subtitle: 'Pantau produk yang perlu segera restok',
-            child: _LowStockTable(items: lowStockItems),
+  Widget build(BuildContext context) {
+    final topLowStockItems = lowStockItems.take(10).toList();
+    final topCategoryItems = categoryItems.take(10).toList();
+    final topStockUpdates = stockUpdates.take(10).toList();
+
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _GudangHeader(
+            userName: userName,
+            clock: clock,
+            formatDate: formatDate,
+            formatTime: formatTime,
+            onMenuTap: onMenuTap,
+            onTambahProdukTap: onTambahProdukTap,
           ),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _SectionCard(
-            title: 'Daftar Kategori Produk',
-            subtitle: 'Ringkasan jumlah produk per kategori',
-            child: _CategoryTable(items: categoryItems),
+          const SizedBox(height: 16),
+          _GudangSummaryCards(summary: summary),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _SectionCard(
+              title: 'Produk Stok Rendah',
+              subtitle: 'Pantau produk yang perlu segera restok',
+              onLihatSemua: onLihatSemuaLowStockTap,
+              child: _LowStockTable(items: topLowStockItems),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _SectionCard(
-            title: 'Update Data Stok Produk Terbaru',
-            subtitle: 'Perubahan terakhir data stok produk',
-            child: _StockUpdateList(items: stockUpdates),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _SectionCard(
+              title: 'Daftar Kategori Produk',
+              subtitle: 'Ringkasan jumlah produk per kategori',
+              onLihatSemua: onLihatSemuaKategoriTap,
+              child: _CategoryTable(items: topCategoryItems),
+            ),
           ),
-        ),
-        const SizedBox(height: 28),
-      ],
-    ),
-  );
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _SectionCard(
+              title: 'Update Data Stok Produk Terbaru',
+              subtitle: 'Perubahan terakhir data stok produk',
+              onLihatSemua: onLihatSemuaStockUpdateTap,
+              child: _StockUpdateList(items: topStockUpdates),
+            ),
+          ),
+          const SizedBox(height: 28),
+        ],
+      ),
+    );
+  }
 }
 
 class _GudangHeader extends StatelessWidget {
   final String userName;
+  final LiveClockController clock;
+  final String Function(DateTime) formatDate;
+  final String Function(DateTime) formatTime;
   final VoidCallback onMenuTap;
   final VoidCallback onTambahProdukTap;
 
   const _GudangHeader({
     required this.userName,
+    required this.clock,
+    required this.formatDate,
+    required this.formatTime,
     required this.onMenuTap,
     required this.onTambahProdukTap,
   });
@@ -454,6 +538,27 @@ class _GudangHeader extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
+                  ValueListenableBuilder<DateTime>(
+                    valueListenable: clock,
+                    builder: (context, now, child) => Row(
+                      children: [
+                        _HeaderInfoCard(
+                          icon: Icons.calendar_today_rounded,
+                          iconBg: const Color(0xFF4A90D9),
+                          label: 'Tanggal',
+                          value: formatDate(now),
+                        ),
+                        const SizedBox(width: 12),
+                        _HeaderInfoCard(
+                          icon: Icons.access_time_rounded,
+                          iconBg: const Color(0xFF38A169),
+                          label: 'Waktu',
+                          value: formatTime(now),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   SizedBox(
                     height: 44,
                     child: ElevatedButton.icon(
@@ -484,205 +589,143 @@ class _GudangHeader extends StatelessWidget {
   }
 }
 
-class _GudangSummarySlider extends StatefulWidget {
-  final DashboardGudangSummary summary;
-
-  const _GudangSummarySlider({required this.summary});
-
-  @override
-  State<_GudangSummarySlider> createState() => _GudangSummarySliderState();
-}
-
-class _GudangSummarySliderState extends State<_GudangSummarySlider> {
-  late final PageController _controller;
-  int _currentPage = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = PageController(viewportFraction: 0.84);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cards = [
-      _SummaryCardData(
-        label: 'Total Produk',
-        value: _formatThousands(widget.summary.totalProduk),
-        icon: Icons.inventory_2_rounded,
-        color: const Color(0xFF4169E1),
-      ),
-      _SummaryCardData(
-        label: 'Stok Rendah',
-        value: _formatThousands(widget.summary.stokRendah),
-        icon: Icons.warning_amber_rounded,
-        color: const Color(0xFFE53E3E),
-      ),
-      _SummaryCardData(
-        label: 'Nilai Inventori',
-        value: 'Rp ${_formatThousands(widget.summary.nilaiInventori.round())}',
-        icon: Icons.account_balance_wallet_rounded,
-        color: const Color(0xFF10B981),
-      ),
-      _SummaryCardData(
-        label: 'Total Terjual (Unit)',
-        value: _formatThousands(widget.summary.totalTerjualUnit),
-        icon: Icons.local_shipping_rounded,
-        color: const Color(0xFF0EA5E9),
-      ),
-      _SummaryCardData(
-        label: 'Total Pendapatan',
-        value: 'Rp ${_formatThousands(widget.summary.totalPendapatan.round())}',
-        icon: Icons.payments_rounded,
-        color: const Color(0xFFF59E0B),
-      ),
-      _SummaryCardData(
-        label: 'Rata-rata per Item',
-        value:
-            'Rp ${_formatThousands(widget.summary.rataRataHargaPerItem.round())}',
-        icon: Icons.bar_chart_rounded,
-        color: const Color(0xFF8B5CF6),
-      ),
-    ];
-
-    return Column(
-      children: [
-        SizedBox(
-          height: 152,
-          child: PageView.builder(
-            controller: _controller,
-            itemCount: cards.length,
-            onPageChanged: (index) {
-              if (mounted) setState(() => _currentPage = index);
-            },
-            itemBuilder: (context, index) {
-              final data = cards[index];
-              return Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: _SummaryCard(data: data),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(cards.length, (index) {
-            final active = index == _currentPage;
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: active ? 18 : 7,
-              height: 7,
-              decoration: BoxDecoration(
-                color: active
-                    ? const Color(0xFF4169E1)
-                    : const Color(0xFFD1D5DB),
-                borderRadius: BorderRadius.circular(99),
-              ),
-            );
-          }),
-        ),
-      ],
-    );
-  }
-
-  static String _formatThousands(int value) {
-    final text = value.toString();
-    final buffer = StringBuffer();
-    for (int i = 0; i < text.length; i++) {
-      if (i > 0 && (text.length - i) % 3 == 0) buffer.write('.');
-      buffer.write(text[i]);
-    }
-    return buffer.toString();
-  }
-}
-
-class _SummaryCardData {
+class _HeaderInfoCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
   final String label;
   final String value;
-  final IconData icon;
-  final Color color;
 
-  const _SummaryCardData({
+  const _HeaderInfoCard({
+    required this.icon,
+    required this.iconBg,
     required this.label,
     required this.value,
-    required this.icon,
-    required this.color,
   });
-}
-
-class _SummaryCard extends StatelessWidget {
-  final _SummaryCardData data;
-
-  const _SummaryCard({required this.data});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.08),
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconBg,
+            borderRadius: BorderRadius.circular(8),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: data.color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+          child: Icon(icon, color: Colors.white, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
             ),
-            child: Icon(data.icon, color: data.color, size: 20),
-          ),
-          const Spacer(),
-          Text(
-            data.value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1F2937),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D3748),
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            data.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _GudangSummaryCards extends StatelessWidget {
+  final DashboardGudangSummary summary;
+
+  const _GudangSummaryCards({required this.summary});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 120,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      children: [
+        SummaryCard(
+          label: 'Total Produk',
+          value: _formatThousands(summary.totalProduk),
+          icon: Icons.inventory_2_rounded,
+          color: const Color(0xFF4169E1),
+        ),
+        SummaryCard(
+          label: 'Stok Rendah',
+          value: _formatThousands(summary.stokRendah),
+          icon: Icons.warning_amber_rounded,
+          color: const Color(0xFFE53E3E),
+        ),
+        SummaryCard(
+          label: 'Nilai Inventori',
+          value: 'Rp ${_formatThousands(summary.nilaiInventori.round())}',
+          icon: Icons.account_balance_wallet_rounded,
+          color: const Color(0xFF10B981),
+        ),
+        SummaryCard(
+          label: 'Total Terjual',
+          value: _formatThousands(summary.totalTerjualUnit),
+          icon: Icons.local_shipping_rounded,
+          color: const Color(0xFF0EA5E9),
+        ),
+        SummaryCard(
+          label: 'Total Pendapatan',
+          value: 'Rp ${_formatThousands(summary.totalPendapatan.round())}',
+          icon: Icons.payments_rounded,
+          color: const Color(0xFFF59E0B),
+        ),
+        SummaryCard(
+          label: 'Rata-rata per Item',
+          value: 'Rp ${_formatThousands(summary.rataRataHargaPerItem.round())}',
+          icon: Icons.bar_chart_rounded,
+          color: const Color(0xFF8B5CF6),
+        ),
+      ],
+    ),
+  );
+}
+
+String _formatThousands(int value) {
+  final text = value.toString();
+  final buffer = StringBuffer();
+  for (int i = 0; i < text.length; i++) {
+    if (i > 0 && (text.length - i) % 3 == 0) buffer.write('.');
+    buffer.write(text[i]);
   }
+  return buffer.toString();
 }
 
 class _SectionCard extends StatelessWidget {
   final String title;
   final String? subtitle;
+  final VoidCallback? onLihatSemua;
   final Widget child;
 
-  const _SectionCard({required this.title, this.subtitle, required this.child});
+  const _SectionCard({
+    required this.title,
+    this.subtitle,
+    this.onLihatSemua,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -703,25 +746,58 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1F2937),
-            ),
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              subtitle!,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade500,
-                fontWeight: FontWeight.w500,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              if (onLihatSemua != null)
+                GestureDetector(
+                  onTap: onLihatSemua,
+                  child: const Row(
+                    children: [
+                      Text(
+                        'Lihat semua',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF4169E1),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 14,
+                        color: Color(0xFF4169E1),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -747,10 +823,11 @@ class _LowStockTable extends StatelessWidget {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
+        horizontalMargin: 12,
         headingRowHeight: 36,
         dataRowMinHeight: 36,
         dataRowMaxHeight: 42,
-        columnSpacing: 12,
+        columnSpacing: 22,
         headingTextStyle: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -758,14 +835,17 @@ class _LowStockTable extends StatelessWidget {
         ),
         dataTextStyle: const TextStyle(fontSize: 11, color: Color(0xFF2D3748)),
         columns: const [
+          DataColumn(label: Text('NO')),
           DataColumn(label: Text('Produk')),
           DataColumn(label: Text('Kategori')),
           DataColumn(label: Text('Stok')),
           DataColumn(label: Text('Stok Min')),
         ],
-        rows: items.map((item) {
+        rows: List.generate(items.length, (index) {
+          final item = items[index];
           return DataRow(
             cells: [
+              DataCell(Text('${index + 1}')),
               DataCell(Text(item.namaProduk)),
               DataCell(Text(item.kategori)),
               DataCell(
@@ -780,7 +860,7 @@ class _LowStockTable extends StatelessWidget {
               DataCell(Text(item.stokMinimum.toString())),
             ],
           );
-        }).toList(),
+        }),
       ),
     );
   }
@@ -803,10 +883,11 @@ class _CategoryTable extends StatelessWidget {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
+        horizontalMargin: 12,
         headingRowHeight: 36,
         dataRowMinHeight: 36,
         dataRowMaxHeight: 42,
-        columnSpacing: 12,
+        columnSpacing: 22,
         headingTextStyle: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -814,13 +895,16 @@ class _CategoryTable extends StatelessWidget {
         ),
         dataTextStyle: const TextStyle(fontSize: 11, color: Color(0xFF2D3748)),
         columns: const [
+          DataColumn(label: Text('NO')),
           DataColumn(label: Text('Kategori')),
           DataColumn(label: Text('Total Produk')),
           DataColumn(label: Text('Status')),
         ],
-        rows: items.map((item) {
+        rows: List.generate(items.length, (index) {
+          final item = items[index];
           return DataRow(
             cells: [
+              DataCell(Text('${index + 1}')),
               DataCell(Text(item.namaKategori)),
               DataCell(Text(item.totalProduk.toString())),
               DataCell(
@@ -847,7 +931,7 @@ class _CategoryTable extends StatelessWidget {
               ),
             ],
           );
-        }).toList(),
+        }),
       ),
     );
   }

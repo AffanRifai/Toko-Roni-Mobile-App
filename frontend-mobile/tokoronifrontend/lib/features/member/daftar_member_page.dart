@@ -1235,6 +1235,26 @@ switch (menu) {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+             Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+              child: Row(
+                children: [
+                  const Text(
+                    'Daftar Member',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2D3748),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Menampilkan ${filtered.length} dari ${_list.length}',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 8),
             if (_isLoading)
               const Padding(
@@ -1320,7 +1340,7 @@ switch (menu) {
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
                   headingRowColor: WidgetStateProperty.all(
-                    const Color(0xFFF7F8FA),
+                    const Color.fromARGB(255, 60, 119, 255),
                   ),
                   headingRowHeight: 42,
                   dataRowMinHeight: 64,
@@ -1329,7 +1349,7 @@ switch (menu) {
                   headingTextStyle: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF4A5568),
+                    color: Color.fromARGB(255, 248, 249, 251),
                   ),
                   dataTextStyle: const TextStyle(
                     fontSize: 11,

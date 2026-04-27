@@ -1058,7 +1058,7 @@ class _LaporanPenjualanPageState extends State<LaporanPenjualanPage>
                         scrollDirection: Axis.horizontal,
                         child: DataTable(
                           headingRowColor: WidgetStateProperty.all(
-                            const Color(0xFFF7F8FA),
+                            const Color.fromARGB(255, 81, 139, 255),
                           ),
                           headingRowHeight: 48,
                           dataRowMinHeight: 64,
@@ -1067,7 +1067,7 @@ class _LaporanPenjualanPageState extends State<LaporanPenjualanPage>
                           headingTextStyle: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF4A5568),
+                            color: Color.fromARGB(255, 255, 255, 255),
                           ),
                           dataTextStyle: const TextStyle(
                             fontSize: 12,

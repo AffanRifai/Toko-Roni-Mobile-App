@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,6 +6,7 @@ import '../../core/access/role_access.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/dashboard_logistik_service.dart';
 import '../../core/state/app_state.dart';
+import '../../core/ui/live_clock_controller.dart';
 import '../../models/kendaraan_model.dart';
 import '../../models/pengiriman_model.dart';
 import '../../shared/widgets/notifikasi_widget.dart';
@@ -35,8 +35,7 @@ class DashboardLogistikPage extends StatefulWidget {
 
 class _DashboardLogistikPageState extends State<DashboardLogistikPage>
     with SingleTickerProviderStateMixin, SidebarMixin {
-  late Timer _timer;
-  DateTime _now = DateTime.now();
+  late final LiveClockController _clock;
 
   bool _isLoading = true;
   bool _hasError = false;
@@ -60,10 +59,7 @@ class _DashboardLogistikPageState extends State<DashboardLogistikPage>
   void initState() {
     super.initState();
     initSidebar(this);
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _now = DateTime.now());
-    });
+    _clock = LiveClockController();
 
     AppState.instance.userName.addListener(_onUserNameChanged);
     AppState.instance.dashboardRefreshTick.addListener(_onDashboardRefresh);
@@ -72,7 +68,7 @@ class _DashboardLogistikPageState extends State<DashboardLogistikPage>
 
   @override
   void dispose() {
-    _timer.cancel();
+    _clock.dispose();
     AppState.instance.userName.removeListener(_onUserNameChanged);
     AppState.instance.dashboardRefreshTick.removeListener(_onDashboardRefresh);
     disposeSidebar();
@@ -149,6 +145,20 @@ class _DashboardLogistikPageState extends State<DashboardLogistikPage>
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (_) => false,
+    );
+  }
+
+  void _openPengirimanPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ManajemenPengirimanPage()),
+    );
+  }
+
+  void _openKendaraanPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ManajemenKendaraanPage()),
     );
   }
 
@@ -251,7 +261,7 @@ class _DashboardLogistikPageState extends State<DashboardLogistikPage>
                 ? _ErrorState(onRetry: _loadDashboard, message: _errorMessage)
                 : _DashboardContent(
                     userName: greetingName,
-                    now: _now,
+                    clock: _clock,
                     formatDate: _formatDate,
                     formatTime: _formatTime,
                     summary: _summary,
@@ -261,6 +271,8 @@ class _DashboardLogistikPageState extends State<DashboardLogistikPage>
                     chartFilter: _chartFilter,
                     onChangeChartFilter: _changeChartFilter,
                     onMenuTap: openSidebar,
+                    onLihatSemuaPengirimanTap: _openPengirimanPage,
+                    onLihatSemuaArmadaTap: _openKendaraanPage,
                   ),
           ),
           ...buildSidebarLayer(
@@ -370,7 +382,7 @@ class _ErrorState extends StatelessWidget {
 
 class _DashboardContent extends StatelessWidget {
   final String userName;
-  final DateTime now;
+  final LiveClockController clock;
   final String Function(DateTime) formatDate;
   final String Function(DateTime) formatTime;
   final DashboardLogistikSummary summary;
@@ -380,10 +392,12 @@ class _DashboardContent extends StatelessWidget {
   final String chartFilter;
   final ValueChanged<String> onChangeChartFilter;
   final VoidCallback onMenuTap;
+  final VoidCallback onLihatSemuaPengirimanTap;
+  final VoidCallback onLihatSemuaArmadaTap;
 
   const _DashboardContent({
     required this.userName,
-    required this.now,
+    required this.clock,
     required this.formatDate,
     required this.formatTime,
     required this.summary,
@@ -393,61 +407,70 @@ class _DashboardContent extends StatelessWidget {
     required this.chartFilter,
     required this.onChangeChartFilter,
     required this.onMenuTap,
+    required this.onLihatSemuaPengirimanTap,
+    required this.onLihatSemuaArmadaTap,
   });
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    physics: const AlwaysScrollableScrollPhysics(),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _Header(
-          userName: userName,
-          now: now,
-          formatDate: formatDate,
-          formatTime: formatTime,
-          onMenuTap: onMenuTap,
-        ),
-        const SizedBox(height: 16),
-        _SummaryCards(summary: summary),
-        const SizedBox(height: 14),
-        _SectionCard(
-          title: 'Pengiriman Saya',
-          subtitle: 'Pengiriman yang ditugaskan kepada Anda',
-          child: _PengirimanSayaList(items: pengirimanSaya),
-        ),
-        const SizedBox(height: 12),
-        _SectionCard(
-          title: 'Daftar Armada / Kendaraan',
-          subtitle: 'Status armada saat ini',
-          child: _ArmadaList(items: armada),
-        ),
-        const SizedBox(height: 12),
-        _SectionCard(
-          title: 'Kinerja Pengiriman',
-          subtitle: 'Statistik pengiriman Anda $chartFilter terakhir',
-          child: _KinerjaChart(
-            data: chartData,
-            filter: chartFilter,
-            onFilterChanged: onChangeChartFilter,
+  Widget build(BuildContext context) {
+    final topPengirimanSaya = pengirimanSaya.take(10).toList();
+    final topArmada = armada.take(10).toList();
+
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Header(
+            userName: userName,
+            clock: clock,
+            formatDate: formatDate,
+            formatTime: formatTime,
+            onMenuTap: onMenuTap,
           ),
-        ),
-        const SizedBox(height: 28),
-      ],
-    ),
-  );
+          const SizedBox(height: 16),
+          _SummaryCards(summary: summary),
+          const SizedBox(height: 14),
+          _SectionCard(
+            title: 'Pengiriman Saya',
+            subtitle: 'Pengiriman yang ditugaskan kepada Anda',
+            onLihatSemua: onLihatSemuaPengirimanTap,
+            child: _PengirimanSayaList(items: topPengirimanSaya),
+          ),
+          const SizedBox(height: 12),
+          _SectionCard(
+            title: 'Daftar Armada / Kendaraan',
+            subtitle: 'Status armada saat ini',
+            onLihatSemua: onLihatSemuaArmadaTap,
+            child: _ArmadaList(items: topArmada),
+          ),
+          const SizedBox(height: 12),
+          _SectionCard(
+            title: 'Kinerja Pengiriman',
+            subtitle: 'Statistik pengiriman Anda $chartFilter terakhir',
+            child: _KinerjaChart(
+              data: chartData,
+              filter: chartFilter,
+              onFilterChanged: onChangeChartFilter,
+            ),
+          ),
+          const SizedBox(height: 28),
+        ],
+      ),
+    );
+  }
 }
 
 class _Header extends StatelessWidget {
   final String userName;
-  final DateTime now;
+  final LiveClockController clock;
   final String Function(DateTime) formatDate;
   final String Function(DateTime) formatTime;
   final VoidCallback onMenuTap;
 
   const _Header({
     required this.userName,
-    required this.now,
+    required this.clock,
     required this.formatDate,
     required this.formatTime,
     required this.onMenuTap,
@@ -507,47 +530,23 @@ class _Header extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
+                  const SizedBox(height: 20),
+                  ValueListenableBuilder<DateTime>(
+                    valueListenable: clock,
+                    builder: (context, now, child) => Row(
                       children: [
-                        const Icon(
-                          Icons.calendar_today_rounded,
-                          size: 14,
-                          color: Colors.white,
+                        _HeaderInfoCard(
+                          icon: Icons.calendar_today_rounded,
+                          iconBg: const Color(0xFF4A90D9),
+                          label: 'Tanggal',
+                          value: formatDate(now),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            formatDate(now),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const Icon(
-                          Icons.access_time_rounded,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          '${formatTime(now)} WIB',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        const SizedBox(width: 12),
+                        _HeaderInfoCard(
+                          icon: Icons.access_time_rounded,
+                          iconBg: const Color(0xFF38A169),
+                          label: 'Waktu',
+                          value: formatTime(now),
                         ),
                       ],
                     ),
@@ -562,106 +561,117 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _SummaryCards extends StatefulWidget {
+class _HeaderInfoCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final String label;
+  final String value;
+
+  const _HeaderInfoCard({
+    required this.icon,
+    required this.iconBg,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.08),
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconBg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: Colors.white, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D3748),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _SummaryCards extends StatelessWidget {
   final DashboardLogistikSummary summary;
 
   const _SummaryCards({required this.summary});
-
-  @override
-  State<_SummaryCards> createState() => _SummaryCardsState();
-}
-
-class _SummaryCardsState extends State<_SummaryCards> {
-  late final PageController _controller;
-  int _currentPage = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = PageController(viewportFraction: 0.86);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final cards = [
       _SummaryCardData(
         label: 'Pengiriman Hari Ini',
-        value: _fmtNum(widget.summary.pengirimanHariIni),
+        value: _fmtNum(summary.pengirimanHariIni),
         icon: Icons.today_rounded,
         color: const Color(0xFF4169E1),
       ),
       _SummaryCardData(
         label: 'Dalam Proses',
-        value: _fmtNum(widget.summary.pengirimanDalamProses),
+        value: _fmtNum(summary.pengirimanDalamProses),
         icon: Icons.local_shipping_rounded,
         color: const Color(0xFFF59E0B),
       ),
       _SummaryCardData(
         label: 'Barang Dikirim',
-        value: '${_fmtNum(widget.summary.barangDikirim)} unit',
+        value: '${_fmtNum(summary.barangDikirim)} unit',
         icon: Icons.inventory_2_rounded,
         color: const Color(0xFF10B981),
       ),
       _SummaryCardData(
         label: 'On Time Rate',
-        value: '${widget.summary.onTimeRate.toStringAsFixed(1)}%',
+        value: '${summary.onTimeRate.toStringAsFixed(1)}%',
         icon: Icons.timelapse_rounded,
         color: const Color(0xFF8B5CF6),
       ),
       _SummaryCardData(
         label: 'Armada Tersedia',
-        value: _fmtNum(widget.summary.armadaTersedia),
+        value: _fmtNum(summary.armadaTersedia),
         icon: Icons.directions_car_rounded,
         color: const Color(0xFF0EA5E9),
       ),
     ];
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          SizedBox(
-            height: 152,
-            child: PageView.builder(
-              controller: _controller,
-              itemCount: cards.length,
-              onPageChanged: (index) {
-                if (mounted) setState(() => _currentPage = index);
-              },
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: _SummaryCard(data: cards[index]),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(cards.length, (index) {
-              final active = index == _currentPage;
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                width: active ? 18 : 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  color: active
-                      ? const Color(0xFF4169E1)
-                      : const Color(0xFFD1D5DB),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-              );
-            }),
-          ),
-        ],
+    return SizedBox(
+      height: 120,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: cards.length,
+        itemBuilder: (context, index) {
+          return _SummaryCard(data: cards[index]);
+        },
       ),
     );
   }
@@ -699,6 +709,8 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: 160,
+      margin: const EdgeInsets.only(right: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -753,9 +765,15 @@ class _SummaryCard extends StatelessWidget {
 class _SectionCard extends StatelessWidget {
   final String title;
   final String? subtitle;
+  final VoidCallback? onLihatSemua;
   final Widget child;
 
-  const _SectionCard({required this.title, this.subtitle, required this.child});
+  const _SectionCard({
+    required this.title,
+    this.subtitle,
+    this.onLihatSemua,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -778,25 +796,58 @@ class _SectionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1F2937),
-              ),
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 2),
-              Text(
-                subtitle!,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade500,
-                  fontWeight: FontWeight.w500,
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1F2937),
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                if (onLihatSemua != null)
+                  GestureDetector(
+                    onTap: onLihatSemua,
+                    child: const Row(
+                      children: [
+                        Text(
+                          'Lihat semua',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF4169E1),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 14,
+                          color: Color(0xFF4169E1),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 12),
             child,
           ],
@@ -823,17 +874,6 @@ class _PengirimanSayaList extends StatelessWidget {
     return '$dd/$mm/${parsed.year} $hh:$mi';
   }
 
-  String _formatRupiah(int value) {
-    if (value <= 0) return 'Rp 0';
-    final text = value.toString();
-    final buffer = StringBuffer('Rp ');
-    for (int i = 0; i < text.length; i++) {
-      if (i > 0 && (text.length - i) % 3 == 0) buffer.write('.');
-      buffer.write(text[i]);
-    }
-    return buffer.toString();
-  }
-
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
@@ -847,7 +887,7 @@ class _PengirimanSayaList extends StatelessWidget {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     return Column(
-      children: sorted.take(8).map((item) {
+      children: sorted.take(10).map((item) {
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

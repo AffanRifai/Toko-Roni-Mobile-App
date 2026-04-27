@@ -613,7 +613,8 @@ class _ManajemenPenggunaPageState extends State<ManajemenPenggunaPage>
                 ],
               ),
             ),
-            const Divider(height: 16),
+            // const Divider(height: 16),
+            const SizedBox(height: 10),
 
             if (_isLoading)
               const Padding(
@@ -634,7 +635,7 @@ class _ManajemenPenggunaPageState extends State<ManajemenPenggunaPage>
                       Icon(
                         Icons.cloud_off_rounded,
                         size: 40,
-                        color: Colors.grey.shade400,
+                        color: const Color.fromARGB(255, 25, 117, 239),
                       ),
                       const SizedBox(height: 10),
                       const Text(
@@ -699,7 +700,7 @@ class _ManajemenPenggunaPageState extends State<ManajemenPenggunaPage>
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
                   headingRowColor: WidgetStateProperty.all(
-                    const Color(0xFFF7F8FA),
+                    const Color.fromARGB(255, 45, 108, 233),
                   ),
                   headingRowHeight: 42,
                   dataRowMinHeight: 60,
@@ -708,7 +709,7 @@ class _ManajemenPenggunaPageState extends State<ManajemenPenggunaPage>
                   headingTextStyle: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF4A5568),
+                    color: Color.fromARGB(255, 255, 255, 255),
                   ),
                   dataTextStyle: const TextStyle(
                     fontSize: 11,

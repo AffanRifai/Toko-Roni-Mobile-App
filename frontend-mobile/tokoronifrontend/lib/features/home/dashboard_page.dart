@@ -1,5 +1,4 @@
 // lib/home/beranda_page.dart
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tokoronifrontend/features/delivery/manajemen_pengiriman_page.dart';
 import 'package:tokoronifrontend/features/profile/profile_page.dart';
@@ -7,6 +6,7 @@ import 'package:tokoronifrontend/features/vehicle/manajemen_kendaraan_page.dart'
 import '../product/daftar_produk_page.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/dashboard_service.dart';
+import '../../core/ui/live_clock_controller.dart';
 import '../category/manajemen_kategori_page.dart';
 import '../auth/login_page.dart';
 import '../user/manajemen_pengguna_page.dart';
@@ -32,8 +32,7 @@ class BerandaPage extends StatefulWidget {
 
 class _BerandaPageState extends State<BerandaPage>
     with SingleTickerProviderStateMixin, SidebarMixin {
-  late Timer _timer;
-  late DateTime _now;
+  late final LiveClockController _clock;
 
   bool _isLoading = true;
   bool _hasError = false;
@@ -47,10 +46,7 @@ class _BerandaPageState extends State<BerandaPage>
   void initState() {
     super.initState();
     initSidebar(this);
-    _now = DateTime.now();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _now = DateTime.now());
-    });
+    _clock = LiveClockController();
     _guardAndLoad();
   }
 
@@ -118,7 +114,7 @@ class _BerandaPageState extends State<BerandaPage>
 
   @override
   void dispose() {
-    _timer.cancel();
+    _clock.dispose();
     disposeSidebar();
     super.dispose();
   }
@@ -215,7 +211,7 @@ class _BerandaPageState extends State<BerandaPage>
                 : _hasError
                 ? _ErrorState(onRetry: _loadAllData, message: _errorMessage)
                 : _BerandaContent(
-                    now: _now,
+                    clock: _clock,
                     formatDate: _formatDate,
                     formatTime: _formatTime,
                     onMenuTap: openSidebar,
@@ -331,7 +327,7 @@ class _ErrorState extends StatelessWidget {
 // BERANDA CONTENT
 // ════════════════════════════════════════════════════════════════════════════
 class _BerandaContent extends StatelessWidget {
-  final DateTime now;
+  final LiveClockController clock;
   final String Function(DateTime) formatDate;
   final String Function(DateTime) formatTime;
   final VoidCallback onMenuTap;
@@ -341,7 +337,7 @@ class _BerandaContent extends StatelessWidget {
   final List<TransaksiItem> transaksi;
 
   const _BerandaContent({
-    required this.now,
+    required this.clock,
     required this.formatDate,
     required this.formatTime,
     required this.onMenuTap,
@@ -358,7 +354,7 @@ class _BerandaContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _BerandaHeader(
-          now: now,
+          clock: clock,
           formatDate: formatDate,
           formatTime: formatTime,
           onMenuTap: onMenuTap,
@@ -408,13 +404,13 @@ class _BerandaContent extends StatelessWidget {
 // ── FIX: ProfileWidget.fromAuth() → nama/role/foto langsung dari database
 // ════════════════════════════════════════════════════════════════════════════
 class _BerandaHeader extends StatefulWidget {
-  final DateTime now;
+  final LiveClockController clock;
   final String Function(DateTime) formatDate;
   final String Function(DateTime) formatTime;
   final VoidCallback onMenuTap;
 
   const _BerandaHeader({
-    required this.now,
+    required this.clock,
     required this.formatDate,
     required this.formatTime,
     required this.onMenuTap,
@@ -503,22 +499,25 @@ class _BerandaHeaderState extends State<_BerandaHeader> {
                   const SizedBox(height: 20),
 
                   // ── Info tanggal & waktu ─────────────────────────────────────
-                  Row(
-                    children: [
-                      _InfoCard(
-                        icon: Icons.calendar_today_rounded,
-                        iconBg: const Color(0xFF4A90D9),
-                        label: 'Tanggal',
-                        value: widget.formatDate(widget.now),
-                      ),
-                      const SizedBox(width: 12),
-                      _InfoCard(
-                        icon: Icons.access_time_rounded,
-                        iconBg: Colors.green,
-                        label: 'Waktu',
-                        value: widget.formatTime(widget.now),
-                      ),
-                    ],
+                  ValueListenableBuilder<DateTime>(
+                    valueListenable: widget.clock,
+                    builder: (context, now, child) => Row(
+                      children: [
+                        _InfoCard(
+                          icon: Icons.calendar_today_rounded,
+                          iconBg: const Color(0xFF4A90D9),
+                          label: 'Tanggal',
+                          value: widget.formatDate(now),
+                        ),
+                        const SizedBox(width: 12),
+                        _InfoCard(
+                          icon: Icons.access_time_rounded,
+                          iconBg: Colors.green,
+                          label: 'Waktu',
+                          value: widget.formatTime(now),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -752,31 +751,41 @@ class _StokMenipisTable extends StatelessWidget {
         ),
         dataTextStyle: const TextStyle(fontSize: 12, color: Color(0xFF2D3748)),
         columns: const [
+          DataColumn(label: Text('NO')),
           DataColumn(label: Text('Produk')),
           DataColumn(label: Text('Kategori')),
           DataColumn(label: Text('Stok Min')),
           DataColumn(label: Text('Sisa Stok')),
         ],
-        rows: items
-            .map(
-              (item) => DataRow(
-                cells: [
-                  DataCell(Text(item.produk)),
-                  DataCell(Text(item.kategori)),
-                  DataCell(Text(item.stokMin.toString())),
-                  DataCell(
-                    Text(
-                      item.sisaStok.toString(),
-                      style: const TextStyle(
-                        color: Color(0xFFE53E3E),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+        rows: List.generate(items.length, (index) {
+          final item = items[index];
+          return DataRow(
+            cells: [
+              DataCell(
+                Text(
+                  '${index + 1}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF2D3748),
                   ),
-                ],
+                ),
               ),
-            )
-            .toList(),
+              DataCell(Text(item.produk)),
+              DataCell(Text(item.kategori)),
+              DataCell(Text(item.stokMin.toString())),
+              DataCell(
+                Text(
+                  item.sisaStok.toString(),
+                  style: const TextStyle(
+                    color: Color(0xFFE53E3E),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }),
       ),
     );
   }
@@ -810,45 +819,52 @@ class _KadaluarsaTable extends StatelessWidget {
         ),
         dataTextStyle: const TextStyle(fontSize: 11, color: Color(0xFF2D3748)),
         columns: const [
+          DataColumn(label: Text('NO')),
           DataColumn(label: Text('Produk')),
           DataColumn(label: Text('Kategori')),
           DataColumn(label: Text('Stok')),
           DataColumn(label: Text('Tgl Kadaluarsa')),
           DataColumn(label: Text('Sisa Hari')),
         ],
-        rows: items
-            .map(
-              (item) => DataRow(
-                cells: [
-                  DataCell(Text(item.produk)),
-                  DataCell(Text(item.kategori)),
-                  DataCell(Text(item.stok.toString())),
-                  DataCell(Text(item.tanggalKadaluarsa)),
-                  DataCell(
-                    item.isExpired
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE53E3E),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Text(
-                              'expired',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                              ),
-                            ),
-                          )
-                        : Text(item.sisaHari),
+        rows: List.generate(items.length, (index) {
+          final item = items[index];
+          return DataRow(
+            cells: [
+              DataCell(
+                Text(
+                  '${index + 1}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF2D3748),
                   ),
-                ],
+                ),
               ),
-            )
-            .toList(),
+              DataCell(Text(item.produk)),
+              DataCell(Text(item.kategori)),
+              DataCell(Text(item.stok.toString())),
+              DataCell(Text(item.tanggalKadaluarsa)),
+              DataCell(
+                item.isExpired
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE53E3E),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          'expired',
+                          style: TextStyle(color: Colors.white, fontSize: 11),
+                        ),
+                      )
+                    : Text(item.sisaHari),
+              ),
+            ],
+          );
+        }),
       ),
     );
   }
@@ -1463,7 +1479,12 @@ class _DonutPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_) => true;
+  bool shouldRepaint(covariant _DonutPainter oldDelegate) {
+    return oldDelegate.normal != normal ||
+        oldDelegate.hampirHabis != hampirHabis ||
+        oldDelegate.kritis != kritis ||
+        oldDelegate.total != total;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1494,46 +1515,56 @@ class _TransaksiTable extends StatelessWidget {
         ),
         dataTextStyle: const TextStyle(fontSize: 11, color: Color(0xFF2D3748)),
         columns: const [
+          DataColumn(label: Text('NO')),
           DataColumn(label: Text('Transaksi')),
           DataColumn(label: Text('Produk')),
           DataColumn(label: Text('Waktu')),
           DataColumn(label: Text('Total')),
           DataColumn(label: Text('Status')),
         ],
-        rows: items
-            .map(
-              (item) => DataRow(
-                cells: [
-                  DataCell(Text(item.id, style: const TextStyle(fontSize: 10))),
-                  DataCell(Text(item.produk)),
-                  DataCell(Text(item.waktu)),
-                  DataCell(Text(item.total)),
-                  DataCell(
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: item.isSuccess
-                            ? const Color(0xFF48BB78)
-                            : const Color(0xFFE53E3E),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        item.isSuccess ? 'success' : 'gagal',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+        rows: List.generate(items.length, (index) {
+          final item = items[index];
+          return DataRow(
+            cells: [
+              DataCell(
+                Text(
+                  '${index + 1}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF2D3748),
+                  ),
+                ),
+              ),
+              DataCell(Text(item.id, style: const TextStyle(fontSize: 10))),
+              DataCell(Text(item.produk)),
+              DataCell(Text(item.waktu)),
+              DataCell(Text(item.total)),
+              DataCell(
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: item.isSuccess
+                        ? const Color(0xFF48BB78)
+                        : const Color(0xFFE53E3E),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    item.isSuccess ? 'success' : 'gagal',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                ],
+                ),
               ),
-            )
-            .toList(),
+            ],
+          );
+        }),
       ),
     );
   }

@@ -700,7 +700,7 @@ class _ManajemenKendaraanPageState extends State<ManajemenKendaraanPage>
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
                     headingRowColor: WidgetStateProperty.all(
-                      const Color(0xFFF7F8FA),
+                      const Color.fromARGB(255, 79, 137, 255),
                     ),
                     headingRowHeight: 48,
                     dataRowMinHeight: 72,
@@ -709,13 +709,14 @@ class _ManajemenKendaraanPageState extends State<ManajemenKendaraanPage>
                     headingTextStyle: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF4A5568),
+                      color: Color.fromARGB(255, 255, 255, 255),
                     ),
                     dataTextStyle: const TextStyle(
                       fontSize: 12,
                       color: Color(0xFF2D3748),
                     ),
                     columns: [
+                      const DataColumn(label: Text('NO')),
                       const DataColumn(label: Text('KODE')),
                       const DataColumn(label: Text('KENDARAAN')),
                       const DataColumn(label: Text('PLAT')),
@@ -725,114 +726,121 @@ class _ManajemenKendaraanPageState extends State<ManajemenKendaraanPage>
                       if (!_isStaffLogistik)
                         const DataColumn(label: Text('AKSI')),
                     ],
-                    rows: list
-                        .map(
-                          (k) => DataRow(
-                            cells: [
-                              DataCell(
-                                Text(
-                                  k.kode,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                    rows: List.generate(list.length, (index) {
+                      final k = list[index];
+                      return DataRow(
+                        cells: [
+                          DataCell(
+                            Text(
+                              '${index + 1}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF2D3748),
                               ),
-                              DataCell(
-                                SizedBox(
-                                  width: 160,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        k.nama,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      if (k.warna.isNotEmpty ||
-                                          k.tahun.isNotEmpty) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          [k.warna, k.tahun]
-                                              .where((s) => s.isNotEmpty)
-                                              .join(' | '),
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey.shade500,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              DataCell(
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: Colors.grey.shade300,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    k.platNomor,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              DataCell(_jenisBadge(k.jenis)),
-                              DataCell(
-                                Text(
-                                  k.tanggalMaintenance,
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ),
-                              DataCell(_statusBadge(k.status)),
-                              if (!_isStaffLogistik)
-                                DataCell(
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      _AksiBtn(
-                                        icon: Icons.visibility_rounded,
-                                        color: const Color(0xFF4169E1),
-                                        label: 'Detail',
-                                        onTap: () => _goDetail(k),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      _AksiBtn(
-                                        icon: Icons.edit_rounded,
-                                        color: const Color(0xFF48BB78),
-                                        label: 'Edit',
-                                        onTap: () => _goEdit(k),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      _AksiBtn(
-                                        icon: Icons.delete_rounded,
-                                        color: const Color(0xFFE53E3E),
-                                        label: 'Hapus',
-                                        onTap: () => _hapus(k),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
+                            ),
                           ),
-                        )
-                        .toList(),
+                          DataCell(
+                            Text(
+                              k.kode,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: 160,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    k.nama,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (k.warna.isNotEmpty ||
+                                      k.tahun.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      [
+                                        k.warna,
+                                        k.tahun,
+                                      ].where((s) => s.isNotEmpty).join(' | '),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey.shade500,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Text(
+                                k.platNomor,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(_jenisBadge(k.jenis)),
+                          DataCell(
+                            Text(
+                              k.tanggalMaintenance,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          DataCell(_statusBadge(k.status)),
+                          if (!_isStaffLogistik)
+                            DataCell(
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _AksiBtn(
+                                    icon: Icons.visibility_rounded,
+                                    color: const Color(0xFF4169E1),
+                                    label: 'Detail',
+                                    onTap: () => _goDetail(k),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _AksiBtn(
+                                    icon: Icons.edit_rounded,
+                                    color: const Color(0xFF48BB78),
+                                    label: 'Edit',
+                                    onTap: () => _goEdit(k),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _AksiBtn(
+                                    icon: Icons.delete_rounded,
+                                    color: const Color(0xFFE53E3E),
+                                    label: 'Hapus',
+                                    onTap: () => _hapus(k),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      );
+                    }),
                   ),
                 ),
         ),

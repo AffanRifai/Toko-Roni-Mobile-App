@@ -391,6 +391,7 @@ class _AppSidebarState extends State<AppSidebar> {
 
   @override
   Widget build(BuildContext context) {
+    final menus = _menusByRole();
     return Container(
       width: MediaQuery.of(context).size.width * 0.78,
       height: double.infinity,
@@ -493,10 +494,12 @@ class _AppSidebarState extends State<AppSidebar> {
             // ── Menu list ──
             Expanded(
               child: RepaintBoundary(
-                child: ListView(
+                child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   physics: const BouncingScrollPhysics(),
-                  children: _menusByRole().map((label) {
+                  itemCount: menus.length,
+                  itemBuilder: (_, index) {
+                    final label = menus[index];
                     final icon = AppSidebar._menuIcons[label] ?? Icons.circle;
                     return AppSidebarItem(
                       label: label,
@@ -504,7 +507,7 @@ class _AppSidebarState extends State<AppSidebar> {
                       isActive: label == widget.activeMenu,
                       onTap: () => widget.onMenuTap(label),
                     );
-                  }).toList(),
+                  },
                 ),
               ),
             ),

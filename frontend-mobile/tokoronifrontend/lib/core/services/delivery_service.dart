@@ -169,11 +169,17 @@ class DeliveryService {
     final list = _extractList(parsed['data']).isNotEmpty
         ? _extractList(parsed['data'])
         : _extractList(parsed);
-    return list
+    final options = list
         .map(_asMap)
         .where((e) => e.isNotEmpty)
         .map(DeliveryDriverOption.fromJson)
         .toList();
+    final byId = <int, DeliveryDriverOption>{};
+    for (final option in options) {
+      if (option.id <= 0) continue;
+      byId.putIfAbsent(option.id, () => option);
+    }
+    return byId.values.toList();
   }
 
   static Future<List<DeliveryVehicleOption>> getAvailableVehicles() async {
@@ -194,11 +200,17 @@ class DeliveryService {
     final list = _extractList(parsed['data']).isNotEmpty
         ? _extractList(parsed['data'])
         : _extractList(parsed);
-    return list
+    final options = list
         .map(_asMap)
         .where((e) => e.isNotEmpty)
         .map(DeliveryVehicleOption.fromJson)
         .toList();
+    final byId = <int, DeliveryVehicleOption>{};
+    for (final option in options) {
+      if (option.id <= 0) continue;
+      byId.putIfAbsent(option.id, () => option);
+    }
+    return byId.values.toList();
   }
 
   static Future<List<DeliveryInvoiceOption>> searchTransactions({
