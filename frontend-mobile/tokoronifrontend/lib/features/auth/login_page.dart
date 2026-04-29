@@ -145,7 +145,7 @@ class _LoginPageState extends State<LoginPage> {
             child: Center(
               child: SingleChildScrollView(
                 keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
+                    ScrollViewKeyboardDismissBehavior.manual,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: ConstrainedBox(

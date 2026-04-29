@@ -1,4 +1,6 @@
 // lib/product/daftar_produk_page.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:tokoronifrontend/features/delivery/manajemen_pengiriman_page.dart';
 import 'package:tokoronifrontend/features/profile/profile_page.dart';
@@ -42,9 +44,28 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
   String _errorMessage = '';
 
   final _searchCtrl = TextEditingController();
+  Timer? _searchDebounce;
+  String _searchQuery = '';
   String _filterKategori = 'Semua kategori';
   String _filterStatus = 'Semua status';
   String _filterStok = 'Semua stok';
+
+  int _dataRevision = 0;
+  int _filteredCacheRevision = -1;
+  String _filteredCacheQuery = '';
+  String _filteredCacheKategori = '';
+  String _filteredCacheStatus = '';
+  String _filteredCacheStok = '';
+  List<ProdukItem> _filteredCache = const [];
+  static const int _initialRenderedRows = 24;
+  static const int _renderedRowsStep = 24;
+  int _maxRenderedRows = _initialRenderedRows;
+
+  int _kategoriOptionsCacheRevision = -1;
+  List<String> _kategoriOptionsCache = const ['Semua kategori'];
+  int _kategoriStatsCacheRevision = -1;
+  Map<String, int> _kategoriProdukCountCache = const {};
+  Set<String> _kategoriHasProdukCache = const {};
 
   String get _currentRole => AppState.instance.userRole.value;
   bool get _isProdukReadOnly => RoleAccess.isProdukReadOnlyRole(_currentRole);
@@ -52,6 +73,7 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
   @override
   void initState() {
     super.initState();
+    _searchQuery = _searchCtrl.text.trim().toLowerCase();
     initSidebar(this);
     _produkList = [];
     _kategoriList = [];
@@ -60,6 +82,7 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     disposeSidebar();
     _searchCtrl.dispose();
     super.dispose();
@@ -85,6 +108,7 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
       setState(() {
         _produkList = bundle.products;
         _kategoriList = categories;
+        _bumpDataRevision();
         if (!kategoriOptions.contains(_filterKategori)) {
           _filterKategori = 'Semua kategori';
         }
@@ -112,44 +136,122 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
   }
 
   // ── Filter ────────────────────────────────────────────────────────────────
-  List<ProdukItem> get _filtered => _produkList.where((p) {
-    final q = _searchCtrl.text.trim().toLowerCase();
-    final matchSearch =
-        q.isEmpty ||
-        p.nama.toLowerCase().contains(q) ||
-        p.kode.toLowerCase().contains(q);
-    final matchKat =
-        _filterKategori == 'Semua kategori' || p.kategori == _filterKategori;
-    final matchStatus =
-        _filterStatus == 'Semua status' ||
-        (_filterStatus == 'Aktif' && p.aktif) ||
-        (_filterStatus == 'Nonaktif' && !p.aktif);
-    final matchStok =
-        _filterStok == 'Semua stok' ||
-        (_filterStok == 'Stok Habis' && p.stok == 0) ||
-        (_filterStok == 'Stok Rendah' && p.stok > 0 && p.stok < 20) ||
-        (_filterStok == 'Stok Normal' && p.stok >= 20);
-    return matchSearch && matchKat && matchStatus && matchStok;
-  }).toList();
+  List<ProdukItem> get _filtered {
+    final canUseCache =
+        _filteredCacheRevision == _dataRevision &&
+        _filteredCacheQuery == _searchQuery &&
+        _filteredCacheKategori == _filterKategori &&
+        _filteredCacheStatus == _filterStatus &&
+        _filteredCacheStok == _filterStok;
+    if (canUseCache) return _filteredCache;
+
+    final q = _searchQuery;
+    _filteredCache = _produkList
+        .where((p) {
+          final matchSearch =
+              q.isEmpty ||
+              p.nama.toLowerCase().contains(q) ||
+              p.kode.toLowerCase().contains(q);
+          final matchKat =
+              _filterKategori == 'Semua kategori' ||
+              p.kategori == _filterKategori;
+          final matchStatus =
+              _filterStatus == 'Semua status' ||
+              (_filterStatus == 'Aktif' && p.aktif) ||
+              (_filterStatus == 'Nonaktif' && !p.aktif);
+          final matchStok =
+              _filterStok == 'Semua stok' ||
+              (_filterStok == 'Stok Habis' && p.stok == 0) ||
+              (_filterStok == 'Stok Rendah' && p.stok > 0 && p.stok < 20) ||
+              (_filterStok == 'Stok Normal' && p.stok >= 20);
+          return matchSearch && matchKat && matchStatus && matchStok;
+        })
+        .toList(growable: false);
+
+    _filteredCacheRevision = _dataRevision;
+    _filteredCacheQuery = _searchQuery;
+    _filteredCacheKategori = _filterKategori;
+    _filteredCacheStatus = _filterStatus;
+    _filteredCacheStok = _filterStok;
+    return _filteredCache;
+  }
 
   List<String> get _kategoriOptions {
+    if (_kategoriOptionsCacheRevision == _dataRevision) {
+      return _kategoriOptionsCache;
+    }
     final set = <String>{
       ..._produkList.map((p) => p.kategori.trim()),
       ..._kategoriList.map((k) => k.nama.trim()),
     }..removeWhere((e) => e.isEmpty || e == '-');
     final list = set.toList()..sort();
-    return ['Semua kategori', ...list];
+    _kategoriOptionsCache = ['Semua kategori', ...list];
+    _kategoriOptionsCacheRevision = _dataRevision;
+    return _kategoriOptionsCache;
   }
 
-  bool _kategoriHasProduk(String nama) =>
-      _produkList.any((p) => p.kategori == nama);
+  bool _kategoriHasProduk(String nama) {
+    _ensureKategoriStatsCache();
+    return _kategoriHasProdukCache.contains(nama);
+  }
+
+  int _kategoriProdukCount(String nama) {
+    _ensureKategoriStatsCache();
+    return _kategoriProdukCountCache[nama] ?? 0;
+  }
 
   void _resetFilter() => setState(() {
     _searchCtrl.clear();
+    _searchQuery = '';
     _filterKategori = 'Semua kategori';
     _filterStatus = 'Semua status';
     _filterStok = 'Semua stok';
+    _invalidateFilteredCache();
+    _maxRenderedRows = _initialRenderedRows;
   });
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    final normalized = value.trim().toLowerCase();
+
+    _searchDebounce = Timer(const Duration(milliseconds: 120), () {
+      if (!mounted || normalized == _searchQuery) return;
+      setState(() {
+        _searchQuery = normalized;
+        _invalidateFilteredCache();
+        _maxRenderedRows = _initialRenderedRows;
+      });
+    });
+  }
+
+  void _bumpDataRevision() {
+    _dataRevision++;
+    _invalidateDerivedCaches();
+    _maxRenderedRows = _initialRenderedRows;
+  }
+
+  void _invalidateFilteredCache() {
+    _filteredCacheRevision = -1;
+  }
+
+  void _invalidateDerivedCaches() {
+    _filteredCacheRevision = -1;
+    _kategoriOptionsCacheRevision = -1;
+    _kategoriStatsCacheRevision = -1;
+  }
+
+  void _ensureKategoriStatsCache() {
+    if (_kategoriStatsCacheRevision == _dataRevision) return;
+    final countMap = <String, int>{};
+    for (final p in _produkList) {
+      final key = p.kategori;
+      if (key.isEmpty || key == '-') continue;
+      countMap.update(key, (value) => value + 1, ifAbsent: () => 1);
+    }
+    _kategoriProdukCountCache = Map.unmodifiable(countMap);
+    _kategoriHasProdukCache = Set.unmodifiable(countMap.keys);
+    _kategoriStatsCacheRevision = _dataRevision;
+  }
 
   String _rupiah(int n) {
     final s = n.toString();
@@ -221,6 +323,8 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
     final hargaText = _rupiah(p.harga);
     return Text(
       hargaText,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       style: TextStyle(
         fontSize: 11,
         color: p.harga > 0 ? const Color(0xFF2D3748) : Colors.grey.shade600,
@@ -238,6 +342,8 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
       children: [
         Text(
           tgl,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 11, color: Color(0xFF2D3748)),
         ),
         if (alert != null) ...[
@@ -269,7 +375,7 @@ class _DaftarProdukPageState extends State<DaftarProdukPage>
       return;
     }
     Widget? page;
-switch (menu) {
+    switch (menu) {
       case 'Dashboard':
         page = DashboardRouter.pageForCurrentUser();
         break;
@@ -305,14 +411,48 @@ switch (menu) {
         break;
     }
     if (page != null) {
-      closeSidebarThenNavigate(
-        () => Navigator.push(context, MaterialPageRoute(builder: (_) => page!)),
-      );
+      FocusManager.instance.primaryFocus?.unfocus();
+      closeSidebarThenNavigate(() {
+        _releaseHeavyContentForBackground();
+        Navigator.push(context, MaterialPageRoute(builder: (_) => page!)).then((
+          _,
+        ) {
+          if (!mounted || _produkList.isNotEmpty || _kategoriList.isNotEmpty) {
+            return;
+          }
+          _loadAllData();
+        });
+      });
     }
+  }
+
+  void _releaseHeavyContentForBackground() {
+    if (_produkList.isEmpty &&
+        _kategoriList.isEmpty &&
+        _filteredCache.isEmpty) {
+      return;
+    }
+    _searchDebounce?.cancel();
+    setState(() {
+      _produkList = [];
+      _kategoriList = [];
+      _filteredCache = const [];
+      _filteredCacheRevision = -1;
+      _kategoriOptionsCacheRevision = -1;
+      _kategoriStatsCacheRevision = -1;
+      _kategoriOptionsCache = const ['Semua kategori'];
+      _kategoriProdukCountCache = const {};
+      _kategoriHasProdukCache = const {};
+      _isLoading = true;
+      _hasError = false;
+      _errorMessage = '';
+      _maxRenderedRows = _initialRenderedRows;
+    });
   }
 
   // ── Dialogs ───────────────────────────────────────────────────────────────
   void _showDetailModal(ProdukItem p) {
+    FocusManager.instance.primaryFocus?.unfocus();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -322,6 +462,7 @@ switch (menu) {
   }
 
   void _showHapusProdukDialog(ProdukItem p) {
+    FocusManager.instance.primaryFocus?.unfocus();
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -355,6 +496,7 @@ switch (menu) {
   }
 
   void _showHapusKategoriDialog(KategoriItem k) {
+    FocusManager.instance.primaryFocus?.unfocus();
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -373,7 +515,10 @@ switch (menu) {
           ),
           ElevatedButton(
             onPressed: () {
-              setState(() => _kategoriList.remove(k));
+              setState(() {
+                _kategoriList.remove(k);
+                _bumpDataRevision();
+              });
               Navigator.pop(context);
               _showSnack('Kategori "${k.nama}" dihapus', Colors.red);
             },
@@ -408,6 +553,7 @@ switch (menu) {
   Widget build(BuildContext context) {
     final filtered = _filtered;
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: const Color(0xFFF3F4F8),
       body: Stack(
         children: [
@@ -427,7 +573,10 @@ switch (menu) {
 
   Future<void> _deleteProduk(ProdukItem p) async {
     if (p.id == null) {
-      setState(() => _produkList.remove(p));
+      setState(() {
+        _produkList.remove(p);
+        _bumpDataRevision();
+      });
       _showSnack(
         'Produk "${p.nama}" dihapus lokal (mode offline).',
         const Color(0xFFE53E3E),
@@ -437,7 +586,10 @@ switch (menu) {
     try {
       await ProductService.deleteProduct(productId: p.id!);
       if (!mounted) return;
-      setState(() => _produkList.removeWhere((e) => e.id == p.id));
+      setState(() {
+        _produkList.removeWhere((e) => e.id == p.id);
+        _bumpDataRevision();
+      });
       _showSnack(
         'Produk "${p.nama}" berhasil dihapus',
         const Color(0xFFE53E3E),
@@ -454,10 +606,11 @@ switch (menu) {
   Widget _buildPageContent(List<ProdukItem> filtered) {
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(),
+          RepaintBoundary(child: _buildHeader()),
           const SizedBox(height: 16),
           if (_hasError) _buildSyncWarning(),
           _buildSummaryCards(),
@@ -481,6 +634,7 @@ switch (menu) {
     onRefresh: _loadAllData,
     child: SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
       child: SizedBox(
         height:
             MediaQuery.of(context).size.height -
@@ -507,6 +661,7 @@ switch (menu) {
     onRefresh: _loadAllData,
     child: SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
       child: SizedBox(
         height:
             MediaQuery.of(context).size.height -
@@ -567,7 +722,9 @@ switch (menu) {
         decoration: BoxDecoration(
           color: const Color(0xFFFFF7E6),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFF6AD55).withOpacity(0.5)),
+          border: Border.all(
+            color: const Color(0xFFF6AD55).withValues(alpha: 0.5),
+          ),
         ),
         child: Row(
           children: [
@@ -735,7 +892,7 @@ switch (menu) {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -758,7 +915,10 @@ switch (menu) {
                 Expanded(
                   child: TextField(
                     controller: _searchCtrl,
-                    onChanged: (_) => setState(() {}),
+                    onChanged: _onSearchChanged,
+                    onSubmitted: (_) =>
+                        FocusManager.instance.primaryFocus?.unfocus(),
+                    textInputAction: TextInputAction.search,
                     decoration: InputDecoration(
                       hintText: 'Cari nama, kode',
                       hintStyle: TextStyle(
@@ -782,7 +942,7 @@ switch (menu) {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: () => setState(() {}),
+                  onPressed: () => FocusScope.of(context).unfocus(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4169E1),
                     shape: RoundedRectangleBorder(
@@ -809,19 +969,35 @@ switch (menu) {
                 _dd(
                   _filterKategori,
                   _kategoriOptions,
-                  (v) => setState(() => _filterKategori = v!),
+                  (v) => setState(() {
+                    _filterKategori = v!;
+                    _invalidateFilteredCache();
+                    _maxRenderedRows = _initialRenderedRows;
+                  }),
                 ),
-                _dd(_filterStatus, const [
-                  'Semua status',
-                  'Aktif',
-                  'Nonaktif',
-                ], (v) => setState(() => _filterStatus = v!)),
-                _dd(_filterStok, const [
-                  'Semua stok',
-                  'Stok Normal',
-                  'Stok Rendah',
-                  'Stok Habis',
-                ], (v) => setState(() => _filterStok = v!)),
+                _dd(
+                  _filterStatus,
+                  const ['Semua status', 'Aktif', 'Nonaktif'],
+                  (v) => setState(() {
+                    _filterStatus = v!;
+                    _invalidateFilteredCache();
+                    _maxRenderedRows = _initialRenderedRows;
+                  }),
+                ),
+                _dd(
+                  _filterStok,
+                  const [
+                    'Semua stok',
+                    'Stok Normal',
+                    'Stok Rendah',
+                    'Stok Habis',
+                  ],
+                  (v) => setState(() {
+                    _filterStok = v!;
+                    _invalidateFilteredCache();
+                    _maxRenderedRows = _initialRenderedRows;
+                  }),
+                ),
                 SizedBox(
                   height: 44,
                   child: OutlinedButton.icon(
@@ -886,6 +1062,8 @@ switch (menu) {
           Expanded(
             child: ElevatedButton.icon(
               onPressed: () async {
+                FocusManager.instance.primaryFocus?.unfocus();
+                _releaseHeavyContentForBackground();
                 await Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const TambahKategoriPage()),
@@ -915,6 +1093,8 @@ switch (menu) {
           Expanded(
             child: ElevatedButton.icon(
               onPressed: () async {
+                FocusManager.instance.primaryFocus?.unfocus();
+                _releaseHeavyContentForBackground();
                 await Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const TambahProdukPage()),
@@ -947,6 +1127,12 @@ switch (menu) {
 
   // ── DAFTAR PRODUK ─────────────────────────────────────────────────────────
   Widget _buildProdukSection(List<ProdukItem> filtered) {
+    final visibleCount = filtered.length < _maxRenderedRows
+        ? filtered.length
+        : _maxRenderedRows;
+    final visibleItems = filtered.take(visibleCount).toList(growable: false);
+    final canLoadMore = visibleCount < filtered.length;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -961,210 +1147,59 @@ switch (menu) {
             ),
           ),
           const SizedBox(height: 12),
-          if (filtered.isEmpty)
+          if (visibleItems.isEmpty)
             _buildEmptyState()
           else
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  headingRowColor: WidgetStateProperty.all(
-                    const Color.fromARGB(255, 74, 134, 255),
-                  ),
-                  headingRowHeight: 44,
-                  dataRowMinHeight: 58,
-                  dataRowMaxHeight: 76,
-                  columnSpacing: 16,
-                  headingTextStyle: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Color.fromARGB(255, 255, 255, 255),
-                  ),
-                  dataTextStyle: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF2D3748),
-                  ),
-                  columns: const [
-                    DataColumn(label: Text('No')),
-                    DataColumn(label: Text('Kode Produk')),
-                    DataColumn(label: Text('Produk')),
-                    DataColumn(label: Text('Kategori')),
-                    DataColumn(label: Text('Jenis')),
-                    DataColumn(label: Text('Harga Jual')),
-                    DataColumn(label: Text('Stok')),
-                    DataColumn(label: Text('Kadaluarsa')),
-                    DataColumn(label: Text('Status')),
-                    DataColumn(label: Text('Ketersediaan')),
-                    DataColumn(label: Text('Aksi')),
+            RepaintBoundary(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
                   ],
-                  rows: List.generate(filtered.length, (i) {
-                    final p = filtered[i];
-                    final stokColor = p.stok == 0
-                        ? const Color(0xFFE53E3E)
-                        : p.stok < 20
-                        ? const Color(0xFFECC94B)
-                        : const Color(0xFF48BB78);
-                    return DataRow(
-                      cells: [
-                        DataCell(Text('${i + 1}')),
-                        DataCell(
-                          Text(p.kode, style: const TextStyle(fontSize: 10)),
-                        ),
-                        DataCell(
-                          SizedBox(
-                            width: 130,
-                            child: Text(
-                              p.nama,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                        DataCell(Text(p.kategori)),
-                        DataCell(Text(p.jenis)),
-                        DataCell(_buildHargaCell(p)),
-                        DataCell(
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: stokColor.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${p.stok}',
-                              style: TextStyle(
-                                color: stokColor,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                        DataCell(_buildKadaluarsaCell(p)),
-                        DataCell(
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: p.aktif
-                                  ? const Color(0xFF48BB78).withOpacity(0.12)
-                                  : Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              p.aktif ? 'Aktif' : 'Nonaktif',
-                              style: TextStyle(
-                                color: p.aktif
-                                    ? const Color(0xFF48BB78)
-                                    : Colors.grey,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
-                        ),
-                        DataCell(
-                          p.stok > 0
-                              ? Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF4169E1,
-                                    ).withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Text(
-                                    'Tersedia',
-                                    style: TextStyle(
-                                      color: Color(0xFF4169E1),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                )
-                              : Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFFE53E3E,
-                                    ).withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Text(
-                                    'Habis',
-                                    style: TextStyle(
-                                      color: Color(0xFFE53E3E),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                        ),
-                        DataCell(
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _AksiBtn(
-                                icon: Icons.visibility_rounded,
-                                color: const Color(0xFF4169E1),
-                                label: 'Detail',
-                                onTap: () => _showDetailModal(p),
-                              ),
-                              if (!_isProdukReadOnly) ...[
-                                const SizedBox(width: 8),
-                                _AksiBtn(
-                                  icon: Icons.edit_rounded,
-                                  color: const Color(0xFFD69E2E),
-                                  label: 'Edit',
-                                  onTap: () async {
-                                    await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            EditProdukPage(produk: p),
-                                      ),
-                                    );
-                                    if (mounted) _loadAllData();
-                                  },
-                                ),
-                                const SizedBox(width: 8),
-                                _AksiBtn(
-                                  icon: Icons.delete_rounded,
-                                  color: const Color(0xFFE53E3E),
-                                  label: 'Hapus',
-                                  onTap: () => _showHapusProdukDialog(p),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
+                ),
+                child: _ProdukRowsViewport(
+                  items: visibleItems,
+                  isReadOnly: _isProdukReadOnly,
+                  hargaBuilder: _buildHargaCell,
+                  kadaluarsaBuilder: _buildKadaluarsaCell,
+                  onDetail: _showDetailModal,
+                  onEdit: (p) async {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    _releaseHeavyContentForBackground();
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditProdukPage(produk: p),
+                      ),
                     );
-                  }),
+                    if (mounted) _loadAllData();
+                  },
+                  onDelete: _showHapusProdukDialog,
                 ),
               ),
             ),
+          if (canLoadMore) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.center,
+              child: OutlinedButton.icon(
+                onPressed: () => setState(() {
+                  _maxRenderedRows += _renderedRowsStep;
+                }),
+                icon: const Icon(Icons.expand_more_rounded, size: 18),
+                label: Text(
+                  'Muat lebih banyak ($visibleCount/${filtered.length})',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1260,127 +1295,130 @@ switch (menu) {
           ),
 
           // ← ListView 1 kolom penuh (bukan GridView 2 kolom)
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _kategoriList.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (_, i) {
-              final k = _kategoriList[i];
-              final hasProduk = _kategoriHasProduk(k.nama);
-              final jumlah = _produkList
-                  .where((p) => p.kategori == k.nama)
-                  .length;
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    // Icon kategori
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4169E1).withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.label_rounded,
-                        color: Color(0xFF4169E1),
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Nama + jumlah produk
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            k.nama,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF2D3748),
+          const SizedBox(height: 10),
+          RepaintBoundary(
+            child: Column(
+              children: [
+                for (var i = 0; i < _kategoriList.length; i++) ...[
+                  Builder(
+                    builder: (_) {
+                      final k = _kategoriList[i];
+                      final hasProduk = _kategoriHasProduk(k.nama);
+                      final jumlah = _kategoriProdukCount(k.nama);
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
                             ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            '$jumlah produk',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Action buttons sejajar horizontal
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (!_isProdukReadOnly) ...[
-                          _KatBtn(
-                            icon: Icons.edit_rounded,
-                            color: const Color(0xFFD69E2E),
-                            label: 'edit',
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => EditKategoriPage(
-                                  // Konversi KategoriItem → KategoriData saat navigasi
-                                  kategori: KategoriData(
-                                    id: k.id ?? 0,
-                                    nama: k.nama,
-                                    slug: k.nama.toLowerCase().replaceAll(
-                                      ' ',
-                                      '-',
-                                    ),
-                                    deskripsi: k.deskripsi,
-                                    aktif: true,
-                                    totalProduk: _produkList
-                                        .where((p) => p.kategori == k.nama)
-                                        .length,
-                                    terakhirDiperbarui: '-',
-                                  ),
-                                ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            // Icon kategori
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(
+                                  0xFF4169E1,
+                                ).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.label_rounded,
+                                color: Color(0xFF4169E1),
+                                size: 22,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          _KatBtn(
-                            icon: Icons.delete_rounded,
-                            color: hasProduk
-                                ? Colors.grey.shade300
-                                : const Color(0xFFE53E3E),
-                            label: 'hapus',
-                            disabled: hasProduk,
-                            onTap: hasProduk
-                                ? () => _showSnack(
-                                    'Kategori tidak bisa dihapus karena masih punya produk',
-                                    const Color(0xFFE53E3E),
-                                  )
-                                : () => _showHapusKategoriDialog(k),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
+                            const SizedBox(width: 12),
+                            // Nama + jumlah produk
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    k.nama,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF2D3748),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    '$jumlah produk',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Action buttons sejajar horizontal
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (!_isProdukReadOnly) ...[
+                                  _KatBtn(
+                                    icon: Icons.edit_rounded,
+                                    color: const Color(0xFFD69E2E),
+                                    label: 'edit',
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => EditKategoriPage(
+                                          // Konversi KategoriItem → KategoriData saat navigasi
+                                          kategori: KategoriData(
+                                            id: k.id ?? 0,
+                                            nama: k.nama,
+                                            slug: k.nama
+                                                .toLowerCase()
+                                                .replaceAll(' ', '-'),
+                                            deskripsi: k.deskripsi,
+                                            aktif: true,
+                                            totalProduk: jumlah,
+                                            terakhirDiperbarui: '-',
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _KatBtn(
+                                    icon: Icons.delete_rounded,
+                                    color: hasProduk
+                                        ? Colors.grey.shade300
+                                        : const Color(0xFFE53E3E),
+                                    label: 'hapus',
+                                    disabled: hasProduk,
+                                    onTap: hasProduk
+                                        ? () => _showSnack(
+                                            'Kategori tidak bisa dihapus karena masih punya produk',
+                                            const Color(0xFFE53E3E),
+                                          )
+                                        : () => _showHapusKategoriDialog(k),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  if (i != _kategoriList.length - 1) const SizedBox(height: 10),
+                ],
+              ],
+            ),
           ),
         ],
       ),
@@ -1391,6 +1429,355 @@ switch (menu) {
 // ════════════════════════════════════════════════════════════════════════════
 // DETAIL MODAL
 // ════════════════════════════════════════════════════════════════════════════
+class _ProdukRowsViewport extends StatelessWidget {
+  final List<ProdukItem> items;
+  final bool isReadOnly;
+  final Widget Function(ProdukItem) hargaBuilder;
+  final Widget Function(ProdukItem) kadaluarsaBuilder;
+  final ValueChanged<ProdukItem> onDetail;
+  final ValueChanged<ProdukItem> onEdit;
+  final ValueChanged<ProdukItem> onDelete;
+
+  const _ProdukRowsViewport({
+    required this.items,
+    required this.isReadOnly,
+    required this.hargaBuilder,
+    required this.kadaluarsaBuilder,
+    required this.onDetail,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  static const double _tableWidth = 1212;
+  static const double _noWidth = 52;
+  static const double _kodeWidth = 110;
+  static const double _produkWidth = 150;
+  static const double _kategoriWidth = 128;
+  static const double _jenisWidth = 84;
+  static const double _hargaWidth = 112;
+  static const double _stokWidth = 76;
+  static const double _kadaluarsaWidth = 132;
+  static const double _statusWidth = 96;
+  static const double _ketersediaanWidth = 114;
+  static const double _aksiWidth = 158;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+      child: SizedBox(
+        width: _tableWidth,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const _ProdukHeaderRow(),
+            for (var i = 0; i < items.length; i++)
+              _ProdukDataRow(
+                index: i + 1,
+                produk: items[i],
+                isReadOnly: isReadOnly,
+                hargaBuilder: hargaBuilder,
+                kadaluarsaBuilder: kadaluarsaBuilder,
+                onDetail: () => onDetail(items[i]),
+                onEdit: () => onEdit(items[i]),
+                onDelete: () => onDelete(items[i]),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProdukHeaderRow extends StatelessWidget {
+  const _ProdukHeaderRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      color: const Color.fromARGB(255, 74, 134, 255),
+      child: const Row(
+        children: [
+          _ProdukHeaderCell('No', width: _ProdukRowsViewport._noWidth),
+          _ProdukHeaderCell(
+            'Kode Produk',
+            width: _ProdukRowsViewport._kodeWidth,
+          ),
+          _ProdukHeaderCell('Produk', width: _ProdukRowsViewport._produkWidth),
+          _ProdukHeaderCell(
+            'Kategori',
+            width: _ProdukRowsViewport._kategoriWidth,
+          ),
+          _ProdukHeaderCell('Jenis', width: _ProdukRowsViewport._jenisWidth),
+          _ProdukHeaderCell(
+            'Harga Jual',
+            width: _ProdukRowsViewport._hargaWidth,
+          ),
+          _ProdukHeaderCell('Stok', width: _ProdukRowsViewport._stokWidth),
+          _ProdukHeaderCell(
+            'Kadaluarsa',
+            width: _ProdukRowsViewport._kadaluarsaWidth,
+          ),
+          _ProdukHeaderCell('Status', width: _ProdukRowsViewport._statusWidth),
+          _ProdukHeaderCell(
+            'Ketersediaan',
+            width: _ProdukRowsViewport._ketersediaanWidth,
+          ),
+          _ProdukHeaderCell('Aksi', width: _ProdukRowsViewport._aksiWidth),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProdukHeaderCell extends StatelessWidget {
+  final String text;
+  final double width;
+
+  const _ProdukHeaderCell(this.text, {required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProdukDataRow extends StatelessWidget {
+  final int index;
+  final ProdukItem produk;
+  final bool isReadOnly;
+  final Widget Function(ProdukItem) hargaBuilder;
+  final Widget Function(ProdukItem) kadaluarsaBuilder;
+  final VoidCallback onDetail;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _ProdukDataRow({
+    required this.index,
+    required this.produk,
+    required this.isReadOnly,
+    required this.hargaBuilder,
+    required this.kadaluarsaBuilder,
+    required this.onDetail,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final stokColor = produk.stok == 0
+        ? const Color(0xFFE53E3E)
+        : produk.stok < 20
+        ? const Color(0xFFECC94B)
+        : const Color(0xFF48BB78);
+
+    return Container(
+      height: 76,
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Row(
+        children: [
+          _ProdukCell(
+            width: _ProdukRowsViewport._noWidth,
+            child: Text('$index', style: _rowTextStyle),
+          ),
+          _ProdukCell(
+            width: _ProdukRowsViewport._kodeWidth,
+            child: Text(
+              produk.kode,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _rowTextStyle.copyWith(fontSize: 10),
+            ),
+          ),
+          _ProdukCell(
+            width: _ProdukRowsViewport._produkWidth,
+            child: Text(
+              produk.nama,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _rowTextStyle,
+            ),
+          ),
+          _ProdukCell(
+            width: _ProdukRowsViewport._kategoriWidth,
+            child: Text(
+              produk.kategori,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _rowTextStyle,
+            ),
+          ),
+          _ProdukCell(
+            width: _ProdukRowsViewport._jenisWidth,
+            child: Text(
+              produk.jenis,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _rowTextStyle,
+            ),
+          ),
+          _ProdukCell(
+            width: _ProdukRowsViewport._hargaWidth,
+            child: hargaBuilder(produk),
+          ),
+          _ProdukCell(
+            width: _ProdukRowsViewport._stokWidth,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: _ProdukPill(
+                label: '${produk.stok}',
+                color: stokColor,
+                background: stokColor.withValues(alpha: 0.12),
+                fontSize: 12,
+              ),
+            ),
+          ),
+          _ProdukCell(
+            width: _ProdukRowsViewport._kadaluarsaWidth,
+            child: kadaluarsaBuilder(produk),
+          ),
+          _ProdukCell(
+            width: _ProdukRowsViewport._statusWidth,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: _ProdukPill(
+                label: produk.aktif ? 'Aktif' : 'Nonaktif',
+                color: produk.aktif ? const Color(0xFF48BB78) : Colors.grey,
+                background: produk.aktif
+                    ? const Color(0xFF48BB78).withValues(alpha: 0.12)
+                    : Colors.grey.shade100,
+              ),
+            ),
+          ),
+          _ProdukCell(
+            width: _ProdukRowsViewport._ketersediaanWidth,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: produk.stok > 0
+                  ? const _ProdukPill(
+                      label: 'Tersedia',
+                      color: Color(0xFF4169E1),
+                      background: Color(0x1A4169E1),
+                    )
+                  : const _ProdukPill(
+                      label: 'Habis',
+                      color: Color(0xFFE53E3E),
+                      background: Color(0x1AE53E3E),
+                    ),
+            ),
+          ),
+          SizedBox(
+            width: _ProdukRowsViewport._aksiWidth,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _AksiBtn(
+                  icon: Icons.visibility_rounded,
+                  color: const Color(0xFF4169E1),
+                  label: 'Detail',
+                  onTap: onDetail,
+                ),
+                if (!isReadOnly) ...[
+                  const SizedBox(width: 8),
+                  _AksiBtn(
+                    icon: Icons.edit_rounded,
+                    color: const Color(0xFFD69E2E),
+                    label: 'Edit',
+                    onTap: onEdit,
+                  ),
+                  const SizedBox(width: 8),
+                  _AksiBtn(
+                    icon: Icons.delete_rounded,
+                    color: const Color(0xFFE53E3E),
+                    label: 'Hapus',
+                    onTap: onDelete,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static const TextStyle _rowTextStyle = TextStyle(
+    fontSize: 11,
+    color: Color(0xFF2D3748),
+  );
+}
+
+class _ProdukCell extends StatelessWidget {
+  final double width;
+  final Widget child;
+
+  const _ProdukCell({required this.width, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _ProdukPill extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color background;
+  final double fontSize;
+
+  const _ProdukPill({
+    required this.label,
+    required this.color,
+    required this.background,
+    this.fontSize = 11,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: color,
+          fontSize: fontSize,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
 class _DetailModal extends StatelessWidget {
   final ProdukItem produk;
   final String Function(int) rupiah;
@@ -1421,7 +1808,7 @@ class _DetailModal extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF4169E1).withOpacity(0.12),
+                  color: const Color(0xFF4169E1).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
@@ -1460,7 +1847,7 @@ class _DetailModal extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: produk.aktif
-                      ? const Color(0xFF48BB78).withOpacity(0.12)
+                      ? const Color(0xFF48BB78).withValues(alpha: 0.12)
                       : Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -1573,7 +1960,7 @@ class _AksiBtn extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.13),
+            color: color.withValues(alpha: 0.13),
             borderRadius: BorderRadius.circular(9),
           ),
           child: Icon(icon, color: color, size: 17),
@@ -1614,7 +2001,9 @@ class _KatBtn extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: disabled ? Colors.grey.shade100 : color.withOpacity(0.15),
+            color: disabled
+                ? Colors.grey.shade100
+                : color.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(9),
           ),
           child: Icon(

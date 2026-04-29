@@ -1,4 +1,6 @@
 // lib/category/manajemen_kategori_page.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:tokoronifrontend/features/delivery/manajemen_pengiriman_page.dart';
 import 'package:tokoronifrontend/features/profile/profile_page.dart';
@@ -58,22 +60,43 @@ class _ManajemenKategoriPageState extends State<ManajemenKategoriPage>
   bool _hasError = false;
   String _errorMessage = '';
   final _searchCtrl = TextEditingController();
+  Timer? _searchDebounce;
+  String _searchQuery = '';
+  int _dataRevision = 0;
+  int _filteredCacheRevision = -1;
+  String _filteredCacheQuery = '';
+  List<KategoriData> _filteredCache = const [];
+  static const int _initialRenderedRows = 24;
+  static const int _renderedRowsStep = 24;
+  int _maxRenderedRows = _initialRenderedRows;
 
   List<KategoriData> get _filtered {
-    final q = _searchCtrl.text.trim().toLowerCase();
-    if (q.isEmpty) return _kategoriList;
-    return _kategoriList
-        .where(
-          (k) =>
-              k.nama.toLowerCase().contains(q) ||
-              k.slug.toLowerCase().contains(q),
-        )
-        .toList();
+    final canUseCache =
+        _filteredCacheRevision == _dataRevision &&
+        _filteredCacheQuery == _searchQuery;
+    if (canUseCache) return _filteredCache;
+
+    final q = _searchQuery;
+    if (q.isEmpty) {
+      _filteredCache = List<KategoriData>.unmodifiable(_kategoriList);
+    } else {
+      _filteredCache = _kategoriList
+          .where(
+            (k) =>
+                k.nama.toLowerCase().contains(q) ||
+                k.slug.toLowerCase().contains(q),
+          )
+          .toList(growable: false);
+    }
+    _filteredCacheRevision = _dataRevision;
+    _filteredCacheQuery = _searchQuery;
+    return _filteredCache;
   }
 
   @override
   void initState() {
     super.initState();
+    _searchQuery = _searchCtrl.text.trim().toLowerCase();
     initSidebar(this);
     _kategoriList = [];
     _loadAllData();
@@ -81,6 +104,7 @@ class _ManajemenKategoriPageState extends State<ManajemenKategoriPage>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     disposeSidebar();
     _searchCtrl.dispose();
     super.dispose();
@@ -111,6 +135,7 @@ class _ManajemenKategoriPageState extends State<ManajemenKategoriPage>
               ),
             )
             .toList();
+        _bumpDataRevision();
         _isLoading = false;
       });
     } catch (e) {
@@ -130,7 +155,10 @@ class _ManajemenKategoriPageState extends State<ManajemenKategoriPage>
     try {
       await CategoryService.deleteCategory(categoryId: k.id);
       if (!mounted) return;
-      setState(() => _kategoriList.removeWhere((e) => e.id == k.id));
+      setState(() {
+        _kategoriList.removeWhere((e) => e.id == k.id);
+        _bumpDataRevision();
+      });
       _showSnack('Kategori "${k.nama}" berhasil dihapus', Colors.red);
     } catch (e) {
       if (!mounted) return;
@@ -148,7 +176,7 @@ class _ManajemenKategoriPageState extends State<ManajemenKategoriPage>
       return;
     }
     Widget? page;
-switch (menu) {
+    switch (menu) {
       case 'Dashboard':
         page = DashboardRouter.pageForCurrentUser();
         break;
@@ -184,10 +212,32 @@ switch (menu) {
         break;
     }
     if (page != null) {
-      closeSidebarThenNavigate(
-        () => Navigator.push(context, MaterialPageRoute(builder: (_) => page!)),
-      );
+      FocusManager.instance.primaryFocus?.unfocus();
+      closeSidebarThenNavigate(() {
+        _releaseHeavyContentForBackground();
+        Navigator.push(context, MaterialPageRoute(builder: (_) => page!)).then((
+          _,
+        ) {
+          if (!mounted || _kategoriList.isNotEmpty) return;
+          _loadAllData();
+        });
+      });
     }
+  }
+
+  void _releaseHeavyContentForBackground() {
+    if (_kategoriList.isEmpty && _filteredCache.isEmpty) return;
+    _searchDebounce?.cancel();
+    setState(() {
+      _kategoriList = [];
+      _filteredCache = const [];
+      _filteredCacheRevision = -1;
+      _filteredCacheQuery = '';
+      _isLoading = true;
+      _hasError = false;
+      _errorMessage = '';
+      _maxRenderedRows = _initialRenderedRows;
+    });
   }
 
   void _showHapusDialog(KategoriData k) {
@@ -269,10 +319,51 @@ switch (menu) {
     );
   }
 
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    final normalized = value.trim().toLowerCase();
+    _searchDebounce = Timer(const Duration(milliseconds: 120), () {
+      if (!mounted || normalized == _searchQuery) return;
+      setState(() {
+        _searchQuery = normalized;
+        _invalidateFilteredCache();
+        _maxRenderedRows = _initialRenderedRows;
+      });
+    });
+  }
+
+  void _bumpDataRevision() {
+    _dataRevision++;
+    _invalidateFilteredCache();
+    _maxRenderedRows = _initialRenderedRows;
+  }
+
+  void _invalidateFilteredCache() {
+    _filteredCacheRevision = -1;
+  }
+
+  Future<void> _openEditKategori(KategoriData k) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => EditKategoriPage(kategori: k)),
+    );
+    if (!mounted) return;
+    if (result is String && result.isNotEmpty) {
+      final isDelete = result.toLowerCase().contains('hapus');
+      _showSnack(
+        result,
+        isDelete ? const Color(0xFFE53E3E) : const Color(0xFF48BB78),
+      );
+    }
+    await _loadAllData();
+  }
+
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: const Color(0xFFF3F4F8),
       body: Stack(
         children: [
@@ -293,22 +384,25 @@ switch (menu) {
     );
   }
 
-  Widget _buildPageContent(List<KategoriData> filtered) => SingleChildScrollView(
-    physics: const AlwaysScrollableScrollPhysics(),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildHeader(),
-        const SizedBox(height: 24),
-        if (_hasError) _buildSyncWarning(),
-        _buildTable(filtered),
-        const SizedBox(height: 40),
-      ],
-    ),
-  );
+  Widget _buildPageContent(List<KategoriData> filtered) =>
+      SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RepaintBoundary(child: _buildHeader()),
+            const SizedBox(height: 24),
+            if (_hasError) _buildSyncWarning(),
+            _buildTable(filtered),
+            const SizedBox(height: 40),
+          ],
+        ),
+      );
 
   Widget _buildLoadingState() => SingleChildScrollView(
     physics: const AlwaysScrollableScrollPhysics(),
+    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
     child: SizedBox(
       height:
           MediaQuery.of(context).size.height -
@@ -332,6 +426,7 @@ switch (menu) {
 
   Widget _buildErrorState() => SingleChildScrollView(
     physics: const AlwaysScrollableScrollPhysics(),
+    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
     child: SizedBox(
       height:
           MediaQuery.of(context).size.height -
@@ -532,6 +627,12 @@ switch (menu) {
 
   // ── TABLE ─────────────────────────────────────────────────────────────────
   Widget _buildTable(List<KategoriData> filtered) {
+    final visibleCount = filtered.length < _maxRenderedRows
+        ? filtered.length
+        : _maxRenderedRows;
+    final visibleItems = filtered.take(visibleCount).toList(growable: false);
+    final canLoadMore = visibleCount < filtered.length;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -540,7 +641,7 @@ switch (menu) {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 10,
               offset: const Offset(0, 3),
             ),
@@ -576,7 +677,10 @@ switch (menu) {
                       Expanded(
                         child: TextField(
                           controller: _searchCtrl,
-                          onChanged: (_) => setState(() {}),
+                          onChanged: _onSearchChanged,
+                          onSubmitted: (_) =>
+                              FocusManager.instance.primaryFocus?.unfocus(),
+                          textInputAction: TextInputAction.search,
                           style: const TextStyle(fontSize: 12),
                           decoration: InputDecoration(
                             hintText: 'Cari kategori',
@@ -603,7 +707,7 @@ switch (menu) {
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton(
-                        onPressed: () => setState(() {}),
+                        onPressed: () => FocusScope.of(context).unfocus(),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF4169E1),
                           padding: const EdgeInsets.symmetric(
@@ -629,137 +733,29 @@ switch (menu) {
             const Divider(height: 1),
 
             // Table
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(
-                  const Color.fromARGB(255, 74, 134, 255),
-                ),
-                headingRowHeight: 42,
-                dataRowMinHeight: 52,
-                dataRowMaxHeight: 64,
-                columnSpacing: 16,
-                headingTextStyle: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Color.fromARGB(255, 255, 255, 255),
-                ),
-                dataTextStyle: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF2D3748),
-                ),
-                columns: const [
-                  DataColumn(label: Text('No')),
-                  DataColumn(label: Text('Nama Kategori')),
-                  DataColumn(label: Text('Slug')),
-                  DataColumn(label: Text('Status')),
-                  DataColumn(label: Text('Aksi')),
-                ],
-                rows: List.generate(filtered.length, (i) {
-                  final k = filtered[i];
-                  return DataRow(
-                    cells: [
-                      DataCell(Text('${i + 1}')),
-                      DataCell(
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              k.nama,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              'ID: ${k.id}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey.shade400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      DataCell(
-                        Text(
-                          '#${k.slug}',
-                          style: const TextStyle(
-                            color: Color(0xFF4169E1),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: k.aktif
-                                ? const Color(0xFF48BB78).withOpacity(0.12)
-                                : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            k.aktif ? 'Aktif' : 'Nonaktif',
-                            style: TextStyle(
-                              color: k.aktif
-                                  ? const Color(0xFF48BB78)
-                                  : Colors.grey,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _AksiBtn(
-                              icon: Icons.edit_rounded,
-                              color: const Color(0xFFD69E2E),
-                              label: 'Edit',
-                              onTap: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        EditKategoriPage(kategori: k),
-                                  ),
-                                );
-                                if (!mounted) return;
-                                if (result is String && result.isNotEmpty) {
-                                  final isDelete = result.toLowerCase().contains(
-                                    'hapus',
-                                  );
-                                  _showSnack(
-                                    result,
-                                    isDelete
-                                        ? const Color(0xFFE53E3E)
-                                        : const Color(0xFF48BB78),
-                                  );
-                                }
-                                await _loadAllData();
-                              },
-                            ),
-                            const SizedBox(width: 8),
-                            _AksiBtn(
-                              icon: Icons.delete_rounded,
-                              color: const Color(0xFFE53E3E),
-                              label: 'Hapus',
-                              onTap: () => _showHapusDialog(k),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                }),
+            RepaintBoundary(
+              child: _KategoriRowsViewport(
+                items: visibleItems,
+                onEdit: _openEditKategori,
+                onDelete: _showHapusDialog,
               ),
             ),
+            if (canLoadMore)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 10, 0, 12),
+                child: Center(
+                  child: OutlinedButton.icon(
+                    onPressed: () => setState(() {
+                      _maxRenderedRows += _renderedRowsStep;
+                    }),
+                    icon: const Icon(Icons.expand_more_rounded, size: 18),
+                    label: Text(
+                      'Muat lebih banyak ($visibleCount/${filtered.length})',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ),
+              ),
 
             if (filtered.isEmpty)
               Padding(
@@ -795,6 +791,240 @@ switch (menu) {
 
 // ── Aksi button — sama persis dengan style di daftar_produk_page.dart ─────────
 // icon di container (background transparan) + label teks di bawah
+class _KategoriRowsViewport extends StatelessWidget {
+  final List<KategoriData> items;
+  final ValueChanged<KategoriData> onEdit;
+  final ValueChanged<KategoriData> onDelete;
+
+  const _KategoriRowsViewport({
+    required this.items,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  static const double _tableWidth = 620;
+  static const double _noWidth = 56;
+  static const double _nameWidth = 190;
+  static const double _slugWidth = 170;
+  static const double _statusWidth = 96;
+  static const double _actionWidth = 108;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+      child: SizedBox(
+        width: _tableWidth,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const _KategoriHeaderRow(),
+            for (var i = 0; i < items.length; i++)
+              _KategoriDataRow(
+                index: i + 1,
+                kategori: items[i],
+                onEdit: () => onEdit(items[i]),
+                onDelete: () => onDelete(items[i]),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KategoriHeaderRow extends StatelessWidget {
+  const _KategoriHeaderRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 42,
+      color: const Color.fromARGB(255, 74, 134, 255),
+      child: const Row(
+        children: [
+          _KategoriHeaderCell('No', width: _KategoriRowsViewport._noWidth),
+          _KategoriHeaderCell(
+            'Nama Kategori',
+            width: _KategoriRowsViewport._nameWidth,
+          ),
+          _KategoriHeaderCell('Slug', width: _KategoriRowsViewport._slugWidth),
+          _KategoriHeaderCell(
+            'Status',
+            width: _KategoriRowsViewport._statusWidth,
+          ),
+          _KategoriHeaderCell(
+            'Aksi',
+            width: _KategoriRowsViewport._actionWidth,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KategoriHeaderCell extends StatelessWidget {
+  final String text;
+  final double width;
+
+  const _KategoriHeaderCell(this.text, {required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KategoriDataRow extends StatelessWidget {
+  final int index;
+  final KategoriData kategori;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _KategoriDataRow({
+    required this.index,
+    required this.kategori,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 64,
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Row(
+        children: [
+          _KategoriCell(
+            width: _KategoriRowsViewport._noWidth,
+            child: Text('$index', style: _rowTextStyle),
+          ),
+          _KategoriCell(
+            width: _KategoriRowsViewport._nameWidth,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  kategori.nama,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _rowTextStyle.copyWith(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  'ID: ${kategori.id}',
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade400),
+                ),
+              ],
+            ),
+          ),
+          _KategoriCell(
+            width: _KategoriRowsViewport._slugWidth,
+            child: Text(
+              '#${kategori.slug}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _rowTextStyle.copyWith(
+                color: const Color(0xFF4169E1),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          _KategoriCell(
+            width: _KategoriRowsViewport._statusWidth,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: kategori.aktif
+                      ? const Color(0xFF48BB78).withValues(alpha: 0.12)
+                      : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  kategori.aktif ? 'Aktif' : 'Nonaktif',
+                  style: TextStyle(
+                    color: kategori.aktif
+                        ? const Color(0xFF48BB78)
+                        : Colors.grey,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: _KategoriRowsViewport._actionWidth,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _AksiBtn(
+                  icon: Icons.edit_rounded,
+                  color: const Color(0xFFD69E2E),
+                  label: 'Edit',
+                  onTap: onEdit,
+                ),
+                const SizedBox(width: 8),
+                _AksiBtn(
+                  icon: Icons.delete_rounded,
+                  color: const Color(0xFFE53E3E),
+                  label: 'Hapus',
+                  onTap: onDelete,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static const TextStyle _rowTextStyle = TextStyle(
+    fontSize: 12,
+    color: Color(0xFF2D3748),
+  );
+}
+
+class _KategoriCell extends StatelessWidget {
+  final double width;
+  final Widget child;
+
+  const _KategoriCell({required this.width, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: child,
+      ),
+    );
+  }
+}
+
 class _AksiBtn extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -817,7 +1047,7 @@ class _AksiBtn extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.13),
+            color: color.withValues(alpha: 0.13),
             borderRadius: BorderRadius.circular(9),
           ),
           child: Icon(icon, color: color, size: 17),

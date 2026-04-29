@@ -1,4 +1,6 @@
 // lib/transaction/kasir_page.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:tokoronifrontend/features/delivery/manajemen_pengiriman_page.dart';
@@ -59,23 +61,48 @@ class _KasirPageState extends State<KasirPage>
   // -- Katalog ---------------------------------------------------------------
   final _searchCtrl = TextEditingController();
   String _filterKategori = 'Semua';
+  String _searchQuery = '';
   List<ProdukItem> _produkList = [];
+  Timer? _searchDebounce;
+
+  int _produkRevision = 0;
+  int _katalogCacheRevision = -1;
+  String _katalogCacheQuery = '';
+  String _katalogCacheKategori = '';
+  List<ProdukItem> _katalogCache = const [];
+
+  int _kategoriCacheRevision = -1;
+  List<String> _kategoriCache = const ['Semua'];
 
   List<ProdukItem> get _katalog {
-    final q = _searchCtrl.text.trim().toLowerCase();
-    return _produkList.where((p) {
-      if (!p.aktif) return false;
-      final matchSearch =
-          q.isEmpty ||
-          p.nama.toLowerCase().contains(q) ||
-          p.kode.toLowerCase().contains(q);
-      final matchKat =
-          _filterKategori == 'Semua' || p.kategori == _filterKategori;
-      return matchSearch && matchKat;
-    }).toList();
+    final canUseCache =
+        _katalogCacheRevision == _produkRevision &&
+        _katalogCacheQuery == _searchQuery &&
+        _katalogCacheKategori == _filterKategori;
+    if (canUseCache) return _katalogCache;
+
+    final q = _searchQuery;
+    _katalogCache = _produkList
+        .where((p) {
+          if (!p.aktif) return false;
+          final matchSearch =
+              q.isEmpty ||
+              p.nama.toLowerCase().contains(q) ||
+              p.kode.toLowerCase().contains(q);
+          final matchKat =
+              _filterKategori == 'Semua' || p.kategori == _filterKategori;
+          return matchSearch && matchKat;
+        })
+        .toList(growable: false);
+    _katalogCacheRevision = _produkRevision;
+    _katalogCacheQuery = _searchQuery;
+    _katalogCacheKategori = _filterKategori;
+    return _katalogCache;
   }
 
   List<String> get _kategoriList {
+    if (_kategoriCacheRevision == _produkRevision) return _kategoriCache;
+
     final set =
         _produkList
             .where((p) => p.aktif)
@@ -83,11 +110,14 @@ class _KasirPageState extends State<KasirPage>
             .toSet()
             .toList()
           ..sort();
-    return ['Semua', ...set];
+    _kategoriCache = ['Semua', ...set];
+    _kategoriCacheRevision = _produkRevision;
+    return _kategoriCache;
   }
 
   // -- Keranjang -------------------------------------------------------------
   final List<KeranjangItem> _keranjang = [];
+  Map<String, int> _qtyByKode = {};
 
   // -- Member ----------------------------------------------------------------
   final List<MemberData> _memberList = [];
@@ -125,6 +155,7 @@ class _KasirPageState extends State<KasirPage>
   @override
   void initState() {
     super.initState();
+    _searchQuery = _searchCtrl.text.trim().toLowerCase();
     initSidebar(this);
     _loadProducts();
     _loadMembers();
@@ -134,7 +165,17 @@ class _KasirPageState extends State<KasirPage>
     try {
       final products = await ProductService.getProducts();
       if (mounted) {
-        setState(() => _produkList = products);
+        setState(() {
+          _produkList = products;
+          _produkRevision++;
+          _kategoriCacheRevision = -1;
+          _katalogCacheRevision = -1;
+
+          final categoryExists =
+              _filterKategori == 'Semua' ||
+              _produkList.any((p) => p.aktif && p.kategori == _filterKategori);
+          if (!categoryExists) _filterKategori = 'Semua';
+        });
       }
     } catch (_) {
       // Jika API gagal, tampilkan error ke user, jangan fallback ke dummy
@@ -192,6 +233,7 @@ class _KasirPageState extends State<KasirPage>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     disposeSidebar();
     _searchCtrl.dispose();
     _namaCtrl.dispose();
@@ -261,6 +303,7 @@ class _KasirPageState extends State<KasirPage>
       } else {
         if (p.stok > 0) _keranjang.add(KeranjangItem(produk: p));
       }
+      _refreshQtyByKode();
     });
   }
 
@@ -273,11 +316,15 @@ class _KasirPageState extends State<KasirPage>
       } else if (newQty <= item.produk.stok) {
         _keranjang[idx].qty = newQty;
       }
+      _refreshQtyByKode();
     });
   }
 
   void _hapusDariKeranjang(int idx) {
-    setState(() => _keranjang.removeAt(idx));
+    setState(() {
+      _keranjang.removeAt(idx);
+      _refreshQtyByKode();
+    });
   }
 
   void _resetKeranjang() {
@@ -289,6 +336,32 @@ class _KasirPageState extends State<KasirPage>
       _diskonCtrl.text = '0';
       _uangDiterimaCtrl.clear();
       _metodePembayaran = 'Tunai';
+      _refreshQtyByKode();
+    });
+  }
+
+  void _refreshQtyByKode() {
+    final map = <String, int>{};
+    for (final item in _keranjang) {
+      map.update(
+        item.produk.kode,
+        (qty) => qty + item.qty,
+        ifAbsent: () => item.qty,
+      );
+    }
+    _qtyByKode = map;
+  }
+
+  void _onSearchChanged(String raw) {
+    _searchDebounce?.cancel();
+    final normalized = raw.trim().toLowerCase();
+
+    _searchDebounce = Timer(const Duration(milliseconds: 120), () {
+      if (!mounted || normalized == _searchQuery) return;
+      setState(() {
+        _searchQuery = normalized;
+        _katalogCacheRevision = -1;
+      });
     });
   }
 
@@ -711,6 +784,7 @@ class _KasirPageState extends State<KasirPage>
   // ------------------------------------------------------------------------
   Widget _buildKatalog() {
     final katalog = _katalog;
+    final qtyByKode = _qtyByKode;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -746,7 +820,7 @@ class _KasirPageState extends State<KasirPage>
                   // Search
                   TextField(
                     controller: _searchCtrl,
-                    onChanged: (_) => setState(() {}),
+                    onChanged: _onSearchChanged,
                     style: const TextStyle(fontSize: 13),
                     decoration: InputDecoration(
                       hintText: 'Cari nama atau kode produk...',
@@ -776,7 +850,12 @@ class _KasirPageState extends State<KasirPage>
                       children: _kategoriList.map((k) {
                         final active = _filterKategori == k;
                         return GestureDetector(
-                          onTap: () => setState(() => _filterKategori = k),
+                          onTap: active
+                              ? null
+                              : () => setState(() {
+                                  _filterKategori = k;
+                                  _katalogCacheRevision = -1;
+                                }),
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(
@@ -848,9 +927,7 @@ class _KasirPageState extends State<KasirPage>
                     itemCount: katalog.length,
                     itemBuilder: (_, i) => _ProdukCard(
                       produk: katalog[i],
-                      qtyDiKeranjang: _keranjang
-                          .where((k) => k.produk.kode == katalog[i].kode)
-                          .fold(0, (s, k) => s + k.qty),
+                      qtyDiKeranjang: qtyByKode[katalog[i].kode] ?? 0,
                       onTambah: () => _tambahKeKeranjang(katalog[i]),
                     ),
                   ),

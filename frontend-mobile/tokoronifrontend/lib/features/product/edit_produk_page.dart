@@ -11,7 +11,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/services/product_service.dart';
-import '../../shared/widgets/shared_widgets.dart';
+import '../../core/ui/keyboard_inset_padding.dart';
 import '../../models/produk_model.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -227,6 +227,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
 
   // ── Date picker ───────────────────────────────────────────────────────────
   Future<void> _pickDate() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final today = DateTime.now();
     final initial =
         _kadaluarsa ?? DateTime.now().add(const Duration(days: 365));
@@ -260,11 +261,15 @@ class _EditProdukPageState extends State<EditProdukPage> {
     if (_namaCtrl.text.trim().isEmpty) e['nama'] = 'Nama produk wajib diisi';
     if (_kodeCtrl.text.trim().isEmpty) e['kode'] = 'Kode produk wajib diisi';
     if (_kategori.isEmpty) e['kategori'] = 'Kategori wajib dipilih';
-    if (_hargaJualCtrl.text.trim().isEmpty)
+    if (_hargaJualCtrl.text.trim().isEmpty) {
       e['hargaJual'] = 'Harga jual wajib diisi';
-    if (_stokAwalCtrl.text.trim().isEmpty)
+    }
+    if (_stokAwalCtrl.text.trim().isEmpty) {
       e['stokAwal'] = 'Stok awal wajib diisi';
-    if (_kadaluarsa == null) e['kadaluarsa'] = 'Tanggal kadaluarsa wajib diisi';
+    }
+    if (_kadaluarsa == null) {
+      e['kadaluarsa'] = 'Tanggal kadaluarsa wajib diisi';
+    }
     setState(
       () => _errors
         ..clear()
@@ -275,6 +280,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
 
   // ── Reset ke data awal produk ─────────────────────────────────────────────
   void _showResetDialog() {
+    FocusManager.instance.primaryFocus?.unfocus();
     showDialog(
       context: context,
       builder: (_) => _ConfirmDialog(
@@ -328,6 +334,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
       );
       return;
     }
+    FocusManager.instance.primaryFocus?.unfocus();
     showDialog(
       context: context,
       builder: (_) => _ConfirmDialog(
@@ -345,6 +352,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
 
   Future<void> _submitUpdateProduk() async {
     if (_isSubmitting) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     if (widget.produk.id == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -409,6 +417,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: const Color(0xFFF3F4F8),
       appBar: AppBar(
         backgroundColor: const Color(0xFFD69E2E),
@@ -422,274 +431,280 @@ class _EditProdukPageState extends State<EditProdukPage> {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Form header ──
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              decoration: const BoxDecoration(
-                color: Color(0xFFD69E2E),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Form Edit Produk',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'ubah informasi produk yang ingin diperbarui',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Form body ──
-            Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(16),
+      body: KeyboardInsetPadding(
+        settleDuration: Duration.zero,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Form header ──
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFD69E2E),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x0D000000),
-                    blurRadius: 8,
-                    offset: Offset(0, 2),
-                  ),
-                ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Form Edit Produk',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'ubah informasi produk yang ingin diperbarui',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ══ INFORMASI DASAR ══
-                  _sectionTitle('Informasi dasar'),
-                  const SizedBox(height: 16),
 
-                  _label('Nama Produk', required: true),
-                  _textField(
-                    _namaCtrl,
-                    'Masukan nama produk',
-                    error: _errors['nama'],
-                    onChanged: (_) => _clearErr('nama'),
+              // ── Form body ──
+              Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(16),
                   ),
-                  const SizedBox(height: 16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x0D000000),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ══ INFORMASI DASAR ══
+                    _sectionTitle('Informasi dasar'),
+                    const SizedBox(height: 16),
 
-                  _label('Kode Produk', required: true),
-                  _fieldWithAction(
-                    ctrl: _kodeCtrl,
-                    hint: 'PRD-XXXXXXXX',
-                    error: _errors['kode'],
-                    onChanged: (_) => _clearErr('kode'),
-                    icon: Icons.refresh_rounded,
-                    tooltip: 'Generate ulang kode',
-                    onAction: _regenKode,
-                  ),
-                  const SizedBox(height: 16),
+                    _label('Nama Produk', required: true),
+                    _textField(
+                      _namaCtrl,
+                      'Masukan nama produk',
+                      error: _errors['nama'],
+                      onChanged: (_) => _clearErr('nama'),
+                    ),
+                    const SizedBox(height: 16),
 
-                  _label('Kategori', required: true),
-                  _dropdown(
-                    value: _kategoriList.contains(_kategori) ? _kategori : null,
-                    hint: '---pilih kategori---',
-                    items: _kategoriList,
-                    error: _errors['kategori'],
-                    onChanged: (v) => setState(() {
-                      _kategori = v ?? '';
-                      _errors.remove('kategori');
-                    }),
-                  ),
-                  const SizedBox(height: 16),
+                    _label('Kode Produk', required: true),
+                    _fieldWithAction(
+                      ctrl: _kodeCtrl,
+                      hint: 'PRD-XXXXXXXX',
+                      error: _errors['kode'],
+                      onChanged: (_) => _clearErr('kode'),
+                      icon: Icons.refresh_rounded,
+                      tooltip: 'Generate ulang kode',
+                      onAction: _regenKode,
+                    ),
+                    const SizedBox(height: 16),
 
-                  _label('Deskripsi produk', required: false),
-                  _textField(
-                    _deskCtrl,
-                    'Isi deskripsi jika perlu',
-                    maxLines: 4,
-                  ),
-                  const SizedBox(height: 28),
+                    _label('Kategori', required: true),
+                    _dropdown(
+                      value: _kategoriList.contains(_kategori)
+                          ? _kategori
+                          : null,
+                      hint: '---pilih kategori---',
+                      items: _kategoriList,
+                      error: _errors['kategori'],
+                      onChanged: (v) => setState(() {
+                        _kategori = v ?? '';
+                        _errors.remove('kategori');
+                      }),
+                    ),
+                    const SizedBox(height: 16),
 
-                  // ══ HARGA & STOK ══
-                  _sectionTitle('Harga & Stok'),
-                  const SizedBox(height: 16),
+                    _label('Deskripsi produk', required: false),
+                    _textField(
+                      _deskCtrl,
+                      'Isi deskripsi jika perlu',
+                      maxLines: 4,
+                    ),
+                    const SizedBox(height: 28),
 
-                  _label('Harga Jual', required: true),
-                  _textField(
-                    _hargaJualCtrl,
-                    'Rp 0',
-                    prefix: 'Rp ',
-                    type: TextInputType.number,
-                    formatters: [FilteringTextInputFormatter.digitsOnly],
-                    error: _errors['hargaJual'],
-                    onChanged: (_) => _clearErr('hargaJual'),
-                  ),
-                  const SizedBox(height: 16),
+                    // ══ HARGA & STOK ══
+                    _sectionTitle('Harga & Stok'),
+                    const SizedBox(height: 16),
 
-                  _label('Harga Modal', required: false),
-                  _textField(
-                    _hargaModalCtrl,
-                    'Rp 0',
-                    prefix: 'Rp ',
-                    type: TextInputType.number,
-                    formatters: [FilteringTextInputFormatter.digitsOnly],
-                  ),
-                  const SizedBox(height: 16),
+                    _label('Harga Jual', required: true),
+                    _textField(
+                      _hargaJualCtrl,
+                      'Rp 0',
+                      prefix: 'Rp ',
+                      type: TextInputType.number,
+                      formatters: [FilteringTextInputFormatter.digitsOnly],
+                      error: _errors['hargaJual'],
+                      onChanged: (_) => _clearErr('hargaJual'),
+                    ),
+                    const SizedBox(height: 16),
 
-                  _label('Stok awal', required: true),
-                  _textField(
-                    _stokAwalCtrl,
-                    '0',
-                    type: TextInputType.number,
-                    formatters: [FilteringTextInputFormatter.digitsOnly],
-                    error: _errors['stokAwal'],
-                    onChanged: (_) => _clearErr('stokAwal'),
-                  ),
-                  const SizedBox(height: 16),
+                    _label('Harga Modal', required: false),
+                    _textField(
+                      _hargaModalCtrl,
+                      'Rp 0',
+                      prefix: 'Rp ',
+                      type: TextInputType.number,
+                      formatters: [FilteringTextInputFormatter.digitsOnly],
+                    ),
+                    const SizedBox(height: 16),
 
-                  _label('Stok minimum', required: false),
-                  _textField(
-                    _stokMinCtrl,
-                    '0',
-                    type: TextInputType.number,
-                    formatters: [FilteringTextInputFormatter.digitsOnly],
-                  ),
-                  const SizedBox(height: 16),
+                    _label('Stok awal', required: true),
+                    _textField(
+                      _stokAwalCtrl,
+                      '0',
+                      type: TextInputType.number,
+                      formatters: [FilteringTextInputFormatter.digitsOnly],
+                      error: _errors['stokAwal'],
+                      onChanged: (_) => _clearErr('stokAwal'),
+                    ),
+                    const SizedBox(height: 16),
 
-                  _label('Satuan', required: true),
-                  _dropdown(
-                    value: _satuan,
-                    hint: 'Pilih satuan',
-                    items: _satuanList,
-                    onChanged: (v) => setState(() => _satuan = v ?? 'Pcs'),
-                  ),
-                  const SizedBox(height: 16),
+                    _label('Stok minimum', required: false),
+                    _textField(
+                      _stokMinCtrl,
+                      '0',
+                      type: TextInputType.number,
+                      formatters: [FilteringTextInputFormatter.digitsOnly],
+                    ),
+                    const SizedBox(height: 16),
 
-                  _label('Barcode', required: false),
-                  _fieldWithAction(
-                    ctrl: _barcodeCtrl,
-                    hint: 'Kosongkan jika tidak ada',
-                    error: _errors['barcode'],
-                    onChanged: (_) => _clearErr('barcode'),
-                    icon: Icons.barcode_reader,
-                    tooltip: 'Generate barcode',
-                    onAction: _regenBarcode,
-                    type: TextInputType.number,
-                    formatters: [FilteringTextInputFormatter.digitsOnly],
-                  ),
-                  const SizedBox(height: 28),
+                    _label('Satuan', required: true),
+                    _dropdown(
+                      value: _satuan,
+                      hint: 'Pilih satuan',
+                      items: _satuanList,
+                      onChanged: (v) => setState(() => _satuan = v ?? 'Pcs'),
+                    ),
+                    const SizedBox(height: 16),
 
-                  // ══ INFORMASI TAMBAHAN ══
-                  _sectionTitle('Informasi Tambahan'),
-                  const SizedBox(height: 16),
+                    _label('Barcode', required: false),
+                    _fieldWithAction(
+                      ctrl: _barcodeCtrl,
+                      hint: 'Kosongkan jika tidak ada',
+                      error: _errors['barcode'],
+                      onChanged: (_) => _clearErr('barcode'),
+                      icon: Icons.barcode_reader,
+                      tooltip: 'Generate barcode',
+                      onAction: _regenBarcode,
+                      type: TextInputType.number,
+                      formatters: [FilteringTextInputFormatter.digitsOnly],
+                    ),
+                    const SizedBox(height: 28),
 
-                  _label('Berat (gram)', required: false),
-                  _textField(
-                    _beratCtrl,
-                    '0',
-                    type: TextInputType.number,
-                    formatters: [FilteringTextInputFormatter.digitsOnly],
-                  ),
-                  const SizedBox(height: 16),
+                    // ══ INFORMASI TAMBAHAN ══
+                    _sectionTitle('Informasi Tambahan'),
+                    const SizedBox(height: 16),
 
-                  _label('Dimensi', required: false),
-                  _textField(_dimensiCtrl, 'panjang X lebar X tinggi'),
-                  const SizedBox(height: 16),
+                    _label('Berat (gram)', required: false),
+                    _textField(
+                      _beratCtrl,
+                      '0',
+                      type: TextInputType.number,
+                      formatters: [FilteringTextInputFormatter.digitsOnly],
+                    ),
+                    const SizedBox(height: 16),
 
-                  _label('Tanggal Kadaluarsa', required: true),
-                  _dateField(),
-                  const SizedBox(height: 20),
+                    _label('Dimensi', required: false),
+                    _textField(_dimensiCtrl, 'panjang X lebar X tinggi'),
+                    const SizedBox(height: 16),
 
-                  // Produk aktif
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: _aktif,
-                        onChanged: (v) => setState(() => _aktif = v ?? true),
-                        activeColor: const Color(0xFFD69E2E),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Text(
-                        'Produk aktif',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF2D3748),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
+                    _label('Tanggal Kadaluarsa', required: true),
+                    _dateField(),
+                    const SizedBox(height: 20),
 
-                  // ── Tombol Reset & Update ──
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _showResetDialog,
-                          icon: const Icon(Icons.refresh_rounded, size: 17),
-                          label: const Text(
-                            'Reset',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF4A5568),
-                            side: const BorderSide(
-                              color: Color(0xFFCBD5E0),
-                              width: 1.5,
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                    // Produk aktif
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: _aktif,
+                          onChanged: (v) => setState(() => _aktif = v ?? true),
+                          activeColor: const Color(0xFFD69E2E),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: ElevatedButton(
-                          onPressed: _showSimpanDialog,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFD69E2E),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
+                        const SizedBox(width: 4),
+                        const Text(
+                          'Produk aktif',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF2D3748),
                           ),
-                          child: const Text(
-                            'Update',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+
+                    // ── Tombol Reset & Update ──
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _showResetDialog,
+                            icon: const Icon(Icons.refresh_rounded, size: 17),
+                            label: const Text(
+                              'Reset',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF4A5568),
+                              side: const BorderSide(
+                                color: Color(0xFFCBD5E0),
+                                width: 1.5,
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 15),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            onPressed: _showSimpanDialog,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFD69E2E),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 15),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: const Text(
+                              'Update',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-          ],
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );
@@ -699,7 +714,10 @@ class _EditProdukPageState extends State<EditProdukPage> {
   // HELPER BUILDERS — private ke file ini
   // ════════════════════════════════════════════════════════════════════════
 
-  void _clearErr(String key) => setState(() => _errors.remove(key));
+  void _clearErr(String key) {
+    if (!_errors.containsKey(key)) return;
+    setState(() => _errors.remove(key));
+  }
 
   Widget _sectionTitle(String title) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -717,7 +735,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
         height: 2,
         width: 120,
         decoration: BoxDecoration(
-          color: const Color(0xFFD69E2E).withOpacity(0.3),
+          color: const Color(0xFFD69E2E).withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -759,16 +777,21 @@ class _EditProdukPageState extends State<EditProdukPage> {
     String? error,
     int maxLines = 1,
     TextInputType type = TextInputType.text,
+    TextInputAction? textInputAction,
     List<TextInputFormatter>? formatters,
     void Function(String)? onChanged,
   }) {
+    final effectiveKeyboardType = maxLines > 1 ? TextInputType.multiline : type;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextField(
           controller: ctrl,
           maxLines: maxLines,
-          keyboardType: type,
+          keyboardType: effectiveKeyboardType,
+          textInputAction:
+              textInputAction ??
+              (maxLines > 1 ? TextInputAction.newline : TextInputAction.next),
           inputFormatters: formatters,
           onChanged: onChanged,
           style: const TextStyle(fontSize: 13),
@@ -834,6 +857,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
     required VoidCallback onAction,
     String? error,
     TextInputType type = TextInputType.text,
+    TextInputAction? textInputAction,
     List<TextInputFormatter>? formatters,
     void Function(String)? onChanged,
   }) {
@@ -843,6 +867,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
         TextField(
           controller: ctrl,
           keyboardType: type,
+          textInputAction: textInputAction ?? TextInputAction.next,
           inputFormatters: formatters,
           onChanged: onChanged,
           style: const TextStyle(fontSize: 13),
@@ -974,6 +999,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
           controller: _kadaluarsaCtrl,
           onChanged: (_) => _clearErr('kadaluarsa'),
           keyboardType: TextInputType.datetime,
+          textInputAction: TextInputAction.next,
           style: const TextStyle(fontSize: 13),
           decoration: InputDecoration(
             hintText: 'hari/bulan/tahun',
@@ -1075,7 +1101,7 @@ class _ConfirmDialog extends StatelessWidget {
           width: 64,
           height: 64,
           decoration: BoxDecoration(
-            color: iconColor.withOpacity(0.12),
+            color: iconColor.withValues(alpha: 0.12),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: iconColor, size: 32),

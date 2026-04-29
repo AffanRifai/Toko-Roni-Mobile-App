@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/services/product_service.dart';
-import '../../shared/widgets/shared_widgets.dart';
+import '../../core/ui/keyboard_inset_padding.dart';
 import '../../models/produk_model.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -91,6 +91,7 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
   }
 
   Future<void> _pickDate() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final today = DateTime.now();
     final initial =
         _model.kadaluarsa ?? DateTime.now().add(const Duration(days: 365));
@@ -109,12 +110,13 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
         child: child!,
       ),
     );
-    if (picked != null)
+    if (picked != null) {
       setState(() {
         _model.kadaluarsa = picked;
         _ctrls.kadaluarsa.text = _fmtDate(picked);
         _errors.remove('kadaluarsa');
       });
+    }
   }
 
   bool _validate() {
@@ -122,12 +124,15 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
     if (_ctrls.nama.text.trim().isEmpty) e['nama'] = 'Nama produk wajib diisi';
     if (_ctrls.kode.text.trim().isEmpty) e['kode'] = 'Kode produk wajib diisi';
     if (_model.kategori.isEmpty) e['kategori'] = 'Kategori wajib dipilih';
-    if (_ctrls.hargaJual.text.trim().isEmpty)
+    if (_ctrls.hargaJual.text.trim().isEmpty) {
       e['hargaJual'] = 'Harga jual wajib diisi';
-    if (_ctrls.stokAwal.text.trim().isEmpty)
+    }
+    if (_ctrls.stokAwal.text.trim().isEmpty) {
       e['stokAwal'] = 'Stok awal wajib diisi';
-    if (_model.kadaluarsa == null)
+    }
+    if (_model.kadaluarsa == null) {
       e['kadaluarsa'] = 'Tanggal kadaluarsa wajib diisi';
+    }
     setState(
       () => _errors
         ..clear()
@@ -136,31 +141,35 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
     return e.isEmpty;
   }
 
-  void _showResetDialog() => showDialog(
-    context: context,
-    builder: (_) => _ConfirmDialog(
-      title: 'Reset Form',
-      icon: Icons.refresh_rounded,
-      iconColor: const Color(0xFFE67E22),
-      message:
-          'Apakah kamu yakin ingin mereset semua isian form? Data yang sudah diisi akan hilang.',
-      confirmLabel: 'Ya, Reset',
-      confirmColor: const Color(0xFFE67E22),
-      onConfirm: () {
-        setState(() {
-          _model = ProdukFormModel(kode: generateKodeProduk());
-          _errors.clear();
-        });
-        _ctrls.resetToModel(_model);
-      },
-    ),
-  );
+  void _showResetDialog() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    showDialog(
+      context: context,
+      builder: (_) => _ConfirmDialog(
+        title: 'Reset Form',
+        icon: Icons.refresh_rounded,
+        iconColor: const Color(0xFFE67E22),
+        message:
+            'Apakah kamu yakin ingin mereset semua isian form? Data yang sudah diisi akan hilang.',
+        confirmLabel: 'Ya, Reset',
+        confirmColor: const Color(0xFFE67E22),
+        onConfirm: () {
+          setState(() {
+            _model = ProdukFormModel(kode: generateKodeProduk());
+            _errors.clear();
+          });
+          _ctrls.resetToModel(_model);
+        },
+      ),
+    );
+  }
 
   void _showSimpanDialog() {
     if (!_validate()) {
       _showErrorSnack();
       return;
     }
+    FocusManager.instance.primaryFocus?.unfocus();
     showDialog(
       context: context,
       builder: (_) => _ConfirmDialog(
@@ -178,6 +187,7 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
 
   Future<void> _submitCreateProduk() async {
     if (_isSubmitting) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     _syncModelFromCtrls();
     setState(() => _isSubmitting = true);
     try {
@@ -230,31 +240,41 @@ class _TambahProdukPageState extends State<TambahProdukPage> {
     ),
   );
 
+  void _clearError(String key) {
+    if (!_errors.containsKey(key)) return;
+    setState(() => _errors.remove(key));
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
+    resizeToAvoidBottomInset: false,
     backgroundColor: const Color(0xFFF3F4F8),
     appBar: _formAppBar('Tambah Produk'),
-    body: SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: _ProdukFormBody(
-        isEdit: false,
-        model: _model,
-        errors: _errors,
-        ctrls: _ctrls,
-        kategoriList: _kategoriList,
-        satuanList: _satuanList,
-        onKategoriChanged: (v) => setState(() {
-          _model.kategori = v ?? '';
-          _errors.remove('kategori');
-        }),
-        onSatuanChanged: (v) => setState(() => _model.satuan = v ?? 'Dus'),
-        onAktifChanged: (v) => setState(() => _model.aktif = v),
-        onRegenKode: _regenKode,
-        onRegenBarcode: _regenBarcode,
-        onPickDate: _pickDate,
-        onClearError: (key) => setState(() => _errors.remove(key)),
-        onReset: _showResetDialog,
-        onSimpan: _showSimpanDialog,
+    body: KeyboardInsetPadding(
+      settleDuration: Duration.zero,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+        child: _ProdukFormBody(
+          isEdit: false,
+          model: _model,
+          errors: _errors,
+          ctrls: _ctrls,
+          kategoriList: _kategoriList,
+          satuanList: _satuanList,
+          onKategoriChanged: (v) => setState(() {
+            _model.kategori = v ?? '';
+            _errors.remove('kategori');
+          }),
+          onSatuanChanged: (v) => setState(() => _model.satuan = v ?? 'Dus'),
+          onAktifChanged: (v) => setState(() => _model.aktif = v),
+          onRegenKode: _regenKode,
+          onRegenBarcode: _regenBarcode,
+          onPickDate: _pickDate,
+          onClearError: _clearError,
+          onReset: _showResetDialog,
+          onSimpan: _showSimpanDialog,
+        ),
       ),
     ),
   );
@@ -342,6 +362,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
   }
 
   Future<void> _pickDate() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final today = DateTime.now();
     final initial =
         _model.kadaluarsa ?? DateTime.now().add(const Duration(days: 365));
@@ -360,12 +381,13 @@ class _EditProdukPageState extends State<EditProdukPage> {
         child: child!,
       ),
     );
-    if (picked != null)
+    if (picked != null) {
       setState(() {
         _model.kadaluarsa = picked;
         _ctrls.kadaluarsa.text = _fmtDate(picked);
         _errors.remove('kadaluarsa');
       });
+    }
   }
 
   bool _validate() {
@@ -373,14 +395,18 @@ class _EditProdukPageState extends State<EditProdukPage> {
     if (_ctrls.nama.text.trim().isEmpty) e['nama'] = 'Nama produk wajib diisi';
     if (_ctrls.kode.text.trim().isEmpty) e['kode'] = 'Kode produk wajib diisi';
     if (_model.kategori.isEmpty) e['kategori'] = 'Kategori wajib dipilih';
-    if (_ctrls.hargaJual.text.trim().isEmpty)
+    if (_ctrls.hargaJual.text.trim().isEmpty) {
       e['hargaJual'] = 'Harga jual wajib diisi';
-    if (_ctrls.stokAwal.text.trim().isEmpty)
+    }
+    if (_ctrls.stokAwal.text.trim().isEmpty) {
       e['stokAwal'] = 'Stok awal wajib diisi';
-    if (_ctrls.barcode.text.trim().isEmpty)
+    }
+    if (_ctrls.barcode.text.trim().isEmpty) {
       e['barcode'] = 'Barcode wajib diisi';
-    if (_model.kadaluarsa == null)
+    }
+    if (_model.kadaluarsa == null) {
       e['kadaluarsa'] = 'Tanggal kadaluarsa wajib diisi';
+    }
     setState(
       () => _errors
         ..clear()
@@ -389,30 +415,34 @@ class _EditProdukPageState extends State<EditProdukPage> {
     return e.isEmpty;
   }
 
-  void _showResetDialog() => showDialog(
-    context: context,
-    builder: (_) => _ConfirmDialog(
-      title: 'Reset Form',
-      icon: Icons.refresh_rounded,
-      iconColor: const Color(0xFFE67E22),
-      message: 'Apakah kamu yakin ingin mereset form ke data awal produk?',
-      confirmLabel: 'Ya, Reset',
-      confirmColor: const Color(0xFFE67E22),
-      onConfirm: () {
-        setState(() {
-          _model = ProdukFormModel.fromItem(widget.produk);
-          _errors.clear();
-        });
-        _ctrls.resetToModel(_model);
-      },
-    ),
-  );
+  void _showResetDialog() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    showDialog(
+      context: context,
+      builder: (_) => _ConfirmDialog(
+        title: 'Reset Form',
+        icon: Icons.refresh_rounded,
+        iconColor: const Color(0xFFE67E22),
+        message: 'Apakah kamu yakin ingin mereset form ke data awal produk?',
+        confirmLabel: 'Ya, Reset',
+        confirmColor: const Color(0xFFE67E22),
+        onConfirm: () {
+          setState(() {
+            _model = ProdukFormModel.fromItem(widget.produk);
+            _errors.clear();
+          });
+          _ctrls.resetToModel(_model);
+        },
+      ),
+    );
+  }
 
   void _showSimpanDialog() {
     if (!_validate()) {
       _showErrorSnack();
       return;
     }
+    FocusManager.instance.primaryFocus?.unfocus();
     showDialog(
       context: context,
       builder: (_) => _ConfirmDialog(
@@ -430,6 +460,7 @@ class _EditProdukPageState extends State<EditProdukPage> {
 
   Future<void> _submitUpdateProduk() async {
     if (_isSubmitting) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     if (widget.produk.id == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -497,31 +528,41 @@ class _EditProdukPageState extends State<EditProdukPage> {
     ),
   );
 
+  void _clearError(String key) {
+    if (!_errors.containsKey(key)) return;
+    setState(() => _errors.remove(key));
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
+    resizeToAvoidBottomInset: false,
     backgroundColor: const Color(0xFFF3F4F8),
     appBar: _formAppBar('Edit Produk', color: const Color(0xFFD69E2E)),
-    body: SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: _ProdukFormBody(
-        isEdit: true,
-        model: _model,
-        errors: _errors,
-        ctrls: _ctrls,
-        kategoriList: _kategoriList,
-        satuanList: _satuanList,
-        onKategoriChanged: (v) => setState(() {
-          _model.kategori = v ?? '';
-          _errors.remove('kategori');
-        }),
-        onSatuanChanged: (v) => setState(() => _model.satuan = v ?? 'Dus'),
-        onAktifChanged: (v) => setState(() => _model.aktif = v),
-        onRegenKode: _regenKode,
-        onRegenBarcode: _regenBarcode,
-        onPickDate: _pickDate,
-        onClearError: (key) => setState(() => _errors.remove(key)),
-        onReset: _showResetDialog,
-        onSimpan: _showSimpanDialog,
+    body: KeyboardInsetPadding(
+      settleDuration: Duration.zero,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+        child: _ProdukFormBody(
+          isEdit: true,
+          model: _model,
+          errors: _errors,
+          ctrls: _ctrls,
+          kategoriList: _kategoriList,
+          satuanList: _satuanList,
+          onKategoriChanged: (v) => setState(() {
+            _model.kategori = v ?? '';
+            _errors.remove('kategori');
+          }),
+          onSatuanChanged: (v) => setState(() => _model.satuan = v ?? 'Dus'),
+          onAktifChanged: (v) => setState(() => _model.aktif = v),
+          onRegenKode: _regenKode,
+          onRegenBarcode: _regenBarcode,
+          onPickDate: _pickDate,
+          onClearError: _clearError,
+          onReset: _showResetDialog,
+          onSimpan: _showSimpanDialog,
+        ),
       ),
     ),
   );
@@ -974,7 +1015,7 @@ class _SectionTitle extends StatelessWidget {
         height: 2,
         width: 120,
         decoration: BoxDecoration(
-          color: color.withOpacity(0.3),
+          color: color.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -1044,66 +1085,76 @@ class _FField extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      TextField(
-        controller: ctrl,
-        maxLines: maxLines,
-        keyboardType: keyboardType,
-        inputFormatters: inputFormatters,
-        onChanged: onChanged,
-        style: const TextStyle(fontSize: 13),
-        decoration: InputDecoration(
-          hintText: hint,
-          prefixText: prefix,
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-          filled: true,
-          fillColor: const Color(0xFFF8F9FA),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 14,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(
-              color: error != null ? Colors.red : Colors.grey.shade300,
+  Widget build(BuildContext context) {
+    final effectiveKeyboardType = maxLines > 1
+        ? TextInputType.multiline
+        : keyboardType;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: ctrl,
+          maxLines: maxLines,
+          keyboardType: effectiveKeyboardType,
+          textInputAction: maxLines > 1
+              ? TextInputAction.newline
+              : TextInputAction.next,
+          inputFormatters: inputFormatters,
+          onChanged: onChanged,
+          style: const TextStyle(fontSize: 13),
+          decoration: InputDecoration(
+            hintText: hint,
+            prefixText: prefix,
+            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+            filled: true,
+            fillColor: const Color(0xFFF8F9FA),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
             ),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(
-              color: error != null ? Colors.red.shade300 : Colors.grey.shade300,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(
+                color: error != null ? Colors.red : Colors.grey.shade300,
+              ),
             ),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(
-              color: error != null ? Colors.red : const Color(0xFF4169E1),
-              width: 1.5,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(
+                color: error != null
+                    ? Colors.red.shade300
+                    : Colors.grey.shade300,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(
+                color: error != null ? Colors.red : const Color(0xFF4169E1),
+                width: 1.5,
+              ),
             ),
           ),
         ),
-      ),
-      if (error != null) ...[
-        const SizedBox(height: 5),
-        Row(
-          children: [
-            const Icon(
-              Icons.error_outline_rounded,
-              color: Colors.red,
-              size: 13,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              error!,
-              style: const TextStyle(color: Colors.red, fontSize: 11),
-            ),
-          ],
-        ),
+        if (error != null) ...[
+          const SizedBox(height: 5),
+          Row(
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.red,
+                size: 13,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                error!,
+                style: const TextStyle(color: Colors.red, fontSize: 11),
+              ),
+            ],
+          ),
+        ],
       ],
-    ],
-  );
+    );
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1139,6 +1190,7 @@ class _FFieldAction extends StatelessWidget {
       TextField(
         controller: ctrl,
         keyboardType: keyboardType,
+        textInputAction: TextInputAction.next,
         inputFormatters: inputFormatters,
         onChanged: onChanged,
         style: const TextStyle(fontSize: 13),
@@ -1296,6 +1348,7 @@ class _FDateField extends StatelessWidget {
         controller: ctrl,
         onChanged: onChanged,
         keyboardType: TextInputType.datetime,
+        textInputAction: TextInputAction.next,
         style: const TextStyle(fontSize: 13),
         decoration: InputDecoration(
           hintText: 'hari/bulan/tahun',
@@ -1390,7 +1443,7 @@ class _ConfirmDialog extends StatelessWidget {
           width: 64,
           height: 64,
           decoration: BoxDecoration(
-            color: iconColor.withOpacity(0.12),
+            color: iconColor.withValues(alpha: 0.12),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: iconColor, size: 32),

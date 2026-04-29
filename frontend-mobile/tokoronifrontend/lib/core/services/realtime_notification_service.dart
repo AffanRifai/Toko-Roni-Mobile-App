@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -26,7 +27,9 @@ class RealtimeNotificationService {
   _RealtimeConfig? _config;
   String? _socketId;
   Future<void>? _connectInFlight;
-  final List<String> _recentNotificationIds = <String>[];
+  static const int _recentNotificationCacheLimit = 300;
+  final Set<String> _recentNotificationIds = <String>{};
+  final ListQueue<String> _recentNotificationOrder = ListQueue<String>();
 
   bool get isConnected => _connected;
 
@@ -60,6 +63,7 @@ class RealtimeNotificationService {
 
       if (_activeUserId != null && _activeUserId != trimmedUserId) {
         _recentNotificationIds.clear();
+        _recentNotificationOrder.clear();
       }
 
       _activeUserId = trimmedUserId;
@@ -160,9 +164,10 @@ class RealtimeNotificationService {
     if (_recentNotificationIds.contains(notificationId)) return true;
 
     _recentNotificationIds.add(notificationId);
-    const maxCacheSize = 300;
-    if (_recentNotificationIds.length > maxCacheSize) {
-      _recentNotificationIds.removeAt(0);
+    _recentNotificationOrder.addLast(notificationId);
+    if (_recentNotificationOrder.length > _recentNotificationCacheLimit) {
+      final oldestId = _recentNotificationOrder.removeFirst();
+      _recentNotificationIds.remove(oldestId);
     }
     return false;
   }

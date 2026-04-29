@@ -1,40 +1,99 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-/// Global wrapper to dismiss active focus when user taps outside editable input.
-/// This uses raw pointer events so child gestures (button tap, dropdown, etc.)
-/// continue to work normally.
-class AppInteractionWrapper extends StatelessWidget {
+/// Global wrapper to dismiss focus when user taps outside editable inputs.
+/// It deliberately ignores drags/scroll so keyboard is not dismissed while
+/// users only scroll through content.
+class AppInteractionWrapper extends StatefulWidget {
+  const AppInteractionWrapper({super.key, required this.child});
+
   final Widget child;
 
-  const AppInteractionWrapper({super.key, required this.child});
+  @override
+  State<AppInteractionWrapper> createState() => _AppInteractionWrapperState();
+}
+
+class _AppInteractionWrapperState extends State<AppInteractionWrapper>
+    with WidgetsBindingObserver {
+  static const double _tapSlop = 18;
+  static const Duration _maxTapDuration = Duration(milliseconds: 300);
+
+  final Map<int, _TapCandidate> _tapCandidates = <int, _TapCandidate>{};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    _tapCandidates.clear();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Dismiss keyboard first on Android back, then allow regular route pop.
+  @override
+  Future<bool> didPopRoute() async {
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus == null || !focus.hasFocus) {
+      return false;
+    }
+
+    focus.unfocus(disposition: UnfocusDisposition.scope);
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: _handlePointerDown,
-      child: StabilizedKeyboardInsets(child: child),
+      onPointerMove: _handlePointerMove,
+      onPointerCancel: _handlePointerCancel,
+      onPointerUp: _handlePointerUp,
+      child: widget.child,
     );
   }
 
   void _handlePointerDown(PointerDownEvent event) {
-    final currentFocus = FocusManager.instance.primaryFocus;
-    if (currentFocus == null || !currentFocus.hasFocus) return;
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus == null || !focus.hasFocus) return;
 
-    if (_isTapOnEditable(event)) return;
-    currentFocus.unfocus();
+    _tapCandidates[event.pointer] = _TapCandidate(
+      downPosition: event.position,
+      downTime: DateTime.now(),
+    );
   }
 
-  bool _isTapOnEditable(PointerDownEvent event) {
+  void _handlePointerMove(PointerMoveEvent event) {
+    final candidate = _tapCandidates[event.pointer];
+    if (candidate == null || candidate.moved) return;
+
+    final distance = (event.position - candidate.downPosition).distance;
+    if (distance > _tapSlop) candidate.moved = true;
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    _tapCandidates.remove(event.pointer);
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    final candidate = _tapCandidates.remove(event.pointer);
+    if (candidate == null || candidate.moved) return;
+    if (DateTime.now().difference(candidate.downTime) > _maxTapDuration) return;
+
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus == null || !focus.hasFocus) return;
+    if (_isTapOnEditable(event.position, event.viewId)) return;
+
+    focus.unfocus(disposition: UnfocusDisposition.scope);
+  }
+
+  bool _isTapOnEditable(Offset position, int viewId) {
     final hitTestResult = HitTestResult();
-    WidgetsBinding.instance.hitTestInView(
-      hitTestResult,
-      event.position,
-      event.viewId,
-    );
+    WidgetsBinding.instance.hitTestInView(hitTestResult, position, viewId);
 
     for (final entry in hitTestResult.path) {
       if (entry.target is RenderEditable) {
@@ -45,91 +104,15 @@ class AppInteractionWrapper extends StatelessWidget {
   }
 }
 
-/// Reduces heavy relayout during keyboard open/close animation by stabilizing
-/// bottom viewInsets and committing only when metrics settle.
-class StabilizedKeyboardInsets extends StatefulWidget {
-  final Widget child;
-  final Duration settleDuration;
+class _TapCandidate {
+  _TapCandidate({required this.downPosition, required this.downTime});
 
-  const StabilizedKeyboardInsets({
-    super.key,
-    required this.child,
-    this.settleDuration = const Duration(milliseconds: 90),
-  });
-
-  @override
-  State<StabilizedKeyboardInsets> createState() =>
-      _StabilizedKeyboardInsetsState();
+  final Offset downPosition;
+  final DateTime downTime;
+  bool moved = false;
 }
 
-class _StabilizedKeyboardInsetsState extends State<StabilizedKeyboardInsets>
-    with WidgetsBindingObserver {
-  Timer? _settleTimer;
-  bool _initialized = false;
-  double _stableBottomInset = 0;
-  double _pendingBottomInset = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_initialized) return;
-    _stableBottomInset = _logicalBottomInset();
-    _initialized = true;
-  }
-
-  @override
-  void dispose() {
-    _settleTimer?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeMetrics() {
-    _scheduleInsetCommit();
-  }
-
-  void _scheduleInsetCommit() {
-    if (!mounted) return;
-    _pendingBottomInset = _logicalBottomInset();
-
-    _settleTimer?.cancel();
-    _settleTimer = Timer(widget.settleDuration, () {
-      if (!mounted) return;
-      if ((_stableBottomInset - _pendingBottomInset).abs() < 0.5) return;
-      setState(() {
-        _stableBottomInset = _pendingBottomInset;
-      });
-    });
-  }
-
-  double _logicalBottomInset() {
-    final view = View.maybeOf(context);
-    if (view == null) return MediaQuery.viewInsetsOf(context).bottom;
-    return view.viewInsets.bottom / view.devicePixelRatio;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final stabilizedInsets = mediaQuery.viewInsets.copyWith(
-      bottom: _stableBottomInset,
-    );
-
-    return MediaQuery(
-      data: mediaQuery.copyWith(viewInsets: stabilizedInsets),
-      child: widget.child,
-    );
-  }
-}
-
-/// Global scroll behavior so any ScrollView dismisses keyboard on drag.
+/// Global scroll behavior: keep keyboard open while dragging/scrolling.
 class AppScrollBehavior extends MaterialScrollBehavior {
   const AppScrollBehavior();
 
@@ -137,6 +120,6 @@ class AppScrollBehavior extends MaterialScrollBehavior {
   ScrollViewKeyboardDismissBehavior getKeyboardDismissBehavior(
     BuildContext context,
   ) {
-    return ScrollViewKeyboardDismissBehavior.onDrag;
+    return ScrollViewKeyboardDismissBehavior.manual;
   }
 }
