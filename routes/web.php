@@ -121,6 +121,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/chart-data/{range}', [DashboardController::class, 'getChartData'])
+        ->where('range', '[0-9]+')
+        ->name('dashboard.chart-data');
     Route::get('/dashboard/logistik/chart-data/{range}', [DashboardController::class, 'getLogistikChartData'])
         ->name('dashboard.logistik.chart-data')
         ->middleware('role:logistik,staff_logistik');

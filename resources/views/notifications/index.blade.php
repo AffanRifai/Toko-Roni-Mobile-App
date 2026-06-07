@@ -142,7 +142,7 @@
                                     'create' => 'fas fa-user-plus text-green-500',
                                     'update' => 'fas fa-user-edit text-blue-500',
                                     
-                                    // Member notifications - lebih spesifik
+                                    // Member notifications
                                     'member_created' => 'fas fa-user-check text-purple-500',
                                     'member_updated' => 'fas fa-user-cog text-blue-500',
                                     
@@ -158,6 +158,8 @@
                                     'product_stock_low_stock' => 'fas fa-exclamation-triangle text-yellow-500',
                                     'product_stock_out_of_stock' => 'fas fa-ban text-red-500',
                                     'product_stock_restock' => 'fas fa-arrow-up text-green-500',
+                                    'product_restock' => 'fas fa-cubes text-green-500',
+                                    'product_restock_complete' => 'fas fa-check-circle text-green-500', // TAMBAHKAN INI
                                     
                                     // Delivery notifications
                                     'delivery_created' => 'fas fa-truck-moving text-blue-500',
@@ -184,10 +186,6 @@
                                     // Checker Report notifications
                                     'product_reported' => 'fas fa-flag-checkered text-orange-500',
                                     'report_resolved' => 'fas fa-check-double text-green-500',
-                                    
-                                    // Product notifications
-                                    'product_restock' => 'fas fa-cubes text-green-500',
-                                    'product_restock_complete' => 'fas fa-check-circle text-green-500',
                                     
                                     default => 'fas fa-bell text-gray-400'
                                 };

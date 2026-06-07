@@ -54,6 +54,7 @@ $unreadCount = $user ? $user->unreadNotifications->count() : 0;
             class="relative p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group focus:outline-none">
         <i class="fas fa-bell text-gray-600 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white text-sm"></i>
         
+<<<<<<< HEAD:storage/framework/views/57de9ce022d17d199d53e825f0d900f4.php
         <span id="notif-badge-wrapper"
               class="absolute -top-1 -right-1 flex h-4 w-4 <?php echo e($unreadCount > 0 ? '' : 'hidden'); ?>">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -64,6 +65,19 @@ $unreadCount = $user ? $user->unreadNotifications->count() : 0;
 
             </span>
         </span>
+=======
+        <?php if($unreadCount > 0): ?>
+            <span class="absolute -top-1 -right-1 flex h-4 w-4">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-white text-[10px] items-center justify-center font-bold">
+                    <?php echo e($unreadCount > 9 ? '9+' : $unreadCount); ?>
+
+                </span>
+            </span>
+        <?php else: ?>
+            <span class="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full"></span>
+        <?php endif; ?>
+>>>>>>> 7d76cb6ee59245fbf3b88b80d2674b181853dbe3:storage/framework/views/708cdc29a877f89076f16bec318cde67.php
     </button>
 
     <!-- Dropdown Menu -->
@@ -83,6 +97,7 @@ $unreadCount = $user ? $user->unreadNotifications->count() : 0;
             <div class="flex items-center justify-between">
                 <h3 class="font-semibold text-gray-900 dark:text-white text-sm">
                     Notifikasi
+<<<<<<< HEAD:storage/framework/views/57de9ce022d17d199d53e825f0d900f4.php
                     <span id="notif-header-badge"
                           class="ml-2 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-0.5 rounded-full <?php echo e($unreadCount > 0 ? '' : 'hidden'); ?>">
                         <span id="notif-header-count"><?php echo e($unreadCount); ?></span> baru
@@ -92,11 +107,26 @@ $unreadCount = $user ? $user->unreadNotifications->count() : 0;
                       method="POST"
                       id="notif-mark-all-form"
                       class="<?php echo e($unreadCount > 0 ? '' : 'hidden'); ?>">
+=======
+                    <?php if($unreadCount > 0): ?>
+                        <span class="ml-2 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-0.5 rounded-full">
+                            <?php echo e($unreadCount); ?> baru
+                        </span>
+                    <?php endif; ?>
+                </h3>
+                <?php if($unreadCount > 0): ?>
+                    <form action="<?php echo e(route('notifications.mark-all-as-read')); ?>" method="POST">
+>>>>>>> 7d76cb6ee59245fbf3b88b80d2674b181853dbe3:storage/framework/views/708cdc29a877f89076f16bec318cde67.php
                         <?php echo csrf_field(); ?>
                         <button type="submit" class="text-xs text-blue-600 hover:text-blue-800">
                             Tandai semua dibaca
                         </button>
+<<<<<<< HEAD:storage/framework/views/57de9ce022d17d199d53e825f0d900f4.php
                 </form>
+=======
+                    </form>
+                <?php endif; ?>
+>>>>>>> 7d76cb6ee59245fbf3b88b80d2674b181853dbe3:storage/framework/views/708cdc29a877f89076f16bec318cde67.php
             </div>
         </div>
 
@@ -116,59 +146,57 @@ $unreadCount = $user ? $user->unreadNotifications->count() : 0;
                         <div class="flex-shrink-0 mt-0.5">
                             <?php
                                 $iconClass = match($data['type'] ?? 'default') {
-                                     // User notifications
-                                    'create' => 'fas fa-user-plus text-green-500',
-                                    'update' => 'fas fa-user-edit text-blue-500',
-                                    
-                                    // Member notifications - lebih spesifik
-                                    'member_created' => 'fas fa-user-check text-purple-500',
-                                    'member_updated' => 'fas fa-user-cog text-blue-500',
-                                    
-                                    // Category notifications
-                                    'category_created' => 'fas fa-tag text-green-500',
-                                    'category_updated' => 'fas fa-tags text-blue-500',
-                                    'category_deleted' => 'fas fa-trash-alt text-red-500',
-                                    
-                                    // Product notifications
-                                    'product_created' => 'fas fa-box-open text-green-500',
-                                    'product_updated' => 'fas fa-boxes text-blue-500',
-                                    'product_deleted' => 'fas fa-trash-alt text-red-500',
-                                    'product_stock_low_stock' => 'fas fa-exclamation-triangle text-yellow-500',
-                                    'product_stock_out_of_stock' => 'fas fa-ban text-red-500',
-                                    'product_stock_restock' => 'fas fa-arrow-up text-green-500',
-                                    
-                                    // Delivery notifications
-                                    'delivery_created' => 'fas fa-truck-moving text-blue-500',
-                                    'delivery_updated' => 'fas fa-truck-ramp-box text-yellow-500',
-                                    'delivery_assigned' => 'fas fa-user-check text-purple-500',
-                                    'delivery_status_changed' => 'fas fa-exchange-alt text-orange-500',
-                                    'delivery_deleted' => 'fas fa-trash-alt text-red-500',
-                                    
-                                    // Vehicle notifications
-                                    'vehicle_created' => 'fas fa-truck-pickup text-green-500',
-                                    'vehicle_updated' => 'fas fa-truck-moving text-yellow-500',
-                                    'vehicle_deleted' => 'fas fa-trash-alt text-red-500',
-                                    'vehicle_status_changed' => 'fas fa-sync-alt text-blue-500',
-                                    
-                                    // Transaction notifications
-                                    'transaction_created' => 'fas fa-shopping-cart text-green-500',
-                                    'transaction_updated' => 'fas fa-edit text-yellow-500',
-                                    'transaction_deleted' => 'fas fa-trash-alt text-red-500',
-                                    
-                                    // Receivable notifications
-                                    'receivable_created' => 'fas fa-file-invoice-dollar text-purple-500',
-                                    'payment_received' => 'fas fa-coins text-green-500',
-                                    
-                                    // Checker Report notifications
-                                    'product_reported' => 'fas fa-flag-checkered text-orange-500',
-                                    'report_resolved' => 'fas fa-check-double text-green-500',
-                                    
-                                    // Product notifications
-                                    'product_restock' => 'fas fa-cubes text-green-500',
-                                    'product_restock_complete' => 'fas fa-check-circle text-green-500',
-                                    
-                                    default => 'fas fa-bell text-gray-400'
-                                };
+                                // User notifications
+                                'create' => 'fas fa-user-plus text-green-500',
+                                'update' => 'fas fa-user-edit text-blue-500',
+                                
+                                // Member notifications
+                                'member_created' => 'fas fa-user-check text-purple-500',
+                                'member_updated' => 'fas fa-user-cog text-blue-500',
+                                
+                                // Category notifications
+                                'category_created' => 'fas fa-tag text-green-500',
+                                'category_updated' => 'fas fa-tags text-blue-500',
+                                'category_deleted' => 'fas fa-trash-alt text-red-500',
+                                
+                                // Product notifications
+                                'product_created' => 'fas fa-box-open text-green-500',
+                                'product_updated' => 'fas fa-boxes text-blue-500',
+                                'product_deleted' => 'fas fa-trash-alt text-red-500',
+                                'product_stock_low_stock' => 'fas fa-exclamation-triangle text-yellow-500',
+                                'product_stock_out_of_stock' => 'fas fa-ban text-red-500',
+                                'product_stock_restock' => 'fas fa-arrow-up text-green-500',
+                                'product_restock' => 'fas fa-cubes text-green-500',
+                                'product_restock_complete' => 'fas fa-check-circle text-green-500',
+                                
+                                // Delivery notifications
+                                'delivery_created' => 'fas fa-truck-moving text-blue-500',
+                                'delivery_updated' => 'fas fa-truck-ramp-box text-yellow-500',
+                                'delivery_assigned' => 'fas fa-user-check text-purple-500',
+                                'delivery_status_changed' => 'fas fa-exchange-alt text-orange-500',
+                                'delivery_deleted' => 'fas fa-trash-alt text-red-500',
+                                
+                                // Vehicle notifications
+                                'vehicle_created' => 'fas fa-truck-pickup text-green-500',
+                                'vehicle_updated' => 'fas fa-truck-moving text-yellow-500',
+                                'vehicle_deleted' => 'fas fa-trash-alt text-red-500',
+                                'vehicle_status_changed' => 'fas fa-sync-alt text-blue-500',
+                                
+                                // Transaction notifications
+                                'transaction_created' => 'fas fa-shopping-cart text-green-500',
+                                'transaction_updated' => 'fas fa-edit text-yellow-500',
+                                'transaction_deleted' => 'fas fa-trash-alt text-red-500',
+                                
+                                // Receivable notifications
+                                'receivable_created' => 'fas fa-file-invoice-dollar text-purple-500',
+                                'payment_received' => 'fas fa-coins text-green-500',
+                                
+                                // Checker Report notifications
+                                'product_reported' => 'fas fa-flag-checkered text-orange-500',
+                                'report_resolved' => 'fas fa-check-double text-green-500',
+                                
+                                default => 'fas fa-bell text-gray-400'
+                            };
                             ?>
                             <i class="<?php echo e($iconClass); ?> text-sm"></i>
                         </div>
