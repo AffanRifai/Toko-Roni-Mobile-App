@@ -16,12 +16,14 @@ class ProductReportedNotification extends Notification
     protected $report;
     protected $product;
     protected $reportedBy;
+    protected $meta;
 
-    public function __construct(CheckerReport $report, Product $product, User $reportedBy)
+    public function __construct(CheckerReport $report, Product $product, User $reportedBy, array $meta = [])
     {
         $this->report = $report;
         $this->product = $product;
         $this->reportedBy = $reportedBy;
+        $this->meta = $meta;
     }
 
     public function via($notifiable)
@@ -39,8 +41,9 @@ class ProductReportedNotification extends Notification
             'other' => 'Lainnya',
         ];
 
-        return [
-            'type' => 'product_reported',
+        return array_merge([
+            'type' => 'report',
+            'title' => 'Laporan Produk Urgent',
             'report_id' => $this->report->id,
             'product_id' => $this->product->id,
             'product_name' => $this->product->name,
@@ -51,10 +54,12 @@ class ProductReportedNotification extends Notification
             'quantity' => $this->report->quantity,
             'reported_by' => $this->reportedBy->name,
             'reported_by_id' => $this->reportedBy->id,
+            'priority' => 'urgent',
+            'urgent' => true,
             'message' => 'Laporan produk: ' . $this->product->name . ' (' . ($typeLabels[$this->report->report_type] ?? $this->report->report_type) . ') oleh ' . $this->reportedBy->name,
             'icon' => 'fa-solid fa-flag',
             'color' => 'orange',
             'time' => now()->toDateTimeString()
-        ];
+        ], $this->meta);
     }
 }

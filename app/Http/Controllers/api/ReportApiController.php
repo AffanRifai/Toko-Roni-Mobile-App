@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class ReportApiController extends Controller
 {
@@ -173,11 +174,132 @@ class ReportApiController extends Controller
     }
 
     /**
-     * Export PDF (Mock)
+     * Export sales PDF
      */
-    public function exportPdf()
+    public function exportPdf(Request $request)
     {
-        return response()->json(['success' => true, 'message' => 'PDF being generated'], 200);
+        try {
+            $user = auth()->user();
+            if (!$user || !in_array($user->role, ['owner', 'manager', 'kepala_gudang', 'kasir', 'admin'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda tidak memiliki akses ke laporan PDF',
+                ], 403);
+            }
+
+            $query = Transaction::with(['user', 'items.product', 'member']);
+
+            if ($request->filled('date')) {
+                $query->whereDate('created_at', $request->date);
+            }
+
+            if ($request->filled('month')) {
+                $date = Carbon::parse($request->month . '-01');
+                $query->whereMonth('created_at', $date->month)
+                    ->whereYear('created_at', $date->year);
+            }
+
+            $sort = $request->get('sort', 'latest');
+            switch ($sort) {
+                case 'oldest':
+                    $query->oldest();
+                    break;
+                case 'highest':
+                    $query->orderBy('total_amount', 'desc');
+                    break;
+                case 'lowest':
+                    $query->orderBy('total_amount', 'asc');
+                    break;
+                default:
+                    $query->latest();
+                    break;
+            }
+
+            $transactions = $query->get();
+            $grandTotal = $transactions->sum('total_amount');
+            $totalItems = $transactions->sum(function ($trx) {
+                return $trx->items ? $trx->items->sum('qty') : 0;
+            });
+            $totalCount = $transactions->count();
+            $maxTransaction = $transactions->max('total_amount');
+            $minTransaction = $transactions->min('total_amount');
+            $averageTransaction = $totalCount > 0 ? $grandTotal / $totalCount : 0;
+
+            $startDate = '-';
+            $endDate = '-';
+            if ($request->filled('date')) {
+                $startDate = Carbon::parse($request->date)->format('d-m-Y');
+                $endDate = $startDate;
+            } elseif ($request->filled('month')) {
+                $date = Carbon::parse($request->month . '-01');
+                $startDate = $date->copy()->startOfMonth()->format('d-m-Y');
+                $endDate = $date->copy()->endOfMonth()->format('d-m-Y');
+            } elseif ($transactions->count() > 0) {
+                $first = $transactions->sortBy('created_at')->first();
+                $last = $transactions->sortByDesc('created_at')->first();
+                $startDate = $first ? Carbon::parse($first->created_at)->format('d-m-Y') : '-';
+                $endDate = $last ? Carbon::parse($last->created_at)->format('d-m-Y') : '-';
+            }
+
+            $paymentMethods = [
+                'tunai' => 0,
+                'transfer' => 0,
+                'kredit' => 0,
+                'e_wallet' => 0,
+                'qris' => 0,
+            ];
+
+            foreach ($transactions as $trx) {
+                $method = strtolower($trx->payment_method ?? '');
+                if (isset($paymentMethods[$method])) {
+                    $paymentMethods[$method]++;
+                } else {
+                    if (!isset($paymentMethods['lainnya'])) {
+                        $paymentMethods['lainnya'] = 0;
+                    }
+                    $paymentMethods['lainnya']++;
+                }
+            }
+
+            $paymentStatus = [
+                'LUNAS' => $transactions->where('payment_status', 'LUNAS')->count(),
+                'BELUM LUNAS' => $transactions->where('payment_status', 'BELUM LUNAS')->count(),
+            ];
+
+            $deliveryStats = [
+                'need' => $transactions->where('need_delivery', true)->count(),
+                'not_need' => $transactions->where('need_delivery', false)->count(),
+            ];
+
+            $pdf = Pdf::loadView('reports.exports.sales-pdf', [
+                'transactions' => $transactions,
+                'grandTotal' => $grandTotal,
+                'total' => $grandTotal,
+                'totalCount' => $totalCount,
+                'totalItems' => $totalItems,
+                'maxTransaction' => $maxTransaction,
+                'minTransaction' => $minTransaction,
+                'averageTransaction' => $averageTransaction,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+                'period' => $startDate != '-' ? "$startDate s/d $endDate" : 'Semua Periode',
+                'filterDate' => $request->date,
+                'filterMonth' => $request->month,
+                'filterSort' => $sort,
+                'paymentMethods' => $paymentMethods,
+                'paymentStatus' => $paymentStatus,
+                'deliveryStats' => $deliveryStats,
+                'generatedAt' => Carbon::now()->translatedFormat('d-m-Y H:i:s'),
+            ])->setPaper('A4', 'landscape');
+
+            return $pdf->download('laporan-penjualan-' . Carbon::now()->format('Y-m-d-H-i-s') . '.pdf');
+        } catch (\Exception $e) {
+            Log::error('API export PDF error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengekspor PDF: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Models\Member;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Notifications\PaymentReceivedNotification;
+use App\Services\NotificationRoutingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -173,12 +174,18 @@ class ReceivableApiController extends Controller
 
             DB::commit();
 
-            // Notifications
+            // Notifications (role-based + monitoring)
             try {
-                $users = User::whereIn('role', ['owner', 'admin', 'kasir'])->get();
                 $receivedBy = auth()->user();
-                foreach ($users as $user) {
-                    $user->notify(new PaymentReceivedNotification($receivable, $payment, $receivedBy));
+                if ($receivedBy instanceof User) {
+                    /** @var NotificationRoutingService $router */
+                    $router = app(NotificationRoutingService::class);
+                    $meta = $router->metaForEvent('receivable.payment_received');
+                    $router->send(
+                        'receivable.payment_received',
+                        new PaymentReceivedNotification($receivable, $payment, $receivedBy, $meta),
+                        $receivedBy
+                    );
                 }
             } catch (\Exception $e) {
                 Log::error('API Payment notification error: ' . $e->getMessage());

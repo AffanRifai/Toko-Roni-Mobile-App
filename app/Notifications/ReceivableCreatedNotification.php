@@ -16,12 +16,14 @@ class ReceivableCreatedNotification extends Notification
     protected $receivable;
     protected $transaction;
     protected $createdBy;
+    protected $meta;
 
-    public function __construct(Receivable $receivable, Transaction $transaction, User $createdBy)
+    public function __construct(Receivable $receivable, Transaction $transaction, User $createdBy, array $meta = [])
     {
         $this->receivable = $receivable;
         $this->transaction = $transaction;
         $this->createdBy = $createdBy;
+        $this->meta = $meta;
     }
 
     public function via($notifiable)
@@ -31,7 +33,7 @@ class ReceivableCreatedNotification extends Notification
 
     public function toArray($notifiable)
     {
-        return [
+        return array_merge([
             'type' => 'receivable_created',
             'receivable_id' => $this->receivable->id,
             'no_piutang' => $this->receivable->no_piutang,
@@ -46,6 +48,6 @@ class ReceivableCreatedNotification extends Notification
             'icon' => 'fa-solid fa-hand-holding-dollar',
             'color' => 'purple',
             'time' => now()->toDateTimeString()
-        ];
+        ], $this->meta);
     }
 }

@@ -16,12 +16,14 @@ class PaymentReceivedNotification extends Notification
     protected $receivable;
     protected $payment;
     protected $receivedBy;
+    protected $meta;
 
-    public function __construct(Receivable $receivable, ReceivablePayment $payment, User $receivedBy)
+    public function __construct(Receivable $receivable, ReceivablePayment $payment, User $receivedBy, array $meta = [])
     {
         $this->receivable = $receivable;
         $this->payment = $payment;
         $this->receivedBy = $receivedBy;
+        $this->meta = $meta;
     }
 
     public function via($notifiable)
@@ -42,7 +44,7 @@ class PaymentReceivedNotification extends Notification
         $isLunas = $remaining <= 0;
         $lunasText = $isLunas ? ' (Lunas)' : '';
 
-        return [
+        return array_merge([
             'type' => 'payment_received',
             'receivable_id' => $this->receivable->id,
             'no_piutang' => $this->receivable->no_piutang,
@@ -71,6 +73,6 @@ class PaymentReceivedNotification extends Notification
             'icon' => $isLunas ? 'fa-solid fa-check-circle' : 'fa-solid fa-money-bill-transfer',
             'color' => $isLunas ? 'green' : 'blue',
             'time' => now()->toDateTimeString()
-        ];
+        ], $this->meta);
     }
 }

@@ -16,12 +16,14 @@ class TransactionCreatedNotification extends Notification
     protected $transaction;
     protected $items;
     protected $createdBy;
+    protected $meta;
 
-    public function __construct(Transaction $transaction, array $items, User $createdBy)
+    public function __construct(Transaction $transaction, array $items, User $createdBy, array $meta = [])
     {
         $this->transaction = $transaction;
         $this->items = $items;
         $this->createdBy = $createdBy;
+        $this->meta = $meta;
     }
 
     public function via($notifiable)
@@ -40,7 +42,7 @@ class TransactionCreatedNotification extends Notification
             'transfer' => 'Transfer'
         ];
         
-        return $this->getInAppPayload(
+        return array_merge($this->getInAppPayload(
             'transaction_created',
             'Transaksi baru ' . $this->transaction->invoice_number . ' sebesar Rp ' . number_format($this->transaction->total_amount, 0, ',', '.') . ' oleh ' . $this->createdBy->name,
             'fas fa-cash-register',
@@ -57,6 +59,6 @@ class TransactionCreatedNotification extends Notification
                 'created_by' => $this->createdBy->name,
                 'created_by_id' => $this->createdBy->id,
             ]
-        );
+        ), $this->meta);
     }
 }

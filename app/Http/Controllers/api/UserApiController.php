@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Notifications\UserCreatedNotification;
 use App\Notifications\UserUpdatedNotification;
+use App\Services\NotificationRoutingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
@@ -15,9 +16,20 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class UserApiController extends Controller
 {
+    private const VALID_ROLES = [
+        'owner',
+        'manager',
+        'kasir',
+        'kepala_gudang',
+        'gudang',
+        'logistik',
+        'checker_barang',
+    ];
+
     /**
      * Constructor
      */
@@ -67,7 +79,12 @@ class UserApiController extends Controller
             $sortField = $request->get('sort_by', 'created_at');
             $sortOrder = $request->get('sort_order', 'desc');
 
-            if (in_array($sortField, ['name', 'email', 'role', 'created_at', 'last_login_at'])) {
+            $sortableFields = ['name', 'email', 'role', 'created_at'];
+            if ($this->usersTableHasColumn('last_login_at')) {
+                $sortableFields[] = 'last_login_at';
+            }
+
+            if (in_array($sortField, $sortableFields, true)) {
                 $query->orderBy($sortField, $sortOrder);
             }
 
@@ -110,7 +127,7 @@ class UserApiController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:owner,kasir,gudang,logistik,checker_barang',
+            'role' => 'required|in:' . implode(',', self::VALID_ROLES),
             'jenis_toko' => 'required|in:grosir,eceran',
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string|max:500',
@@ -127,11 +144,11 @@ class UserApiController extends Controller
         }
 
         // Validasi logic role x jenis toko
-        if ($request->role === 'gudang' && $request->jenis_toko === 'eceran') {
+        if ($this->isWarehouseRole($request->role) && $request->jenis_toko === 'eceran') {
             return response()->json([
                 'success' => false,
-                'message' => 'Role gudang hanya untuk toko grosir',
-                'errors' => ['jenis_toko' => ['Role gudang hanya untuk toko grosir']]
+                'message' => 'Role kepala gudang hanya untuk toko grosir',
+                'errors' => ['jenis_toko' => ['Role kepala gudang hanya untuk toko grosir']]
             ], 422);
         }
 
@@ -139,6 +156,7 @@ class UserApiController extends Controller
 
         try {
             $data = $validator->validated();
+            $data['role'] = $this->normalizeRole($data['role'] ?? null);
             $data['password'] = Hash::make($data['password']);
             $data['is_active'] = $request->boolean('is_active', true);
 
@@ -227,7 +245,7 @@ class UserApiController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:255',
             'email' => ['sometimes', 'required', 'email', Rule::unique('users')->ignore($user->id)],
-            'role' => 'sometimes|required|in:owner,kasir,gudang,logistik,checker_barang',
+            'role' => 'sometimes|required|in:' . implode(',', self::VALID_ROLES),
             'jenis_toko' => 'sometimes|required|in:grosir,eceran',
             'password' => 'nullable|string|min:8|confirmed',
             'phone' => 'nullable|string|max:20',
@@ -246,11 +264,11 @@ class UserApiController extends Controller
 
         // Validasi logic role x jenis toko
         if ($request->has('role') && $request->has('jenis_toko') &&
-            $request->role === 'gudang' && $request->jenis_toko === 'eceran') {
+            $this->isWarehouseRole($request->role) && $request->jenis_toko === 'eceran') {
             return response()->json([
                 'success' => false,
-                'message' => 'Role gudang hanya untuk toko grosir',
-                'errors' => ['jenis_toko' => ['Role gudang hanya untuk toko grosir']]
+                'message' => 'Role kepala gudang hanya untuk toko grosir',
+                'errors' => ['jenis_toko' => ['Role kepala gudang hanya untuk toko grosir']]
             ], 422);
         }
 
@@ -259,6 +277,9 @@ class UserApiController extends Controller
         try {
             $oldData = $user->toArray();
             $data = $validator->validated();
+            if (array_key_exists('role', $data)) {
+                $data['role'] = $this->normalizeRole($data['role']);
+            }
 
             // Handle password
             if ($request->filled('password')) {
@@ -412,7 +433,7 @@ class UserApiController extends Controller
                         'name' => $user->name,
                         'email' => $user->email,
                         'role' => $user->role,
-                        'role_text' => ucfirst($user->role),
+                        'role_text' => $this->formatRoleText($user->role),
                         'has_face' => $user->face_descriptor ? true : false,
                         'face_registered_at' => $user->face_registered_at ?
                             $user->face_registered_at->format('d/m/Y H:i') : null
@@ -727,8 +748,8 @@ class UserApiController extends Controller
     public function changeRole(Request $request, $id)
     {
         $validator = Validator::make($request->all(), [
-            'role' => 'required|in:owner,kasir,gudang,logistik,checker_barang',
-            'jenis_toko' => 'required_if:role,gudang|in:grosir,eceran'
+            'role' => 'required|in:' . implode(',', self::VALID_ROLES),
+            'jenis_toko' => 'required_if:role,gudang,kepala_gudang|in:grosir,eceran'
         ]);
 
         if ($validator->fails()) {
@@ -750,18 +771,18 @@ class UserApiController extends Controller
             }
 
             // Validate role and jenis_toko combination
-            if ($request->role === 'gudang' && $request->jenis_toko === 'eceran') {
+            if ($this->isWarehouseRole($request->role) && $request->jenis_toko === 'eceran') {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Role gudang hanya untuk toko grosir',
-                    'errors' => ['jenis_toko' => ['Role gudang hanya untuk toko grosir']]
+                    'message' => 'Role kepala gudang hanya untuk toko grosir',
+                    'errors' => ['jenis_toko' => ['Role kepala gudang hanya untuk toko grosir']]
                 ], 400);
             }
 
             $oldRole = $user->role;
             $oldJenisToko = $user->jenis_toko;
 
-            $user->role = $request->role;
+            $user->role = $this->normalizeRole($request->role);
             if ($request->has('jenis_toko')) {
                 $user->jenis_toko = $request->jenis_toko;
             }
@@ -960,7 +981,7 @@ class UserApiController extends Controller
         $validator = Validator::make($request->all(), [
             'user_ids' => 'required|array|min:1',
             'user_ids.*' => 'exists:users,id',
-            'role' => 'required|in:owner,kasir,gudang,logistik,checker_barang'
+            'role' => 'required|in:' . implode(',', self::VALID_ROLES)
         ]);
 
         if ($validator->fails()) {
@@ -972,21 +993,22 @@ class UserApiController extends Controller
         }
 
         try {
+            $normalizedRole = $this->normalizeRole($request->role);
             $count = User::whereIn('id', $request->user_ids)
                 ->where('id', '!=', auth()->id()) // Exclude self
-                ->update(['role' => $request->role]);
+                ->update(['role' => $normalizedRole]);
 
             Log::info('Bulk update user roles via API', [
                 'user_ids' => $request->user_ids,
-                'role' => $request->role,
+                'role' => $normalizedRole,
                 'count' => $count,
                 'updated_by' => auth()->id()
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => "{$count} user berhasil diperbarui rolenya menjadi {$request->role}",
-                'data' => ['updated_count' => $count, 'role' => $request->role]
+                'message' => "{$count} user berhasil diperbarui rolenya menjadi {$normalizedRole}",
+                'data' => ['updated_count' => $count, 'role' => $normalizedRole]
             ], 200);
 
         } catch (\Exception $e) {
@@ -1262,22 +1284,27 @@ class UserApiController extends Controller
      */
     private function formatUserData($user, $detailed = false)
     {
+        $lastLoginAt = null;
+        if ($this->usersTableHasColumn('last_login_at')) {
+            $lastLoginAt = $this->formatDateTime($user->last_login_at);
+        }
+
         $data = [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role,
-            'role_text' => ucfirst($user->role),
+            'role_text' => $this->formatRoleText($user->role),
             'jenis_toko' => $user->jenis_toko,
-            'jenis_toko_text' => ucfirst($user->jenis_toko),
+            'jenis_toko_text' => ucfirst((string) $user->jenis_toko),
             'phone' => $user->phone,
             'address' => $user->address,
             'is_active' => $user->is_active,
             'status_text' => $user->is_active ? 'Active' : 'Inactive',
             'avatar' => $user->image ? asset('storage/' . $user->image) : null,
-            'last_login_at' => $user->last_login_at ? $user->last_login_at->format('d/m/Y H:i:s') : null,
-            'created_at' => $user->created_at->format('d/m/Y H:i:s'),
-            'updated_at' => $user->updated_at->format('d/m/Y H:i:s'),
+            'last_login_at' => $lastLoginAt,
+            'created_at' => $this->formatDateTime($user->created_at),
+            'updated_at' => $this->formatDateTime($user->updated_at),
         ];
 
         if ($detailed) {
@@ -1285,7 +1312,7 @@ class UserApiController extends Controller
                 'has_face' => $user->face_descriptor ? true : false,
                 'face_score' => $user->face_score,
                 'face_registered_at' => $user->face_registered_at ?
-                    $user->face_registered_at->format('d/m/Y H:i:s') : null,
+                    $this->formatDateTime($user->face_registered_at) : null,
                 'face_image' => $user->image && strpos($user->image, 'face_') !== false ?
                     asset('storage/' . $user->image) : null
             ];
@@ -1307,6 +1334,14 @@ class UserApiController extends Controller
     {
         $totalUsers = User::count();
         $activeUsers = User::where('is_active', true)->count();
+        $faceRegisteredCount = User::whereNotNull('face_descriptor')->count();
+
+        $onlineNow = 0;
+        if ($this->usersTableHasColumn('last_login_at')) {
+            $onlineNow = User::whereNotNull('last_login_at')
+                ->where('last_login_at', '>=', now()->subMinutes(5))
+                ->count();
+        }
 
         return [
             'total' => $totalUsers,
@@ -1314,8 +1349,11 @@ class UserApiController extends Controller
             'inactive' => User::where('is_active', false)->count(),
             'by_role' => [
                 'owner' => User::where('role', 'owner')->count(),
+                'manager' => User::where('role', 'manager')->count(),
                 'kasir' => User::where('role', 'kasir')->count(),
-                'gudang' => User::where('role', 'gudang')->count(),
+                'kepala_gudang' => User::where('role', 'kepala_gudang')->count(),
+                // Backward compatibility for legacy data that still uses `gudang`
+                'gudang' => User::whereIn('role', ['gudang', 'kepala_gudang'])->count(),
                 'logistik' => User::where('role', 'logistik')->count(),
                 'checker_barang' => User::where('role', 'checker_barang')->count(),
             ],
@@ -1326,12 +1364,79 @@ class UserApiController extends Controller
             'active_percentage' => $totalUsers > 0
                 ? round(($activeUsers / $totalUsers) * 100, 1)
                 : 0,
-            'face_registered' => User::whereNotNull('face_descriptor')->count(),
+            'face_registered' => $faceRegisteredCount,
             'face_registered_percentage' => $totalUsers > 0
-                ? round((User::whereNotNull('face_descriptor')->count() / $totalUsers) * 100, 1)
+                ? round(($faceRegisteredCount / $totalUsers) * 100, 1)
                 : 0,
-            'online_now' => User::where('last_login_at', '>=', now()->subMinutes(5))->count(),
+            'online_now' => $onlineNow,
         ];
+    }
+
+    private function usersTableHasColumn(string $column): bool
+    {
+        static $cache = [];
+
+        if (array_key_exists($column, $cache)) {
+            return $cache[$column];
+        }
+
+        try {
+            $cache[$column] = Schema::hasColumn('users', $column);
+        } catch (\Throwable $e) {
+            $cache[$column] = false;
+        }
+
+        return $cache[$column];
+    }
+
+    private function formatDateTime($value, string $format = 'd/m/Y H:i:s'): ?string
+    {
+        if (empty($value)) {
+            return null;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format($format);
+        }
+
+        try {
+            return \Carbon\Carbon::parse($value)->format($format);
+        } catch (\Throwable $e) {
+            return (string) $value;
+        }
+    }
+
+    private function normalizeRole(?string $role): ?string
+    {
+        if ($role === null) {
+            return null;
+        }
+
+        $normalized = strtolower(trim($role));
+
+        return match ($normalized) {
+            'gudang' => 'kepala_gudang',
+            'staff_logistik' => 'logistik',
+            default => $normalized,
+        };
+    }
+
+    private function isWarehouseRole(?string $role): bool
+    {
+        return $this->normalizeRole($role) === 'kepala_gudang';
+    }
+
+    private function formatRoleText(?string $role): string
+    {
+        return match ($this->normalizeRole($role)) {
+            'owner' => 'Owner',
+            'manager' => 'Manager',
+            'kasir' => 'Kasir',
+            'kepala_gudang' => 'Kepala Gudang',
+            'logistik' => 'Logistik',
+            'checker_barang' => 'Checker Barang',
+            default => ucfirst((string) $role),
+        };
     }
 
     /**
@@ -1411,37 +1516,23 @@ class UserApiController extends Controller
         try {
             $currentUser = auth()->user();
 
-            if (!$currentUser) {
+            if (!$currentUser instanceof User || !$user instanceof User) {
                 return;
             }
 
-            // 1. Kirim ke semua user dengan role owner
-            $owners = User::where('role', 'owner')
-                ->where('id', '!=', $currentUser->id)
-                ->get();
-
-            foreach ($owners as $owner) {
-                $owner->notify(new UserCreatedNotification($user, $currentUser));
-                Log::info('API Notifikasi user terkirim ke owner:', [
-                    'owner_id' => $owner->id,
-                    'user_id' => $user->id
-                ]);
+            $extraIds = [];
+            if ($user->is_active && $user->id !== $currentUser->id) {
+                $extraIds[] = $user->id;
             }
 
-            // 2. Kirim ke user yang baru dibuat (jika aktif)
-            if ($user->is_active && $user->id != $currentUser->id) {
-                $user->notify(new UserCreatedNotification($user, $currentUser));
-                Log::info('API Notifikasi user terkirim ke user baru:', ['user_id' => $user->id]);
-            }
-
-            // 3. Kirim ke diri sendiri
-            $currentUser->notify(new UserCreatedNotification($user, $currentUser));
-            Log::info('API Notifikasi user terkirim ke diri sendiri:', [
-                'user_id' => $currentUser->id,
-                'user_name' => $currentUser->name,
-                'action' => 'membuat user baru',
-                'new_user_id' => $user->id
-            ]);
+            /** @var NotificationRoutingService $router */
+            $router = app(NotificationRoutingService::class);
+            $router->send(
+                'user.created',
+                new UserCreatedNotification($user, $currentUser),
+                $currentUser,
+                ['target_user_ids' => $extraIds]
+            );
 
         } catch (\Exception $e) {
             Log::error('API Gagal mengirim notifikasi user: ' . $e->getMessage());
@@ -1456,38 +1547,23 @@ class UserApiController extends Controller
         try {
             $currentUser = auth()->user();
 
-            if (!$currentUser) {
+            if (!$currentUser instanceof User || !$user instanceof User) {
                 return;
             }
 
-            // 1. Kirim ke semua owner
-            $owners = User::where('role', 'owner')
-                ->where('id', '!=', $currentUser->id)
-                ->get();
-
-            foreach ($owners as $owner) {
-                $owner->notify(new UserUpdatedNotification($user, $currentUser, $changes));
-                Log::info('API Notifikasi update user terkirim ke owner:', [
-                    'owner_id' => $owner->id,
-                    'user_id' => $user->id
-                ]);
+            $extraIds = [];
+            if ($user->id !== $currentUser->id) {
+                $extraIds[] = $user->id;
             }
 
-            // 2. Kirim ke user yang diupdate (jika bukan dirinya sendiri)
-            if ($user->id != $currentUser->id) {
-                $user->notify(new UserUpdatedNotification($user, $currentUser, $changes));
-                Log::info('API Notifikasi update user terkirim ke user yang diupdate:', ['user_id' => $user->id]);
-            }
-
-            // 3. Kirim ke diri sendiri
-            $currentUser->notify(new UserUpdatedNotification($user, $currentUser, $changes));
-            Log::info('API Notifikasi update user terkirim ke diri sendiri:', [
-                'user_id' => $currentUser->id,
-                'user_name' => $currentUser->name,
-                'action' => 'mengupdate user',
-                'updated_user_id' => $user->id,
-                'changes' => array_keys($changes)
-            ]);
+            /** @var NotificationRoutingService $router */
+            $router = app(NotificationRoutingService::class);
+            $router->send(
+                'user.updated',
+                new UserUpdatedNotification($user, $currentUser, $changes),
+                $currentUser,
+                ['target_user_ids' => $extraIds]
+            );
 
         } catch (\Exception $e) {
             Log::error('API Gagal mengirim notifikasi update user: ' . $e->getMessage());

@@ -829,36 +829,8 @@
                 @yield('content')
             </main>
 
-            <!-- Footer with Alpine.js polling for live notifications (DARI KODE 2) -->
-            <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-3" 
-                    x-data="{ 
-                        lastChecked: '{{ now()->toDateTimeString() }}',
-                        
-                        init() {
-                            // Polling for live toast notifications every 15 seconds
-                            setInterval(() => this.checkNewNotifications(), 15000);
-                        },
-                        
-                        checkNewNotifications() {
-                            fetch(`/notifications/recent?since=${this.lastChecked}`)
-                                .then(res => res.json())
-                                .then(data => {
-                                    if (data.success && data.data.length > 0) {
-                                        // Dispatch event for toast
-                                        const newNotif = data.data[0]; 
-                                        if (newNotif.is_unread) {
-                                            window.dispatchEvent(new CustomEvent('notify', {
-                                                detail: { 
-                                                    message: newNotif.message, 
-                                                    type: 'info' 
-                                                }
-                                            }));
-                                        }
-                                        this.lastChecked = new Date().toISOString().slice(0, 19).replace('T', ' ');
-                                    }
-                                });
-                        }
-                    }">
+            <!-- Footer -->
+            <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-3">
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between">
                     <div class="text-xs text-gray-600 dark:text-gray-400">
                         <div class="flex items-center space-x-2">
@@ -894,6 +866,7 @@
     <div id="toast-container" class="toast-container"></div>
         <!-- Alpine.js -->
     <script src="//unpkg.com/alpinejs" defer></script>
+    <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
     <script>
         // ================= SIDEBAR TOGGLE =================
         (function() {
@@ -1119,6 +1092,124 @@
         }
 
         window.showToast = showToast;
+
+        // ================= REAL-TIME NOTIFICATIONS (REVERB) =================
+        (function() {
+            const userId = @json(auth()->id());
+            const appKey = @json(env('REVERB_APP_KEY'));
+            const wsPort = @json((int) env('REVERB_PORT', 8080));
+            const wsScheme = @json(env('REVERB_SCHEME', 'http'));
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+            if (!userId || !appKey || typeof window.Pusher === 'undefined') return;
+
+            const wsHost = window.location.hostname;
+            const forceTLS = wsScheme === 'https';
+            const channelName = `private-App.Models.User.${userId}`;
+            const existingState = window.__tokoroniRealtimeNotif || null;
+
+            if (existingState && existingState.channelName !== channelName && existingState.pusher) {
+                try {
+                    existingState.pusher.disconnect();
+                } catch (_) {}
+            }
+
+            if (!window.__tokoroniRealtimeNotif || window.__tokoroniRealtimeNotif.channelName !== channelName) {
+                const pusher = new window.Pusher(appKey, {
+                    wsHost,
+                    wsPort,
+                    wssPort: wsPort,
+                    forceTLS,
+                    enabledTransports: ['ws', 'wss'],
+                    authEndpoint: '/broadcasting/auth',
+                    auth: {
+                        headers: {
+                            'X-CSRF-TOKEN': csrfToken,
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json',
+                        },
+                    },
+                });
+
+                window.__tokoroniRealtimeNotif = {
+                    pusher,
+                    channelName,
+                    channel: pusher.subscribe(channelName),
+                    seenNotificationIds: new Set(),
+                    handler: null,
+                };
+            }
+
+            const state = window.__tokoroniRealtimeNotif;
+            const channel = state.channel;
+            const seenNotificationIds = state.seenNotificationIds;
+
+            const updateBadge = (count) => {
+                const safeCount = Math.max(0, Number(count || 0));
+                const displayText = safeCount > 9 ? '9+' : `${safeCount}`;
+
+                const badgeWrapper = document.getElementById('notif-badge-wrapper');
+                const badgeCount = document.getElementById('notif-badge-count');
+                const headerBadge = document.getElementById('notif-header-badge');
+                const headerCount = document.getElementById('notif-header-count');
+                const markAllForm = document.getElementById('notif-mark-all-form');
+
+                if (badgeWrapper) {
+                    badgeWrapper.classList.toggle('hidden', safeCount <= 0);
+                }
+                if (badgeCount) {
+                    badgeCount.dataset.count = `${safeCount}`;
+                    badgeCount.textContent = displayText;
+                }
+                if (headerBadge) {
+                    headerBadge.classList.toggle('hidden', safeCount <= 0);
+                }
+                if (headerCount) {
+                    headerCount.textContent = `${safeCount}`;
+                }
+                if (markAllForm) {
+                    markAllForm.classList.toggle('hidden', safeCount <= 0);
+                }
+            };
+
+            const initialCount = Number(
+                document.getElementById('notif-badge-count')?.dataset?.count || 0
+            );
+            updateBadge(initialCount);
+
+            if (state.handler) {
+                channel.unbind('notification.created', state.handler);
+            }
+
+            state.handler = (payload) => {
+                const notification = payload?.notification || payload || {};
+                const notificationId = String(notification.id || '');
+                if (!notificationId || seenNotificationIds.has(notificationId)) return;
+
+                seenNotificationIds.add(notificationId);
+                const maxSeen = 300;
+                if (seenNotificationIds.size > maxSeen) {
+                    const firstSeen = seenNotificationIds.values().next().value;
+                    if (firstSeen) {
+                        seenNotificationIds.delete(firstSeen);
+                    }
+                }
+
+                const payloadUnread = Number(payload?.unread_count);
+                const currentUnread = Number(
+                    document.getElementById('notif-badge-count')?.dataset?.count || 0
+                );
+                const nextUnread = Number.isFinite(payloadUnread)
+                    ? payloadUnread
+                    : currentUnread + 1;
+                updateBadge(nextUnread);
+
+                const message = String(notification.message || 'Notifikasi baru');
+                showToast(message, 'info', 4000);
+            };
+
+            channel.bind('notification.created', state.handler);
+        })();
     </script>
 
     @stack('scripts')

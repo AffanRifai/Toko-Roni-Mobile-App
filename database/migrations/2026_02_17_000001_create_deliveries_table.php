@@ -13,7 +13,7 @@ return new class extends Migration
                 $table->id();
                 $table->string('delivery_code')->unique();
                 $table->foreignId('transaction_id')->constrained()->cascadeOnDelete();
-                $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+                $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
                 $table->foreignId('vehicle_id')->nullable()->constrained()->nullOnDelete();
                 $table->string('origin')->nullable();
                 $table->string('destination')->nullable();

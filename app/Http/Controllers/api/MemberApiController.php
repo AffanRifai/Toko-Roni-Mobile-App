@@ -10,6 +10,7 @@ use App\Models\Transaction;
 use App\Models\Receivable;
 use App\Notifications\MemberCreatedNotification;
 use App\Notifications\MemberUpdatedNotification;
+use App\Services\NotificationRoutingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -863,29 +864,17 @@ class MemberApiController extends Controller
         try {
             $currentUser = auth()->user();
 
-            if (!$currentUser) {
+            if (!$currentUser instanceof User) {
                 return;
             }
 
-            // 1. Kirim ke semua user dengan role owner
-            $owners = User::where('role', 'owner')->get();
-
-            foreach ($owners as $owner) {
-                if ($owner->id != $currentUser->id) {
-                    $owner->notify(new MemberCreatedNotification($member, $currentUser));
-                    Log::info('API Notifikasi member terkirim ke owner:', [
-                        'owner_id' => $owner->id,
-                        'member_id' => $member->id
-                    ]);
-                }
-            }
-
-            // 2. Kirim ke diri sendiri (pembuat)
-            $currentUser->notify(new MemberCreatedNotification($member, $currentUser));
-            Log::info('API Notifikasi member terkirim ke diri sendiri:', [
-                'user_id' => $currentUser->id,
-                'member_id' => $member->id
-            ]);
+            /** @var NotificationRoutingService $router */
+            $router = app(NotificationRoutingService::class);
+            $router->send(
+                'member.created',
+                new MemberCreatedNotification($member, $currentUser),
+                $currentUser
+            );
 
         } catch (\Exception $e) {
             Log::error('API Gagal mengirim notifikasi member: ' . $e->getMessage());
@@ -900,29 +889,17 @@ class MemberApiController extends Controller
         try {
             $currentUser = auth()->user();
 
-            if (!$currentUser) {
+            if (!$currentUser instanceof User) {
                 return;
             }
 
-            // 1. Kirim ke semua user dengan role owner
-            $owners = User::where('role', 'owner')
-                ->where('id', '!=', $currentUser->id)
-                ->get();
-
-            foreach ($owners as $owner) {
-                $owner->notify(new MemberUpdatedNotification($member, $currentUser, $changes));
-                Log::info('API Notifikasi update member terkirim ke owner:', [
-                    'owner_id' => $owner->id,
-                    'member_id' => $member->id
-                ]);
-            }
-
-            // 2. Kirim ke diri sendiri (pembuat update)
-            $currentUser->notify(new MemberUpdatedNotification($member, $currentUser, $changes));
-            Log::info('API Notifikasi update member terkirim ke diri sendiri:', [
-                'user_id' => $currentUser->id,
-                'member_id' => $member->id
-            ]);
+            /** @var NotificationRoutingService $router */
+            $router = app(NotificationRoutingService::class);
+            $router->send(
+                'member.updated',
+                new MemberUpdatedNotification($member, $currentUser, $changes),
+                $currentUser
+            );
 
         } catch (\Exception $e) {
             Log::error('API Gagal mengirim notifikasi update member: ' . $e->getMessage());

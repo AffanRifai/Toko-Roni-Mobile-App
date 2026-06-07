@@ -138,9 +138,17 @@ class NotificationController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
-        $notifications = $user->notifications()
-            ->latest()
+
+        $since = request()->query('since');
+        $query = $user->notifications()->latest();
+        if (!empty($since)) {
+            try {
+                $query->where('created_at', '>', \Carbon\Carbon::parse($since));
+            } catch (\Throwable $e) {
+            }
+        }
+
+        $notifications = $query
             ->take(5)
             ->get()
             ->map(function ($notification) {

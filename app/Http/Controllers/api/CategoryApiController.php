@@ -5,9 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\User;
+use App\Notifications\CategoryCreatedNotification;
+use App\Notifications\CategoryDeletedNotification;
+use App\Notifications\CategoryUpdatedNotification;
+use App\Services\NotificationRoutingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class CategoryApiController extends Controller
 {
@@ -60,14 +67,24 @@ class CategoryApiController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:categories',
-            'description' => 'nullable|string',
-            'is_active' => 'boolean',
-        ]);
+        $payload = $this->buildCategoryPayload($request);
+        $validated = Validator::make($payload, [
+            'name' => ['required', 'string', 'max:255', 'unique:categories,name'],
+            'slug' => ['required', 'string', 'max:255', 'unique:categories,slug'],
+            'description' => ['nullable', 'string'],
+            'is_active' => ['boolean'],
+        ])->validate();
 
         try {
             $category = Category::create($validated);
+            $actor = auth()->user();
+            if ($actor instanceof User) {
+                $this->notifyByEvent(
+                    eventKey: 'category.created',
+                    notification: new CategoryCreatedNotification($category, $actor),
+                    actor: $actor
+                );
+            }
 
             return response()->json([
                 'success' => true,
@@ -130,14 +147,45 @@ class CategoryApiController extends Controller
             ], 404);
         }
 
-        $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255|unique:categories,name,' . $id,
-            'description' => 'nullable|string',
-            'is_active' => 'boolean',
-        ]);
+        $payload = $this->buildCategoryPayload($request, $category);
+        $validated = Validator::make($payload, [
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('categories', 'name')->ignore($id),
+            ],
+            'slug' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('categories', 'slug')->ignore($id),
+            ],
+            'description' => ['nullable', 'string'],
+            'is_active' => ['boolean'],
+        ])->validate();
 
         try {
+            $before = $category->getOriginal();
             $category->update($validated);
+            $actor = auth()->user();
+            if ($actor instanceof User) {
+                $changes = [];
+                foreach ($validated as $key => $value) {
+                    $oldValue = $before[$key] ?? null;
+                    if ((string) $oldValue !== (string) $value) {
+                        $changes[$key] = $value;
+                    }
+                }
+
+                if (!empty($changes)) {
+                    $this->notifyByEvent(
+                        eventKey: 'category.updated',
+                        notification: new CategoryUpdatedNotification($category->fresh(), $actor, $changes),
+                        actor: $actor
+                    );
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -178,7 +226,16 @@ class CategoryApiController extends Controller
                 ], 400);
             }
 
+            $categoryName = $category->name;
+            $actor = auth()->user();
             $category->delete();
+            if ($actor instanceof User) {
+                $this->notifyByEvent(
+                    eventKey: 'category.deleted',
+                    notification: new CategoryDeletedNotification($categoryName, $actor),
+                    actor: $actor
+                );
+            }
 
             return response()->json([
                 'success' => true,
@@ -229,5 +286,118 @@ class CategoryApiController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    private function notifyByEvent(string $eventKey, $notification, User $actor): void
+    {
+        try {
+            /** @var NotificationRoutingService $router */
+            $router = app(NotificationRoutingService::class);
+            $router->send($eventKey, $notification, $actor);
+        } catch (\Throwable $e) {
+            Log::warning('Category API notification failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Normalize multi-alias payload from mobile/web into canonical category fields.
+     */
+    private function buildCategoryPayload(Request $request, ?Category $existing = null): array
+    {
+        $nameRaw = $this->firstFilled($request, [
+            'name',
+            'nama',
+            'nama_kategori',
+            'category_name',
+        ]);
+        $name = $nameRaw !== null
+            ? trim((string) $nameRaw)
+            : ($existing?->name ?? '');
+
+        $slugRaw = $this->firstFilled($request, [
+            'slug',
+            'slug_url',
+            'slug_kategori',
+            'category_slug',
+        ]);
+        $slugSource = $slugRaw !== null ? (string) $slugRaw : $name;
+        $slug = Str::slug($slugSource);
+        if ($slug === '' && $existing !== null) {
+            $slug = (string) $existing->slug;
+        }
+
+        $descriptionRaw = $this->firstPresent($request, [
+            'description',
+            'deskripsi',
+            'desc',
+        ]);
+        $description = $descriptionRaw !== null ? trim((string) $descriptionRaw) : null;
+        if ($description === '') {
+            $description = null;
+        }
+        if ($descriptionRaw === null && $existing !== null) {
+            $description = $existing->description;
+        }
+
+        $isActiveRaw = $this->firstPresent($request, ['is_active', 'aktif', 'status']);
+        $isActive = $existing?->is_active ?? true;
+        if ($isActiveRaw !== null) {
+            $isActive = $this->toBool($isActiveRaw, $isActive);
+        }
+
+        return [
+            'name' => $name,
+            'slug' => $slug,
+            'description' => $description,
+            'is_active' => $isActive,
+        ];
+    }
+
+    private function firstFilled(Request $request, array $keys): mixed
+    {
+        foreach ($keys as $key) {
+            if (!$request->exists($key)) {
+                continue;
+            }
+            $value = $request->input($key);
+            if ($value === null) {
+                continue;
+            }
+            if (is_string($value) && trim($value) === '') {
+                continue;
+            }
+            return $value;
+        }
+        return null;
+    }
+
+    private function firstPresent(Request $request, array $keys): mixed
+    {
+        foreach ($keys as $key) {
+            if ($request->exists($key)) {
+                return $request->input($key);
+            }
+        }
+        return null;
+    }
+
+    private function toBool(mixed $value, bool $default): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value)) {
+            return $value === 1;
+        }
+        if (is_string($value)) {
+            $normalized = strtolower(trim($value));
+            if (in_array($normalized, ['1', 'true', 'aktif', 'active', 'yes'], true)) {
+                return true;
+            }
+            if (in_array($normalized, ['0', 'false', 'nonaktif', 'inactive', 'no'], true)) {
+                return false;
+            }
+        }
+        return $default;
     }
 }

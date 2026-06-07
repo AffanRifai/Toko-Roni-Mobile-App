@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Http\Request;
 use App\Http\Controllers\Api\AuthApiController;
 use App\Http\Controllers\Api\DashboardApiController;
 use App\Http\Controllers\Api\TransactionApiController;
@@ -13,6 +15,7 @@ use App\Http\Controllers\Api\UserApiController;
 use App\Http\Controllers\Api\NotificationApiController;
 use App\Http\Controllers\Api\CategoryApiController;
 use App\Http\Controllers\Api\ReceivableApiController;
+use App\Http\Controllers\Api\CheckerReportApiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -54,6 +57,10 @@ Route::prefix('v1')->name('api.')->group(function () {
     // PROTECTED API (Sanctum Authentication Required)
     // =========================================================================
     Route::middleware(['auth:sanctum'])->group(function () {
+
+        Route::post('/broadcasting/auth', function (Request $request) {
+            return Broadcast::auth($request);
+        })->name('broadcasting.auth');
 
         // ---------------------------------------------------------------------
         // AUTH & PROFILE
@@ -143,12 +150,21 @@ Route::prefix('v1')->name('api.')->group(function () {
             // Product actions
             Route::post('/{product}/update-stock', [ProductApiController::class, 'updateStock'])->name('update-stock');
             Route::post('/{product}/toggle-active', [ProductApiController::class, 'toggleActive'])->name('toggle-active');
+            Route::post('/{product}/report', [CheckerReportApiController::class, 'storeForProduct'])->name('report');
 
             // Statistics
             Route::get('/statistics/overview', [ProductApiController::class, 'getStatistics'])->name('statistics');
 
             // Export
             Route::get('/export/csv', [ProductApiController::class, 'export'])->name('export');
+        });
+
+        // ---------------------------------------------------------------------
+        // CHECKER REPORTS API
+        // ---------------------------------------------------------------------
+        Route::prefix('checker')->name('checker.')->group(function () {
+            Route::get('/reports', [CheckerReportApiController::class, 'index'])->name('reports.index');
+            Route::post('/reports', [CheckerReportApiController::class, 'store'])->name('reports.store');
         });
 
         // ---------------------------------------------------------------------
@@ -286,9 +302,9 @@ Route::prefix('v1')->name('api.')->group(function () {
         });
 
         // ---------------------------------------------------------------------
-        // USERS API (OWNER/ADMIN ONLY)
+        // USERS API (OWNER/ADMIN/MANAGER)
         // ---------------------------------------------------------------------
-        Route::prefix('users')->name('users.')->middleware('role:owner,admin')->group(function () {
+        Route::prefix('users')->name('users.')->middleware('role:owner,admin,manager')->group(function () {
             // Face registration
             Route::get('/face-registration', [UserApiController::class, 'faceRegistration'])->name('face.registration');
             Route::post('/faces/register', [UserApiController::class, 'registerFace'])->name('faces.register');
@@ -337,6 +353,25 @@ Route::prefix('v1')->name('api.')->group(function () {
                     ]
                 ]);
             })->name('server-time');
+
+            Route::get('/realtime', function (Request $request) {
+                $requestHost = $request->getHost();
+                $wsHost = env('REVERB_HOST', 'localhost');
+                if (in_array($wsHost, ['localhost', '127.0.0.1'], true)) {
+                    $wsHost = $requestHost;
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'app_key' => env('REVERB_APP_KEY'),
+                        'ws_host' => $wsHost,
+                        'ws_port' => (int) env('REVERB_PORT', 8080),
+                        'scheme' => env('REVERB_SCHEME', 'http'),
+                        'auth_endpoint' => $request->getSchemeAndHttpHost() . '/api/v1/broadcasting/auth',
+                    ],
+                ]);
+            })->name('realtime');
         });
 
     }); // End authenticated routes

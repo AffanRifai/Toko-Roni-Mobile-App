@@ -26,16 +26,15 @@ $unreadCount = $user ? $user->unreadNotifications->count() : 0;
             class="relative p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group focus:outline-none">
         <i class="fas fa-bell text-gray-600 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white text-sm"></i>
         
-        @if($unreadCount > 0)
-            <span class="absolute -top-1 -right-1 flex h-4 w-4">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-white text-[10px] items-center justify-center font-bold">
-                    {{ $unreadCount > 9 ? '9+' : $unreadCount }}
-                </span>
+        <span id="notif-badge-wrapper"
+              class="absolute -top-1 -right-1 flex h-4 w-4 {{ $unreadCount > 0 ? '' : 'hidden' }}">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+            <span id="notif-badge-count"
+                  class="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-white text-[10px] items-center justify-center font-bold"
+                  data-count="{{ $unreadCount }}">
+                {{ $unreadCount > 9 ? '9+' : $unreadCount }}
             </span>
-        @else
-            <span class="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full"></span>
-        @endif
+        </span>
     </button>
 
     <!-- Dropdown Menu -->
@@ -55,20 +54,20 @@ $unreadCount = $user ? $user->unreadNotifications->count() : 0;
             <div class="flex items-center justify-between">
                 <h3 class="font-semibold text-gray-900 dark:text-white text-sm">
                     Notifikasi
-                    @if($unreadCount > 0)
-                        <span class="ml-2 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-0.5 rounded-full">
-                            {{ $unreadCount }} baru
-                        </span>
-                    @endif
+                    <span id="notif-header-badge"
+                          class="ml-2 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-0.5 rounded-full {{ $unreadCount > 0 ? '' : 'hidden' }}">
+                        <span id="notif-header-count">{{ $unreadCount }}</span> baru
+                    </span>
                 </h3>
-                @if($unreadCount > 0)
-                    <form action="{{ route('notifications.mark-all-as-read') }}" method="POST">
+                <form action="{{ route('notifications.mark-all-as-read') }}"
+                      method="POST"
+                      id="notif-mark-all-form"
+                      class="{{ $unreadCount > 0 ? '' : 'hidden' }}">
                         @csrf
                         <button type="submit" class="text-xs text-blue-600 hover:text-blue-800">
                             Tandai semua dibaca
                         </button>
-                    </form>
-                @endif
+                </form>
             </div>
         </div>
 

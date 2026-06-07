@@ -20,7 +20,7 @@ class Vehicle extends Model
         'capacity_volume', // Bukan 'max_volume'
         'status',
         'last_maintenance',
-        // 'notes'
+        'notes',
     ];
 
     protected $casts = [

@@ -178,7 +178,7 @@ class Transaction extends Model
      */
     public function isCredit()
     {
-        return $this->payment_method === 'kredit';
+        return in_array($this->payment_method, ['kredit', 'credit_card', 'hutang', 'credit'], true);
     }
 
     /**
@@ -226,7 +226,7 @@ class Transaction extends Model
      */
     public function getStatusText()
     {
-        if ($this->payment_method === 'kredit') {
+        if ($this->isCredit()) {
             return $this->payment_status;
         }
 
@@ -248,7 +248,7 @@ class Transaction extends Model
      */
     public function scopeCredit($query)
     {
-        return $query->where('payment_method', 'kredit');
+        return $query->whereIn('payment_method', ['kredit', 'credit_card', 'hutang', 'credit']);
     }
 
     /**
@@ -256,7 +256,7 @@ class Transaction extends Model
      */
     public function scopeCash($query)
     {
-        return $query->where('payment_method', 'tunai');
+        return $query->whereIn('payment_method', ['tunai', 'cash']);
     }
 
     /**
@@ -264,7 +264,7 @@ class Transaction extends Model
      */
     public function scopeOverdue($query)
     {
-        return $query->where('payment_method', 'kredit')
+        return $query->whereIn('payment_method', ['kredit', 'credit_card', 'hutang', 'credit'])
             ->where('payment_status', '!=', 'LUNAS')
             ->whereDate('due_date', '<', now()->startOfDay());
     }
@@ -313,7 +313,7 @@ class Transaction extends Model
         // Saat membuat transaksi baru
         static::creating(function ($transaction) {
             // Jika transaksi kredit, set payment_status ke BELUM LUNAS
-            if ($transaction->payment_method === 'kredit') {
+            if (in_array($transaction->payment_method, ['kredit', 'credit_card', 'hutang', 'credit'], true)) {
                 $transaction->payment_status = 'BELUM LUNAS';
             } else {
                 $transaction->payment_status = 'LUNAS';

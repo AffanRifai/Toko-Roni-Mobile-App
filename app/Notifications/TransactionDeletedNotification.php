@@ -13,11 +13,13 @@ class TransactionDeletedNotification extends Notification
 
     protected $invoiceNumber;
     protected $deletedBy;
+    protected $meta;
 
-    public function __construct(string $invoiceNumber, User $deletedBy)
+    public function __construct(string $invoiceNumber, User $deletedBy, array $meta = [])
     {
         $this->invoiceNumber = $invoiceNumber;
         $this->deletedBy = $deletedBy;
+        $this->meta = $meta;
     }
 
     public function via($notifiable)
@@ -27,7 +29,7 @@ class TransactionDeletedNotification extends Notification
 
     public function toArray($notifiable)
     {
-        return [
+        return array_merge([
             'type' => 'transaction_deleted',
             'invoice_number' => $this->invoiceNumber,
             'deleted_by' => $this->deletedBy->name,
@@ -36,6 +38,6 @@ class TransactionDeletedNotification extends Notification
             'icon' => 'fa-solid fa-trash',
             'color' => 'red',
             'time' => now()->toDateTimeString()
-        ];
+        ], $this->meta);
     }
 }

@@ -6,6 +6,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\User;
+use App\Notifications\ProductCreatedNotification;
+use App\Notifications\ProductDeletedNotification;
+use App\Notifications\ProductUpdatedNotification;
+use App\Services\NotificationRoutingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -163,6 +168,14 @@ class ProductApiController extends Controller
             $validated['updated_by'] = auth()->id();
 
             $product = Product::create($validated)->load('category');
+            $actor = auth()->user();
+            if ($actor instanceof User) {
+                $this->notifyByEvent(
+                    eventKey: 'product.created',
+                    notification: new ProductCreatedNotification($product, $actor),
+                    actor: $actor
+                );
+            }
 
             return response()->json([
                 'success' => true,
@@ -213,10 +226,29 @@ class ProductApiController extends Controller
         ]);
 
         try {
+            $before = $product->getOriginal();
             $validated['updated_by'] = auth()->id();
 
             $product->update($validated);
             $product->load('category');
+            $actor = auth()->user();
+            if ($actor instanceof User) {
+                $changes = [];
+                foreach ($validated as $key => $value) {
+                    $oldValue = $before[$key] ?? null;
+                    if ((string) $oldValue !== (string) $value) {
+                        $changes[$key] = $value;
+                    }
+                }
+
+                if (!empty($changes)) {
+                    $this->notifyByEvent(
+                        eventKey: 'product.updated',
+                        notification: new ProductUpdatedNotification($product, $actor, $changes),
+                        actor: $actor
+                    );
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -239,7 +271,17 @@ class ProductApiController extends Controller
     public function destroy(Product $product)
     {
         try {
+            $productName = $product->name;
+            $productCode = $product->code;
+            $actor = auth()->user();
             $product->delete();
+            if ($actor instanceof User) {
+                $this->notifyByEvent(
+                    eventKey: 'product.deleted',
+                    notification: new ProductDeletedNotification($productName, $productCode, $actor),
+                    actor: $actor
+                );
+            }
 
             return response()->json([
                 'success' => true,
@@ -298,5 +340,16 @@ class ProductApiController extends Controller
     public function export()
     {
         return response()->json(['success' => false, 'message' => 'Not implemented'], 501);
+    }
+
+    private function notifyByEvent(string $eventKey, $notification, User $actor): void
+    {
+        try {
+            /** @var NotificationRoutingService $router */
+            $router = app(NotificationRoutingService::class);
+            $router->send($eventKey, $notification, $actor);
+        } catch (\Throwable $e) {
+            Log::warning('Product API notification failed: ' . $e->getMessage());
+        }
     }
 }

@@ -188,7 +188,7 @@ public function exportPdf(Request $request)
         'not_need' => $transactions->where('need_delivery', false)->count(),
     ];
 
-    $pdf = Pdf::loadView('reports.sales-pdf', [
+    $pdf = Pdf::loadView('reports.exports.sales-pdf', [
         'transactions' => $transactions,
         'grandTotal' => $grandTotal,
         'total' => $grandTotal,

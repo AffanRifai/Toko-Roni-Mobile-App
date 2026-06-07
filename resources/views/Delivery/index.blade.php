@@ -343,7 +343,12 @@
                                     </div>
                                 </td>
                                 <td class="px-6 py-4">
-                                    @if ($delivery->user)
+                                    @php
+                                        $showCourier = in_array($delivery->status, ['assigned', 'picked_up', 'on_delivery', 'delivered'], true)
+                                            && $delivery->user
+                                            && in_array(optional($delivery->user)->role, ['logistik', 'staff_logistik', 'kurir'], true);
+                                    @endphp
+                                    @if ($showCourier)
                                         <div>
                                             <span class="text-gray-900 font-medium">{{ $delivery->user->name }}</span>
                                             @if ($delivery->vehicle)
