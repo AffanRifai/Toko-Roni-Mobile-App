@@ -4,6 +4,7 @@
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../offline/local_database.dart';
 import '../config/api_config.dart';
 
 class AuthService {
@@ -82,5 +83,11 @@ class AuthService {
     }
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
+    try {
+      final db = await LocalDatabase.instance.db;
+      await db.delete(LocalDatabase.tableAppSession);
+      await db.delete(LocalDatabase.tableCart);
+      await db.delete(LocalDatabase.tableCartItems);
+    } catch (_) {}
   }
 }

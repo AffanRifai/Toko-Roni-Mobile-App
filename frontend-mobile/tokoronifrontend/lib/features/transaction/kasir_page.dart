@@ -20,6 +20,8 @@ import '../product/daftar_produk_page.dart';
 import '../category/manajemen_kategori_page.dart';
 import '../user/manajemen_pengguna_page.dart';
 import '../member/daftar_member_page.dart';
+import '../../core/offline/cart_local_repository.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/member_service.dart';
 import '../../core/services/product_service.dart';
 import '../../core/services/transaction_service.dart';
@@ -118,6 +120,8 @@ class _KasirPageState extends State<KasirPage>
   // -- Keranjang -------------------------------------------------------------
   final List<KeranjangItem> _keranjang = [];
   Map<String, int> _qtyByKode = {};
+  String _activeUserId = '';
+  bool _cartRestored = false;
 
   // -- Member ----------------------------------------------------------------
   final List<MemberData> _memberList = [];
@@ -176,6 +180,7 @@ class _KasirPageState extends State<KasirPage>
               _produkList.any((p) => p.aktif && p.kategori == _filterKategori);
           if (!categoryExists) _filterKategori = 'Semua';
         });
+        await _restoreCartFromLocalIfNeeded();
       }
     } catch (_) {
       // Jika API gagal, tampilkan error ke user, jangan fallback ke dummy
@@ -350,6 +355,105 @@ class _KasirPageState extends State<KasirPage>
       );
     }
     _qtyByKode = map;
+    unawaited(_persistCartToLocal());
+  }
+
+  Future<void> _ensureActiveUserId() async {
+    if (_activeUserId.trim().isNotEmpty) return;
+    _activeUserId = await AuthService.getUserId();
+  }
+
+  Future<void> _persistCartToLocal() async {
+    await _ensureActiveUserId();
+    if (_activeUserId.trim().isEmpty) return;
+    if (_keranjang.isEmpty) {
+      await CartLocalRepository.instance.clearActiveCart(_activeUserId);
+      return;
+    }
+
+    final items = _keranjang
+        .map(
+          (item) => {
+            'product_server_id': item.produk.id,
+            'product_name': item.produk.nama,
+            'product_code': item.produk.kode,
+            'qty': item.qty,
+            'price': item.produk.harga,
+          },
+        )
+        .toList(growable: false);
+    await CartLocalRepository.instance.saveActiveCart(
+      userId: _activeUserId,
+      items: items,
+    );
+  }
+
+  Future<void> _restoreCartFromLocalIfNeeded() async {
+    if (_cartRestored || _produkList.isEmpty) return;
+    await _ensureActiveUserId();
+    if (_activeUserId.trim().isEmpty) return;
+
+    final savedItems = await CartLocalRepository.instance.loadActiveCart(
+      _activeUserId,
+    );
+    if (savedItems.isEmpty) {
+      _cartRestored = true;
+      return;
+    }
+
+    final restored = <KeranjangItem>[];
+    for (final row in savedItems) {
+      final productId = (row['product_server_id'] as num?)?.toInt();
+      final productCode = row['product_code']?.toString() ?? '';
+      final qty = (row['qty'] as num?)?.toInt() ?? 1;
+      final price = (row['price'] as num?)?.toInt() ?? 0;
+
+      ProdukItem? matched;
+      if (productId != null) {
+        for (final p in _produkList) {
+          if (p.id == productId) {
+            matched = p;
+            break;
+          }
+        }
+      }
+      if (matched == null) {
+        for (final p in _produkList) {
+          if (p.kode == productCode) {
+            matched = p;
+            break;
+          }
+        }
+      }
+
+      if (matched == null) {
+        matched = ProdukItem(
+          id: productId,
+          kode: productCode,
+          nama: row['product_name']?.toString() ?? 'Produk',
+          kategori: '-',
+          jenis: 'Pcs',
+          harga: price,
+          stok: qty,
+          kadaluarsa: '-',
+          aktif: true,
+        );
+      }
+
+      final maxQty = matched.stok <= 0 ? qty : matched.stok;
+      restored.add(
+        KeranjangItem(produk: matched, qty: qty > maxQty ? maxQty : qty),
+      );
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _keranjang
+        ..clear()
+        ..addAll(restored);
+      _refreshQtyByKode();
+    });
+    _cartRestored = true;
   }
 
   void _onSearchChanged(String raw) {

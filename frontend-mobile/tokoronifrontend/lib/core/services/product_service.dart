@@ -4,6 +4,12 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../../models/produk_model.dart';
 import '../config/api_config.dart';
+import '../offline/category_local_repository.dart';
+import '../offline/offline_utils.dart';
+import '../offline/product_local_repository.dart';
+import '../offline/sync_manager.dart';
+import '../offline/sync_queue_repository.dart';
+import '../offline/sync_types.dart';
 import 'auth_service.dart';
 import 'notification_refresh_helper.dart';
 
@@ -24,43 +30,58 @@ class ProductService {
   }
 
   static Future<List<ProdukItem>> getProducts({int perPage = 200}) async {
-    final response = await _performRequest(
-      () async => http
-          .get(
-            Uri.parse('${ApiConfig.productIndex}?per_page=$perPage'),
-            headers: await AuthService.authHeaders(),
-          )
-          .timeout(const Duration(seconds: 15)),
-    );
+    try {
+      final response = await _performRequest(
+        () async => http
+            .get(
+              Uri.parse('${ApiConfig.productIndex}?per_page=$perPage'),
+              headers: await AuthService.authHeaders(),
+            )
+            .timeout(const Duration(seconds: 15)),
+      );
 
-    final json = _decode(response, fallbackMessage: 'Gagal memuat produk');
-    final list = _extractList(json['data']);
-
-    return list
-        .map(_asMap)
-        .where((m) => m.isNotEmpty)
-        .map(ProdukItem.fromJson)
-        .toList();
+      final json = _decode(response, fallbackMessage: 'Gagal memuat produk');
+      final list = _extractList(json['data']);
+      final rawMaps = list.map(_asMap).where((m) => m.isNotEmpty).toList();
+      await ProductLocalRepository.instance.cacheRemoteProducts(rawMaps);
+      return rawMaps.map(ProdukItem.fromJson).toList(growable: false);
+    } catch (error) {
+      final fallback = await ProductLocalRepository.instance.getProducts();
+      if (fallback.isNotEmpty && isNetworkReachabilityError(error)) {
+        return fallback;
+      }
+      rethrow;
+    }
   }
 
   static Future<List<KategoriItem>> getCategories() async {
-    final response = await _performRequest(
-      () async => http
-          .get(
-            Uri.parse(ApiConfig.productCategories),
-            headers: await AuthService.authHeaders(),
-          )
-          .timeout(const Duration(seconds: 15)),
-    );
+    try {
+      final response = await _performRequest(
+        () async => http
+            .get(
+              Uri.parse(ApiConfig.productCategories),
+              headers: await AuthService.authHeaders(),
+            )
+            .timeout(const Duration(seconds: 15)),
+      );
 
-    final json = _decode(response, fallbackMessage: 'Gagal memuat kategori');
-    final list = _extractList(json['data']);
-
-    return list
-        .map(_asMap)
-        .where((m) => m.isNotEmpty)
-        .map(KategoriItem.fromJson)
-        .toList();
+      final json = _decode(response, fallbackMessage: 'Gagal memuat kategori');
+      final list = _extractList(json['data']);
+      final rawMaps = list.map(_asMap).where((m) => m.isNotEmpty).toList();
+      await CategoryLocalRepository.instance.cacheRemoteCategories(rawMaps);
+      return rawMaps.map(KategoriItem.fromJson).toList(growable: false);
+    } catch (error) {
+      final local = await CategoryLocalRepository.instance.getCategories();
+      if (local.isNotEmpty && isNetworkReachabilityError(error)) {
+        return local
+            .map(
+              (e) =>
+                  KategoriItem(id: e.id, nama: e.nama, deskripsi: e.deskripsi),
+            )
+            .toList(growable: false);
+      }
+      rethrow;
+    }
   }
 
   static Future<ProdukItem> createProduct({
@@ -68,22 +89,41 @@ class ProductService {
     required List<KategoriItem> categories,
   }) async {
     final body = _buildProductPayload(model: model, categories: categories);
+    final categoryName = model.kategori.trim();
+    try {
+      final response = await _performRequest(
+        () async => http
+            .post(
+              Uri.parse(ApiConfig.productIndex),
+              headers: await AuthService.authHeaders(),
+              body: jsonEncode(body),
+            )
+            .timeout(const Duration(seconds: 20)),
+      );
 
-    final response = await _performRequest(
-      () async => http
-          .post(
-            Uri.parse(ApiConfig.productIndex),
-            headers: await AuthService.authHeaders(),
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 20)),
-    );
-
-    final json = _decode(response, fallbackMessage: 'Gagal menambah produk');
-    final data = _asMap(json['data']);
-    final created = ProdukItem.fromJson(data);
-    await NotificationRefreshHelper.refreshSafely();
-    return created;
+      final json = _decode(response, fallbackMessage: 'Gagal menambah produk');
+      final data = _asMap(json['data']);
+      if (data.isNotEmpty) {
+        await ProductLocalRepository.instance.cacheRemoteProducts([data]);
+      }
+      final created = ProdukItem.fromJson(data);
+      await NotificationRefreshHelper.refreshSafely();
+      return created;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final pending = await ProductLocalRepository.instance.savePendingCreate(
+        payload: body,
+        categoryName: categoryName,
+      );
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.product,
+        entityLocalId: pending.localId,
+        operation: SyncOperation.create,
+        payload: body,
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      return pending.item;
+    }
   }
 
   static Future<ProdukItem> updateProduct({
@@ -92,40 +132,111 @@ class ProductService {
     required List<KategoriItem> categories,
   }) async {
     final body = _buildProductPayload(model: model, categories: categories);
+    final categoryName = model.kategori.trim();
+    try {
+      final response = await _performRequest(
+        () async => http
+            .put(
+              Uri.parse('${ApiConfig.productIndex}/$productId'),
+              headers: await AuthService.authHeaders(),
+              body: jsonEncode(body),
+            )
+            .timeout(const Duration(seconds: 20)),
+      );
 
-    final response = await _performRequest(
-      () async => http
-          .put(
-            Uri.parse('${ApiConfig.productIndex}/$productId'),
-            headers: await AuthService.authHeaders(),
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 20)),
-    );
-
-    final json = _decode(response, fallbackMessage: 'Gagal memperbarui produk');
-    final data = _asMap(json['data']);
-    final updated = ProdukItem.fromJson(data);
-    await NotificationRefreshHelper.refreshSafely();
-    return updated;
+      final json = _decode(
+        response,
+        fallbackMessage: 'Gagal memperbarui produk',
+      );
+      final data = _asMap(json['data']);
+      if (data.isNotEmpty) {
+        await ProductLocalRepository.instance.cacheRemoteProducts([data]);
+      }
+      final updated = ProdukItem.fromJson(data);
+      await NotificationRefreshHelper.refreshSafely();
+      return updated;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      await ProductLocalRepository.instance.savePendingUpdate(
+        productId: productId,
+        payload: body,
+        categoryName: categoryName,
+      );
+      final localId = await ProductLocalRepository.instance.findLocalIdByAnyId(
+        productId,
+      );
+      if (localId != null) {
+        await SyncQueueRepository.instance.enqueue(
+          entityType: LocalEntityType.product,
+          entityLocalId: localId,
+          operation: SyncOperation.update,
+          payload: body,
+        );
+      }
+      unawaited(SyncManager.instance.triggerSync());
+      final local = await ProductLocalRepository.instance.getProducts();
+      final match = local.where((p) => p.id == productId).toList();
+      return match.isNotEmpty
+          ? match.first
+          : ProdukItem.fromJson({
+              'id': productId,
+              'name': model.nama,
+              'code': model.kode,
+              'category_name': model.kategori,
+              'description': model.deskripsi,
+              'unit': model.satuan,
+              'price': body['price'],
+              'cost_price': body['cost_price'],
+              'stock': body['stock'],
+              'min_stock': body['min_stock'],
+              'barcode': body['barcode'],
+              'weight': body['weight'],
+              'dimensions': body['dimensions'],
+              'expiry_date': body['expiry_date'],
+              'is_active': body['is_active'],
+            });
+    }
   }
 
   static Future<void> deleteProduct({required int productId}) async {
-    final response = await _performRequest(
-      () async => http
-          .delete(
-            Uri.parse('${ApiConfig.productIndex}/$productId'),
-            headers: await AuthService.authHeaders(),
-          )
-          .timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () async => http
+            .delete(
+              Uri.parse('${ApiConfig.productIndex}/$productId'),
+              headers: await AuthService.authHeaders(),
+            )
+            .timeout(const Duration(seconds: 20)),
+      );
 
-    _decode(
-      response,
-      fallbackMessage: 'Gagal menghapus produk',
-      allowEmptyBody: true,
-    );
-    await NotificationRefreshHelper.refreshSafely();
+      _decode(
+        response,
+        fallbackMessage: 'Gagal menghapus produk',
+        allowEmptyBody: true,
+      );
+      final localId = await ProductLocalRepository.instance.findLocalIdByAnyId(
+        productId,
+      );
+      if (localId != null) {
+        await ProductLocalRepository.instance.removeByLocalId(localId);
+      }
+      await NotificationRefreshHelper.refreshSafely();
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      await ProductLocalRepository.instance.savePendingDelete(productId);
+      final localId = await ProductLocalRepository.instance.findLocalIdByAnyId(
+        productId,
+      );
+      if (localId != null) {
+        await SyncQueueRepository.instance.enqueue(
+          entityType: LocalEntityType.product,
+          entityLocalId: localId,
+          operation: SyncOperation.delete,
+          payload: {'id': productId},
+        );
+      }
+      unawaited(SyncManager.instance.triggerSync());
+    }
   }
 
   static Map<String, dynamic> _decode(

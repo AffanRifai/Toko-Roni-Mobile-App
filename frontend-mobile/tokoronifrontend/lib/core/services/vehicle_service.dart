@@ -6,6 +6,11 @@ import 'package:http/http.dart' as http;
 
 import '../../models/kendaraan_model.dart';
 import '../config/api_config.dart';
+import '../offline/offline_utils.dart';
+import '../offline/sync_manager.dart';
+import '../offline/sync_queue_repository.dart';
+import '../offline/sync_types.dart';
+import '../offline/vehicle_local_repository.dart';
 import 'auth_service.dart';
 import 'notification_refresh_helper.dart';
 
@@ -33,53 +38,80 @@ class VehicleService {
       ApiConfig.vehicleIndex,
     ).replace(queryParameters: query);
 
-    final response = await _performRequest(
-      () async => http
-          .get(uri, headers: await AuthService.authHeaders())
-          .timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () async => http
+            .get(uri, headers: await AuthService.authHeaders())
+            .timeout(const Duration(seconds: 20)),
+      );
 
-    final parsed = _decode(
-      response,
-      fallbackMessage: 'Gagal memuat data kendaraan',
-      allowEmptyBody: false,
-    );
+      final parsed = _decode(
+        response,
+        fallbackMessage: 'Gagal memuat data kendaraan',
+        allowEmptyBody: false,
+      );
 
-    final list = _extractList(parsed['data']).isNotEmpty
-        ? _extractList(parsed['data'])
-        : _extractList(parsed);
-
-    return list
-        .map(_asMap)
-        .where((e) => e.isNotEmpty)
-        .map(KendaraanItem.fromJson)
-        .toList();
+      final list = _extractList(parsed['data']).isNotEmpty
+          ? _extractList(parsed['data'])
+          : _extractList(parsed);
+      final rows = list.map(_asMap).where((e) => e.isNotEmpty).toList();
+      await VehicleLocalRepository.instance.cacheVehicles(rows);
+      return rows.map(KendaraanItem.fromJson).toList(growable: false);
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      var local = await VehicleLocalRepository.instance.getVehicles();
+      final query = cleanSearch.toLowerCase();
+      if (query.isNotEmpty) {
+        local = local
+            .where(
+              (v) =>
+                  v.nama.toLowerCase().contains(query) ||
+                  v.platNomor.toLowerCase().contains(query),
+            )
+            .toList(growable: false);
+      }
+      return local;
+    }
   }
 
   static Future<KendaraanItem> getVehicleDetail({
     required int vehicleId,
   }) async {
-    final response = await _performRequest(
-      () async => http
-          .get(
-            Uri.parse(ApiConfig.vehicleDetail(vehicleId)),
-            headers: await AuthService.authHeaders(),
-          )
-          .timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () async => http
+            .get(
+              Uri.parse(ApiConfig.vehicleDetail(vehicleId)),
+              headers: await AuthService.authHeaders(),
+            )
+            .timeout(const Duration(seconds: 20)),
+      );
 
-    final parsed = _decode(
-      response,
-      fallbackMessage: 'Gagal memuat detail kendaraan',
-      allowEmptyBody: false,
-    );
+      final parsed = _decode(
+        response,
+        fallbackMessage: 'Gagal memuat detail kendaraan',
+        allowEmptyBody: false,
+      );
 
-    final data = _asMap(parsed['data']);
-    if (data.isEmpty) {
-      throw Exception('Data kendaraan tidak ditemukan.');
+      final data = _asMap(parsed['data']);
+      if (data.isEmpty) {
+        throw Exception('Data kendaraan tidak ditemukan.');
+      }
+      await VehicleLocalRepository.instance.upsertLocalRow({
+        ...data,
+        'local_id': 'srv-$vehicleId',
+        'server_id': vehicleId,
+        'sync_status': SyncStatus.synced.value,
+      });
+      return KendaraanItem.fromJson(data);
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final local = await VehicleLocalRepository.instance.getVehicleDetail(
+        vehicleId,
+      );
+      if (local != null) return local;
+      rethrow;
     }
-
-    return KendaraanItem.fromJson(data);
   }
 
   static Future<KendaraanItem> createVehicle({
@@ -104,30 +136,64 @@ class VehicleService {
       if (catatan.trim().isNotEmpty) 'notes': catatan.trim(),
     };
 
-    final response = await _performRequest(
-      () => _sendJson(
-        method: 'POST',
-        uri: Uri.parse(ApiConfig.vehicleIndex),
-        body: payload,
-      ).timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () => _sendJson(
+          method: 'POST',
+          uri: Uri.parse(ApiConfig.vehicleIndex),
+          body: payload,
+        ).timeout(const Duration(seconds: 20)),
+      );
 
-    final parsed = _decode(
-      response,
-      fallbackMessage: 'Gagal menambah kendaraan',
-      allowEmptyBody: true,
-    );
+      final parsed = _decode(
+        response,
+        fallbackMessage: 'Gagal menambah kendaraan',
+        allowEmptyBody: true,
+      );
 
-    final data = _asMap(parsed['data']);
-    if (data.isNotEmpty) {
-      final created = KendaraanItem.fromJson(data);
-      await NotificationRefreshHelper.refreshSafely();
+      final data = _asMap(parsed['data']);
+      final row = data.isNotEmpty ? data : {'id': 0, ...payload};
+      await VehicleLocalRepository.instance.upsertLocalRow({
+        ...row,
+        'local_id': 'srv-${row['id'] ?? DateTime.now().microsecondsSinceEpoch}',
+        'server_id': row['id'],
+        'sync_status': SyncStatus.synced.value,
+      });
+      final created = KendaraanItem.fromJson(row);
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Kendaraan berhasil ditambahkan',
+        message: 'Data armada baru telah disimpan.',
+        type: 'vehicle',
+      );
       return created;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final localId = 'loc-${DateTime.now().microsecondsSinceEpoch}';
+      final row = {
+        'id': generateTempId(),
+        ...payload,
+        'local_id': localId,
+        'server_id': null,
+        'sync_status': SyncStatus.pendingCreate.value,
+      };
+      await VehicleLocalRepository.instance.upsertLocalRow(row);
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.vehicle,
+        entityLocalId: localId,
+        operation: SyncOperation.create,
+        payload: payload,
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Kendaraan disimpan offline',
+        message: 'Akan sinkron otomatis saat online.',
+        type: 'vehicle',
+        priority: 'high',
+        important: true,
+        enqueueSync: true,
+      );
+      return KendaraanItem.fromJson(row);
     }
-
-    final created = KendaraanItem.fromJson({'id': 0, ...payload});
-    await NotificationRefreshHelper.refreshSafely();
-    return created;
   }
 
   static Future<KendaraanItem> updateVehicle({
@@ -153,48 +219,106 @@ class VehicleService {
       if (catatan.trim().isNotEmpty) 'notes': catatan.trim(),
     };
 
-    final response = await _performRequest(
-      () => _sendJson(
-        method: 'PUT',
-        uri: Uri.parse(ApiConfig.vehicleDetail(vehicleId)),
-        body: payload,
-      ).timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () => _sendJson(
+          method: 'PUT',
+          uri: Uri.parse(ApiConfig.vehicleDetail(vehicleId)),
+          body: payload,
+        ).timeout(const Duration(seconds: 20)),
+      );
 
-    final parsed = _decode(
-      response,
-      fallbackMessage: 'Gagal memperbarui kendaraan',
-      allowEmptyBody: true,
-    );
+      final parsed = _decode(
+        response,
+        fallbackMessage: 'Gagal memperbarui kendaraan',
+        allowEmptyBody: true,
+      );
 
-    final data = _asMap(parsed['data']);
-    if (data.isNotEmpty) {
-      final updated = KendaraanItem.fromJson(data);
-      await NotificationRefreshHelper.refreshSafely();
+      final data = _asMap(parsed['data']);
+      final row = data.isNotEmpty ? data : {'id': vehicleId, ...payload};
+      await VehicleLocalRepository.instance.upsertLocalRow({
+        ...row,
+        'local_id': 'srv-$vehicleId',
+        'server_id': vehicleId,
+        'sync_status': SyncStatus.synced.value,
+      });
+      final updated = KendaraanItem.fromJson(row);
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Kendaraan berhasil diperbarui',
+        message: 'Perubahan data armada tersimpan.',
+        type: 'vehicle',
+      );
       return updated;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final row = {
+        'id': vehicleId,
+        ...payload,
+        'local_id': 'srv-$vehicleId',
+        'server_id': vehicleId,
+        'sync_status': SyncStatus.pendingUpdate.value,
+      };
+      await VehicleLocalRepository.instance.upsertLocalRow(row);
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.vehicle,
+        entityLocalId: 'srv-$vehicleId',
+        operation: SyncOperation.update,
+        payload: payload,
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Perubahan kendaraan disimpan offline',
+        message: 'Akan sinkron otomatis saat online.',
+        type: 'vehicle',
+        priority: 'high',
+        important: true,
+        enqueueSync: true,
+      );
+      return KendaraanItem.fromJson(row);
     }
-
-    final updated = KendaraanItem.fromJson({'id': vehicleId, ...payload});
-    await NotificationRefreshHelper.refreshSafely();
-    return updated;
   }
 
   static Future<void> deleteVehicle({required int vehicleId}) async {
-    final response = await _performRequest(
-      () async => http
-          .delete(
-            Uri.parse(ApiConfig.vehicleDetail(vehicleId)),
-            headers: await AuthService.authHeaders(),
-          )
-          .timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () async => http
+            .delete(
+              Uri.parse(ApiConfig.vehicleDetail(vehicleId)),
+              headers: await AuthService.authHeaders(),
+            )
+            .timeout(const Duration(seconds: 20)),
+      );
 
-    _decode(
-      response,
-      fallbackMessage: 'Gagal menghapus kendaraan',
-      allowEmptyBody: true,
-    );
-    await NotificationRefreshHelper.refreshSafely();
+      _decode(
+        response,
+        fallbackMessage: 'Gagal menghapus kendaraan',
+        allowEmptyBody: true,
+      );
+      await VehicleLocalRepository.instance.removeByLocalId('srv-$vehicleId');
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Kendaraan berhasil dihapus',
+        message: 'Data armada telah dihapus.',
+        type: 'vehicle',
+      );
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      await VehicleLocalRepository.instance.removeByLocalId('srv-$vehicleId');
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.vehicle,
+        entityLocalId: 'srv-$vehicleId',
+        operation: SyncOperation.delete,
+        payload: {'vehicle_id': vehicleId},
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Hapus kendaraan disimpan offline',
+        message: 'Akan sinkron otomatis saat online.',
+        type: 'vehicle',
+        priority: 'high',
+        important: true,
+        enqueueSync: true,
+      );
+    }
   }
 
   static Future<KendaraanItem> setMaintenance({required int vehicleId}) {
@@ -218,26 +342,78 @@ class VehicleService {
     required String fallbackMessage,
     required Map<String, dynamic> fallbackData,
   }) async {
-    final response = await _performRequest(
-      () => _sendJson(
-        method: 'POST',
-        uri: uri,
-        body: const {},
-      ).timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () => _sendJson(
+          method: 'POST',
+          uri: uri,
+          body: const {},
+        ).timeout(const Duration(seconds: 20)),
+      );
 
-    final parsed = _decode(
-      response,
-      fallbackMessage: fallbackMessage,
-      allowEmptyBody: true,
-    );
+      final parsed = _decode(
+        response,
+        fallbackMessage: fallbackMessage,
+        allowEmptyBody: true,
+      );
 
-    final data = _asMap(parsed['data']);
-    final result = KendaraanItem.fromJson(
-      data.isNotEmpty ? data : fallbackData,
-    );
-    await NotificationRefreshHelper.refreshSafely();
-    return result;
+      final data = _asMap(parsed['data']);
+      final result = KendaraanItem.fromJson(
+        data.isNotEmpty ? data : fallbackData,
+      );
+      await VehicleLocalRepository.instance.upsertLocalRow({
+        ...(data.isNotEmpty ? data : fallbackData),
+        'local_id': 'srv-${fallbackData['id'] ?? 0}',
+        'server_id': fallbackData['id'],
+        'sync_status': SyncStatus.synced.value,
+      });
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Status kendaraan diperbarui',
+        message: 'Perubahan status armada berhasil disimpan.',
+        type: 'vehicle',
+      );
+      return result;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final vehicleId = _toInt(fallbackData['id']);
+      final status = (fallbackData['status'] ?? '').toString();
+      await VehicleLocalRepository.instance.upsertLocalRow({
+        ...fallbackData,
+        'local_id': 'srv-$vehicleId',
+        'server_id': vehicleId,
+        'sync_status': SyncStatus.pendingUpdate.value,
+      });
+      final payload = _statusPayloadFromFallback(status);
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.vehicle,
+        entityLocalId: 'srv-$vehicleId',
+        operation: SyncOperation.update,
+        payload: payload,
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Status kendaraan disimpan offline',
+        message: 'Akan sinkron otomatis saat online.',
+        type: 'vehicle',
+        priority: 'high',
+        important: true,
+        enqueueSync: true,
+      );
+      return KendaraanItem.fromJson({...fallbackData, ...payload});
+    }
+  }
+
+  static Map<String, dynamic> _statusPayloadFromFallback(String statusApiOrLabel) {
+    final statusApi = statusApiOrLabel.contains('_')
+        ? statusApiOrLabel
+        : kendaraanStatusApiFromLabel(kendaraanStatusLabelFromApi(statusApiOrLabel));
+    return {'status': statusApi};
+  }
+
+  static int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   static Future<http.Response> _sendJson({

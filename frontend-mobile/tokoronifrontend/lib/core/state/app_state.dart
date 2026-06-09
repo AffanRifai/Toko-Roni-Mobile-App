@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/api_config.dart';
+import '../offline/profile_local_repository.dart';
 import '../services/auth_service.dart';
 import '../services/device_notification_service.dart';
 import '../services/notifikasi_service.dart';
@@ -31,6 +33,9 @@ class AppState with WidgetsBindingObserver {
 
   bool _initialized = false;
   Set<String> _knownNotifIds = <String>{};
+  static const int _recentRealtimeDeviceNotifLimit = 300;
+  final Set<String> _recentRealtimeDeviceNotifIds = <String>{};
+  final ListQueue<String> _recentRealtimeDeviceNotifOrder = ListQueue<String>();
   DateTime? _lastNotifFetchedAt;
   Future<void>? _notifRefreshInFlight;
   static const Duration _minNotifRefreshInterval = Duration(seconds: 8);
@@ -146,9 +151,35 @@ class AppState with WidgetsBindingObserver {
           await prefs.setString('user_address', address);
           await prefs.setString('user_joined_at', joinedAt);
           await prefs.setString('user_photo', photo);
+          await ProfileLocalRepository.instance.cacheProfile({
+            'name': name,
+            'email': email,
+            'role': role,
+            'phone': phone,
+            'address': address,
+            'joined_at': joinedAt,
+            'photo': photo,
+          });
         }
       }
-    } catch (_) {}
+    } catch (_) {
+      final cached = await ProfileLocalRepository.instance.getProfile();
+      if (cached.isEmpty) return;
+      userName.value = _firstNonEmpty([cached['name'], userName.value]);
+      userEmail.value = _firstNonEmpty([cached['email'], userEmail.value]);
+      userRole.value = _firstNonEmpty([cached['role'], userRole.value]);
+      userPhone.value = _firstNonEmpty([cached['phone'], userPhone.value]);
+      userAddress.value = _firstNonEmpty([
+        cached['address'],
+        userAddress.value,
+      ]);
+      userJoinedAt.value = _firstNonEmpty([
+        cached['joined_at'],
+        userJoinedAt.value,
+      ]);
+      final photo = _firstNonEmpty([cached['photo'], userPhoto.value]);
+      userPhoto.value = photo.isEmpty ? null : photo;
+    }
   }
 
   Future<void> refreshNotifications({bool force = false}) async {
@@ -241,15 +272,37 @@ class AppState with WidgetsBindingObserver {
   }
 
   Future<void> _onRealtimeNotification(Map<String, dynamic> raw) async {
-    final item = NotifItem.fromJson(raw);
-    if (item.id.trim().isEmpty || _knownNotifIds.contains(item.id)) {
-      return;
-    }
+    final item = await NotifikasiService.ingestRealtime(raw);
+    if (item == null) return;
 
-    _knownNotifIds.add(item.id);
-    notifications.value = [item, ...notifications.value];
-    unreadCount.value = notifications.value.where((n) => !n.sudahDibaca).length;
+    final notificationId = item.id.trim();
+    if (notificationId.isEmpty) return;
+
+    final shouldTriggerDeviceNotification =
+        !item.sudahDibaca &&
+        _markRealtimeDeviceNotificationHandled(notificationId);
+
+    final latest = await NotifikasiService.getAll(perPage: 100, page: 1);
+    _knownNotifIds = latest.map((e) => e.id).toSet();
+    notifications.value = latest;
+    unreadCount.value = latest.where((n) => !n.sudahDibaca).length;
+
+    if (!shouldTriggerDeviceNotification) return;
     await DeviceNotificationService.showFromNotifItem(item);
+  }
+
+  bool _markRealtimeDeviceNotificationHandled(String notificationId) {
+    if (notificationId.isEmpty) return false;
+    if (_recentRealtimeDeviceNotifIds.contains(notificationId)) return false;
+
+    _recentRealtimeDeviceNotifIds.add(notificationId);
+    _recentRealtimeDeviceNotifOrder.addLast(notificationId);
+    if (_recentRealtimeDeviceNotifOrder.length >
+        _recentRealtimeDeviceNotifLimit) {
+      final oldestId = _recentRealtimeDeviceNotifOrder.removeFirst();
+      _recentRealtimeDeviceNotifIds.remove(oldestId);
+    }
+    return true;
   }
 
   void triggerDashboardRefresh() => dashboardRefreshTick.value++;
@@ -269,6 +322,8 @@ class AppState with WidgetsBindingObserver {
     notifications.value = [];
     unreadCount.value = 0;
     _knownNotifIds.clear();
+    _recentRealtimeDeviceNotifIds.clear();
+    _recentRealtimeDeviceNotifOrder.clear();
     _lastNotifFetchedAt = null;
     _initialized = false;
   }

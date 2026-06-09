@@ -1,9 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+import '../offline/notification_local_repository.dart';
+import '../offline/sync_manager.dart';
+import '../offline/sync_queue_repository.dart';
+import '../offline/sync_types.dart';
 import 'auth_service.dart';
 
 class NotifItem {
@@ -399,46 +404,36 @@ class NotifikasiService {
           .get(uri, headers: await AuthService.authHeaders())
           .timeout(const Duration(seconds: 15));
 
-      if (res.statusCode != 200) return [];
+      if (res.statusCode != 200) {
+        return NotificationLocalRepository.instance.getNotifications();
+      }
       final json = jsonDecode(res.body) as Map<String, dynamic>;
-      if (json['success'] != true) return [];
+      if (json['success'] != true) {
+        return NotificationLocalRepository.instance.getNotifications();
+      }
 
       final list = _extractList(json['data']);
-      return list
+      final parsed = list
           .map(_asMap)
           .where((e) => e.isNotEmpty)
           .map(NotifItem.fromJson)
           .toList();
+      await NotificationLocalRepository.instance.cacheServerNotifications(parsed);
+      return NotificationLocalRepository.instance.getNotifications();
     } catch (_) {
-      return [];
+      return NotificationLocalRepository.instance.getNotifications();
     }
   }
 
   static Future<List<NotifItem>> getUnread() async {
-    try {
-      final res = await http
-          .get(
-            Uri.parse(ApiConfig.notifications),
-            headers: await AuthService.authHeaders(),
-          )
-          .timeout(const Duration(seconds: 15));
-
-      if (res.statusCode != 200) return [];
-      final json = jsonDecode(res.body) as Map<String, dynamic>;
-      if (json['success'] != true) return [];
-
-      final list = _extractList(json['data']);
-      return list
-          .map(_asMap)
-          .where((e) => e.isNotEmpty)
-          .map(NotifItem.fromJson)
-          .toList();
-    } catch (_) {
-      return [];
-    }
+    final list = await getAll(perPage: 100, page: 1);
+    return list.where((item) => !item.sudahDibaca).toList(growable: false);
   }
 
   static Future<bool> markAsRead(String id) async {
+    await NotificationLocalRepository.instance.markRead(id);
+    if (id.trim().isEmpty || id.startsWith('loc-')) return true;
+
     try {
       final res = await http
           .post(
@@ -446,13 +441,23 @@ class NotifikasiService {
             headers: await AuthService.authHeaders(),
           )
           .timeout(const Duration(seconds: 10));
-      return res.statusCode >= 200 && res.statusCode < 300;
+      if (res.statusCode >= 200 && res.statusCode < 300) return true;
     } catch (_) {
-      return false;
+      // fallback queued below
     }
+
+    await SyncQueueRepository.instance.enqueue(
+      entityType: LocalEntityType.notification,
+      entityLocalId: 'notif:read:$id',
+      operation: SyncOperation.update,
+      payload: {'action': 'mark_read', 'notification_id': id},
+    );
+    unawaited(SyncManager.instance.triggerSync());
+    return true;
   }
 
   static Future<bool> markAllAsRead() async {
+    await NotificationLocalRepository.instance.markAllRead();
     try {
       final res = await http
           .post(
@@ -460,13 +465,25 @@ class NotifikasiService {
             headers: await AuthService.authHeaders(),
           )
           .timeout(const Duration(seconds: 10));
-      return res.statusCode >= 200 && res.statusCode < 300;
+      if (res.statusCode >= 200 && res.statusCode < 300) return true;
     } catch (_) {
-      return false;
+      // fallback queued below
     }
+
+    await SyncQueueRepository.instance.enqueue(
+      entityType: LocalEntityType.notification,
+      entityLocalId: 'notif:readall',
+      operation: SyncOperation.update,
+      payload: const {'action': 'mark_all_read'},
+    );
+    unawaited(SyncManager.instance.triggerSync());
+    return true;
   }
 
   static Future<bool> delete(String id) async {
+    await NotificationLocalRepository.instance.deleteOne(id);
+    if (id.trim().isEmpty || id.startsWith('loc-')) return true;
+
     try {
       final res = await http
           .delete(
@@ -474,13 +491,23 @@ class NotifikasiService {
             headers: await AuthService.authHeaders(),
           )
           .timeout(const Duration(seconds: 10));
-      return res.statusCode >= 200 && res.statusCode < 300;
+      if (res.statusCode >= 200 && res.statusCode < 300) return true;
     } catch (_) {
-      return false;
+      // fallback queued below
     }
+
+    await SyncQueueRepository.instance.enqueue(
+      entityType: LocalEntityType.notification,
+      entityLocalId: 'notif:delete:$id',
+      operation: SyncOperation.delete,
+      payload: {'action': 'delete', 'notification_id': id},
+    );
+    unawaited(SyncManager.instance.triggerSync());
+    return true;
   }
 
   static Future<bool> clearAll() async {
+    await NotificationLocalRepository.instance.clearAll();
     try {
       final res = await http
           .delete(
@@ -488,10 +515,25 @@ class NotifikasiService {
             headers: await AuthService.authHeaders(),
           )
           .timeout(const Duration(seconds: 10));
-      return res.statusCode >= 200 && res.statusCode < 300;
+      if (res.statusCode >= 200 && res.statusCode < 300) return true;
     } catch (_) {
-      return false;
+      // fallback queued below
     }
+
+    await SyncQueueRepository.instance.enqueue(
+      entityType: LocalEntityType.notification,
+      entityLocalId: 'notif:clearall',
+      operation: SyncOperation.delete,
+      payload: const {'action': 'clear_all'},
+    );
+    unawaited(SyncManager.instance.triggerSync());
+    return true;
+  }
+
+  static Future<NotifItem?> ingestRealtime(Map<String, dynamic> raw) async {
+    return NotificationLocalRepository.instance.upsertServerNotificationFromRaw(
+      raw,
+    );
   }
 
   static List<dynamic> _extractList(dynamic raw) {

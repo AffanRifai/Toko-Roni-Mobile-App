@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+import '../offline/dashboard_cache_repository.dart';
+import '../offline/offline_utils.dart';
 import 'auth_service.dart';
 
 class DashboardKasirSummary {
@@ -130,77 +132,115 @@ class DashboardKasirService {
   };
 
   static Future<DashboardKasirSummary> getSummary() async {
-    final statsJson = await _getJson(
-      ApiConfig.dashboardStats,
-      fallbackMessage: 'Gagal memuat ringkasan dashboard kasir',
-    );
-
-    final statsData = _asMap(statsJson['data']);
-    final transactions = _asMap(statsData['transactions']);
-    final today = _asMap(transactions['today']);
-
-    final fallbackCount = _toInt(today['count']);
-    final fallbackAmount = _toDouble(today['amount']);
-
-    final todayStatsJson = await _tryGetJson(
-      '${ApiConfig.transactionIndex}/today-stats',
-    );
-    final todayStatsData = _asMap(todayStatsJson?['data']);
-
-    final totalTransactions = _toInt(
-      todayStatsData['total_transactions'],
-      fallback: fallbackCount,
-    );
-
-    final revenue = _toDouble(
-      todayStatsData['total_amount'],
-      fallback: fallbackAmount,
-    );
-
-    double average = _toDouble(todayStatsData['average_transaction']);
-    if (average <= 0 && totalTransactions > 0) {
-      average = revenue / totalTransactions;
-    }
-
-    int soldProducts = _toInt(
-      todayStatsData['sold_products'],
-      fallback: _toInt(todayStatsData['total_items_sold']),
-    );
-
-    if (soldProducts <= 0) {
-      soldProducts = await _getTodaySoldProductsFromTransactions();
-    }
-
-    if (soldProducts <= 0) {
-      final chartJson = await _tryGetJson(
-        '${ApiConfig.dashboardChart}?period=week',
+    try {
+      final statsJson = await _getJson(
+        ApiConfig.dashboardStats,
+        fallbackMessage: 'Gagal memuat ringkasan dashboard kasir',
       );
-      soldProducts = _extractTodaySoldProducts(chartJson);
-    }
 
-    return DashboardKasirSummary(
-      totalTransactionsToday: totalTransactions,
-      revenueToday: revenue,
-      averageTransactionToday: average,
-      soldProductsToday: soldProducts,
-    );
+      final statsData = _asMap(statsJson['data']);
+      final transactions = _asMap(statsData['transactions']);
+      final today = _asMap(transactions['today']);
+
+      final fallbackCount = _toInt(today['count']);
+      final fallbackAmount = _toDouble(today['amount']);
+
+      final todayStatsJson = await _tryGetJson(
+        '${ApiConfig.transactionIndex}/today-stats',
+      );
+      final todayStatsData = _asMap(todayStatsJson?['data']);
+
+      final totalTransactions = _toInt(
+        todayStatsData['total_transactions'],
+        fallback: fallbackCount,
+      );
+
+      final revenue = _toDouble(
+        todayStatsData['total_amount'],
+        fallback: fallbackAmount,
+      );
+
+      double average = _toDouble(todayStatsData['average_transaction']);
+      if (average <= 0 && totalTransactions > 0) {
+        average = revenue / totalTransactions;
+      }
+
+      int soldProducts = _toInt(
+        todayStatsData['sold_products'],
+        fallback: _toInt(todayStatsData['total_items_sold']),
+      );
+
+      if (soldProducts <= 0) {
+        soldProducts = await _getTodaySoldProductsFromTransactions();
+      }
+
+      if (soldProducts <= 0) {
+        final chartJson = await _tryGetJson(
+          '${ApiConfig.dashboardChart}?period=week',
+        );
+        soldProducts = _extractTodaySoldProducts(chartJson);
+      }
+
+      final summary = DashboardKasirSummary(
+        totalTransactionsToday: totalTransactions,
+        revenueToday: revenue,
+        averageTransactionToday: average,
+        soldProductsToday: soldProducts,
+      );
+      await DashboardCacheRepository.instance.saveKasir({
+        'summary': {
+          'total_transactions_today': summary.totalTransactionsToday,
+          'revenue_today': summary.revenueToday,
+          'average_transaction_today': summary.averageTransactionToday,
+          'sold_products_today': summary.soldProductsToday,
+        },
+      });
+      return summary;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final cached = await DashboardCacheRepository.instance.getKasir();
+      final summary = _asMap(cached['summary']);
+      if (summary.isEmpty) rethrow;
+      return DashboardKasirSummary(
+        totalTransactionsToday: _toInt(summary['total_transactions_today']),
+        revenueToday: _toDouble(summary['revenue_today']),
+        averageTransactionToday: _toDouble(summary['average_transaction_today']),
+        soldProductsToday: _toInt(summary['sold_products_today']),
+      );
+    }
   }
 
   static Future<List<DashboardKasirTransaction>> getRecentTransactions({
     int limit = 5,
   }) async {
     final safeLimit = limit <= 0 ? 5 : limit;
+    try {
+      final json = await _getJson(
+        '${ApiConfig.transactionsRecent}?limit=$safeLimit',
+        fallbackMessage: 'Gagal memuat transaksi terbaru',
+      );
 
-    final json = await _getJson(
-      '${ApiConfig.transactionsRecent}?limit=$safeLimit',
-      fallbackMessage: 'Gagal memuat transaksi terbaru',
-    );
-
-    final list = _extractList(json['data']);
-    return list
-        .map((item) => DashboardKasirTransaction.fromJson(_asMap(item)))
-        .take(safeLimit)
-        .toList();
+      final list = _extractList(json['data']);
+      final rows = list.map(_asMap).toList(growable: false);
+      final cached = await DashboardCacheRepository.instance.getKasir();
+      await DashboardCacheRepository.instance.saveKasir({
+        ...cached,
+        'recent_transactions': rows,
+      });
+      return rows
+          .map((item) => DashboardKasirTransaction.fromJson(item))
+          .take(safeLimit)
+          .toList(growable: false);
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final cached = await DashboardCacheRepository.instance.getKasir();
+      final rows = _extractList(cached['recent_transactions']);
+      if (rows.isEmpty) rethrow;
+      return rows
+          .map((item) => DashboardKasirTransaction.fromJson(_asMap(item)))
+          .take(safeLimit)
+          .toList(growable: false);
+    }
   }
 
   static int _extractTodaySoldProducts(Map<String, dynamic>? chartJson) {

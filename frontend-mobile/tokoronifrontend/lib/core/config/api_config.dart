@@ -10,7 +10,7 @@ class ApiConfig {
   // Kalau pakai device fisik      → http://IP_KOMPUTER_KAMU:8000/api
   // Kalau sudah deploy ke server  → https://domain-kamu.com/api
   //
-  static const String baseUrl = 'http://192.168.1.3:8000/api/v1';
+  static const String baseUrl = 'http://192.168.1.5:8000/api/v1';
 
   // Face biometrics mode:
   // - true  : backend adalah sumber kebenaran descriptor (direkomendasikan)

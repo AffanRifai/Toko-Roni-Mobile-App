@@ -3,6 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
+import '../offline/category_local_repository.dart';
+import '../offline/offline_utils.dart';
+import '../offline/sync_manager.dart';
+import '../offline/sync_queue_repository.dart';
+import '../offline/sync_types.dart';
 import 'auth_service.dart';
 import 'notification_refresh_helper.dart';
 
@@ -68,18 +73,29 @@ class CategoryRecord {
 class CategoryService {
   static Future<List<CategoryRecord>> getCategories({int perPage = 200}) async {
     try {
-      return await _getCategoriesFromUrl(
+      final categories = await _getCategoriesFromUrl(
         '${ApiConfig.categoryIndex}?per_page=$perPage',
       );
+      return categories;
     } catch (e) {
       final msg = e.toString().toLowerCase();
       final looksLikeMissingEndpoint =
           msg.contains('http 404') || msg.contains('not found');
-      if (!looksLikeMissingEndpoint) rethrow;
+      if (!looksLikeMissingEndpoint) {
+        final local = await CategoryLocalRepository.instance.getCategories();
+        if (local.isNotEmpty && isNetworkReachabilityError(e)) return local;
+        rethrow;
+      }
     }
 
     // Fallback untuk backend yang hanya expose endpoint kategori via products.
-    return _getCategoriesFromUrl(ApiConfig.productCategories);
+    try {
+      return await _getCategoriesFromUrl(ApiConfig.productCategories);
+    } catch (e) {
+      final local = await CategoryLocalRepository.instance.getCategories();
+      if (local.isNotEmpty && isNetworkReachabilityError(e)) return local;
+      rethrow;
+    }
   }
 
   static Future<List<CategoryRecord>> _getCategoriesFromUrl(String url) async {
@@ -91,12 +107,10 @@ class CategoryService {
 
     final json = _decode(response, fallbackMessage: 'Gagal memuat kategori');
     final list = _extractList(json['data']);
+    final rawMaps = list.map(_asMap).where((m) => m.isNotEmpty).toList();
+    await CategoryLocalRepository.instance.cacheRemoteCategories(rawMaps);
 
-    return list
-        .map(_asMap)
-        .where((m) => m.isNotEmpty)
-        .map(CategoryRecord.fromJson)
-        .toList();
+    return rawMaps.map(CategoryRecord.fromJson).toList();
   }
 
   static Future<CategoryRecord> createCategory({
@@ -111,8 +125,124 @@ class CategoryService {
       deskripsi: deskripsi,
       aktif: aktif,
     );
-    final url = Uri.parse(ApiConfig.categoryIndex);
+    try {
+      final created = await _createCategoryRemote(body);
+      await NotificationRefreshHelper.refreshSafely();
+      return created;
+    } catch (e) {
+      if (!isNetworkReachabilityError(e)) rethrow;
+      final pending = await CategoryLocalRepository.instance.savePendingCreate(
+        nama: nama,
+        slug: body['slug']?.toString() ?? slug,
+        deskripsi: deskripsi,
+        aktif: aktif,
+      );
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.category,
+        entityLocalId: pending.localId,
+        operation: SyncOperation.create,
+        payload: body,
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      return pending.item;
+    }
+  }
 
+  static Future<CategoryRecord> updateCategory({
+    required int categoryId,
+    required String nama,
+    required String slug,
+    required String deskripsi,
+    required bool aktif,
+  }) async {
+    final body = _buildCategoryPayload(
+      nama: nama,
+      slug: slug,
+      deskripsi: deskripsi,
+      aktif: aktif,
+    );
+    try {
+      final updated = await _updateCategoryRemote(categoryId, body);
+      await NotificationRefreshHelper.refreshSafely();
+      return updated;
+    } catch (e) {
+      if (!isNetworkReachabilityError(e)) rethrow;
+      await CategoryLocalRepository.instance.savePendingUpdate(
+        categoryId: categoryId,
+        nama: nama,
+        slug: body['slug']?.toString() ?? slug,
+        deskripsi: deskripsi,
+        aktif: aktif,
+      );
+      final localId = await CategoryLocalRepository.instance.findLocalIdByAnyId(
+        categoryId,
+      );
+      if (localId != null) {
+        await SyncQueueRepository.instance.enqueue(
+          entityType: LocalEntityType.category,
+          entityLocalId: localId,
+          operation: SyncOperation.update,
+          payload: body,
+        );
+      }
+      unawaited(SyncManager.instance.triggerSync());
+      return CategoryRecord(
+        id: categoryId,
+        nama: nama,
+        slug: body['slug']?.toString() ?? slug,
+        deskripsi: deskripsi,
+        aktif: aktif,
+        totalProduk: 0,
+        terakhirDiperbarui: _formatUpdatedAt(DateTime.now().toIso8601String()),
+      );
+    }
+  }
+
+  static Future<void> deleteCategory({required int categoryId}) async {
+    try {
+      final response = await _performRequest(
+        () async => http
+            .delete(
+              Uri.parse('${ApiConfig.categoryIndex}/$categoryId'),
+              headers: await AuthService.authHeaders(),
+            )
+            .timeout(const Duration(seconds: 20)),
+      );
+
+      _decode(
+        response,
+        fallbackMessage: 'Gagal menghapus kategori',
+        allowEmptyBody: true,
+      );
+      final localId = await CategoryLocalRepository.instance.findLocalIdByAnyId(
+        categoryId,
+      );
+      if (localId != null) {
+        await CategoryLocalRepository.instance.removeByLocalId(localId);
+      }
+      await NotificationRefreshHelper.refreshSafely();
+    } catch (e) {
+      if (!isNetworkReachabilityError(e)) rethrow;
+      await CategoryLocalRepository.instance.savePendingDelete(categoryId);
+      final localId = await CategoryLocalRepository.instance.findLocalIdByAnyId(
+        categoryId,
+      );
+      if (localId != null) {
+        await SyncQueueRepository.instance.enqueue(
+          entityType: LocalEntityType.category,
+          entityLocalId: localId,
+          operation: SyncOperation.delete,
+          payload: {'id': categoryId},
+        );
+      }
+      unawaited(SyncManager.instance.triggerSync());
+    }
+  }
+
+  static Future<CategoryRecord> _createCategoryRemote(
+    Map<String, dynamic> body,
+  ) async {
+    final url = Uri.parse(ApiConfig.categoryIndex);
     final attempts = <Future<http.Response> Function()>[
       () => _sendJson(method: 'POST', url: url, body: body),
       () => _sendForm(method: 'POST', url: url, body: body),
@@ -132,7 +262,15 @@ class CategoryService {
           fallbackRecord: body,
           fallbackId: 0,
         );
-        await NotificationRefreshHelper.refreshSafely();
+        final decoded = _decode(
+          response,
+          fallbackMessage: 'Gagal menambah kategori',
+          allowEmptyBody: true,
+        );
+        final data = _asMap(decoded['data']);
+        await CategoryLocalRepository.instance.cacheRemoteCategories([
+          data.isNotEmpty ? data : body,
+        ]);
         return created;
       }
 
@@ -146,19 +284,10 @@ class CategoryService {
     throw Exception('Gagal menambah kategori');
   }
 
-  static Future<CategoryRecord> updateCategory({
-    required int categoryId,
-    required String nama,
-    required String slug,
-    required String deskripsi,
-    required bool aktif,
-  }) async {
-    final body = _buildCategoryPayload(
-      nama: nama,
-      slug: slug,
-      deskripsi: deskripsi,
-      aktif: aktif,
-    );
+  static Future<CategoryRecord> _updateCategoryRemote(
+    int categoryId,
+    Map<String, dynamic> body,
+  ) async {
     final url = Uri.parse('${ApiConfig.categoryIndex}/$categoryId');
 
     final attempts = <Future<http.Response> Function()>[
@@ -191,7 +320,15 @@ class CategoryService {
           fallbackRecord: body,
           fallbackId: categoryId,
         );
-        await NotificationRefreshHelper.refreshSafely();
+        final decoded = _decode(
+          response,
+          fallbackMessage: 'Gagal memperbarui kategori',
+          allowEmptyBody: true,
+        );
+        final data = _asMap(decoded['data']);
+        await CategoryLocalRepository.instance.cacheRemoteCategories([
+          data.isNotEmpty ? data : {...body, 'id': categoryId},
+        ]);
         return updated;
       }
 
@@ -203,24 +340,6 @@ class CategoryService {
       _decode(lastResponse, fallbackMessage: 'Gagal memperbarui kategori');
     }
     throw Exception('Gagal memperbarui kategori');
-  }
-
-  static Future<void> deleteCategory({required int categoryId}) async {
-    final response = await _performRequest(
-      () async => http
-          .delete(
-            Uri.parse('${ApiConfig.categoryIndex}/$categoryId'),
-            headers: await AuthService.authHeaders(),
-          )
-          .timeout(const Duration(seconds: 20)),
-    );
-
-    _decode(
-      response,
-      fallbackMessage: 'Gagal menghapus kategori',
-      allowEmptyBody: true,
-    );
-    await NotificationRefreshHelper.refreshSafely();
   }
 
   static Future<http.Response> _performRequest(

@@ -4,6 +4,11 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../../models/transaction_api_model.dart';
 import '../config/api_config.dart';
+import '../offline/offline_utils.dart';
+import '../offline/sync_manager.dart';
+import '../offline/sync_queue_repository.dart';
+import '../offline/sync_types.dart';
+import '../offline/transaction_local_repository.dart';
 import 'auth_service.dart';
 import 'notification_refresh_helper.dart';
 
@@ -19,99 +24,155 @@ class TransactionService {
       ApiConfig.transactionIndex,
     ).replace(queryParameters: query);
 
-    final response = await _performRequest(
-      () async => http
-          .get(uri, headers: await AuthService.authHeaders())
-          .timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () async => http
+            .get(uri, headers: await AuthService.authHeaders())
+            .timeout(const Duration(seconds: 20)),
+      );
 
-    final parsed = _decode(
-      response,
-      fallbackMessage: 'Gagal memuat riwayat transaksi',
-      allowEmptyBody: false,
-    );
+      final parsed = _decode(
+        response,
+        fallbackMessage: 'Gagal memuat riwayat transaksi',
+        allowEmptyBody: false,
+      );
 
-    final data = parsed['data'];
-    final list = _extractList(data).isNotEmpty
-        ? _extractList(data)
-        : _extractList(parsed);
-
-    return list
-        .map(_asMap)
-        .where((e) => e.isNotEmpty)
-        .map(TransactionApiItem.fromJson)
-        .toList();
+      final data = parsed['data'];
+      final list = _extractList(data).isNotEmpty
+          ? _extractList(data)
+          : _extractList(parsed);
+      final rawMaps = list.map(_asMap).where((e) => e.isNotEmpty).toList();
+      await TransactionLocalRepository.instance.cacheRemoteTransactions(
+        rawMaps,
+      );
+      return rawMaps.map(TransactionApiItem.fromJson).toList(growable: false);
+    } catch (error) {
+      final local = await TransactionLocalRepository.instance
+          .getTransactionsFromCache();
+      if (local.isNotEmpty && isNetworkReachabilityError(error)) return local;
+      rethrow;
+    }
   }
 
   static Future<TransactionApiItem> getTransactionDetail({
     required int transactionId,
   }) async {
-    final response = await _performRequest(
-      () async => http
-          .get(
-            Uri.parse(ApiConfig.transactionDetail(transactionId)),
-            headers: await AuthService.authHeaders(),
-          )
-          .timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () async => http
+            .get(
+              Uri.parse(ApiConfig.transactionDetail(transactionId)),
+              headers: await AuthService.authHeaders(),
+            )
+            .timeout(const Duration(seconds: 20)),
+      );
 
-    final parsed = _decode(
-      response,
-      fallbackMessage: 'Gagal memuat detail transaksi',
-      allowEmptyBody: false,
-    );
+      final parsed = _decode(
+        response,
+        fallbackMessage: 'Gagal memuat detail transaksi',
+        allowEmptyBody: false,
+      );
 
-    final data = _asMap(parsed['data']);
-    if (data.isEmpty) {
-      throw Exception('Data detail transaksi tidak ditemukan.');
+      final data = _asMap(parsed['data']);
+      if (data.isEmpty) {
+        throw Exception('Data detail transaksi tidak ditemukan.');
+      }
+      await TransactionLocalRepository.instance.cacheRemoteTransactionDetail(
+        data,
+      );
+      return TransactionApiItem.fromJson(data);
+    } catch (error) {
+      final local = await TransactionLocalRepository.instance
+          .getTransactionDetailFromCache(transactionId);
+      if (local != null && isNetworkReachabilityError(error)) return local;
+      rethrow;
     }
-
-    return TransactionApiItem.fromJson(data);
   }
 
   static Future<TransactionApiItem> createTransaction({
     required CreateTransactionPayload payload,
   }) async {
-    final response = await _performRequest(
-      () => _sendJson(
-        method: 'POST',
-        uri: Uri.parse(ApiConfig.transactionIndex),
-        body: payload.toJson(),
-      ).timeout(const Duration(seconds: 25)),
-    );
+    final jsonPayload = payload.toJson();
+    try {
+      final response = await _performRequest(
+        () => _sendJson(
+          method: 'POST',
+          uri: Uri.parse(ApiConfig.transactionIndex),
+          body: jsonPayload,
+        ).timeout(const Duration(seconds: 25)),
+      );
 
-    final parsed = _decode(
-      response,
-      fallbackMessage: 'Gagal memproses transaksi',
-      allowEmptyBody: false,
-    );
+      final parsed = _decode(
+        response,
+        fallbackMessage: 'Gagal memproses transaksi',
+        allowEmptyBody: false,
+      );
 
-    final data = _asMap(parsed['data']);
-    if (data.isEmpty) {
-      throw Exception('Respons transaksi dari server kosong.');
+      final data = _asMap(parsed['data']);
+      if (data.isEmpty) {
+        throw Exception('Respons transaksi dari server kosong.');
+      }
+
+      await TransactionLocalRepository.instance.cacheRemoteTransactionDetail(
+        data,
+      );
+      final created = TransactionApiItem.fromJson(data);
+      await NotificationRefreshHelper.refreshSafely();
+      return created;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final pending = await TransactionLocalRepository.instance
+          .savePendingCreate(payload);
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.transactionDraft,
+        entityLocalId: pending.localId,
+        operation: SyncOperation.create,
+        payload: jsonPayload,
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      return pending.item;
     }
-
-    final created = TransactionApiItem.fromJson(data);
-    await NotificationRefreshHelper.refreshSafely();
-    return created;
   }
 
   static Future<void> deleteTransaction({required int transactionId}) async {
-    final response = await _performRequest(
-      () async => http
-          .delete(
-            Uri.parse(ApiConfig.transactionDetail(transactionId)),
-            headers: await AuthService.authHeaders(),
-          )
-          .timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () async => http
+            .delete(
+              Uri.parse(ApiConfig.transactionDetail(transactionId)),
+              headers: await AuthService.authHeaders(),
+            )
+            .timeout(const Duration(seconds: 20)),
+      );
 
-    _decode(
-      response,
-      fallbackMessage: 'Gagal menghapus transaksi',
-      allowEmptyBody: true,
-    );
-    await NotificationRefreshHelper.refreshSafely();
+      _decode(
+        response,
+        fallbackMessage: 'Gagal menghapus transaksi',
+        allowEmptyBody: true,
+      );
+      final localId = await TransactionLocalRepository.instance
+          .findLocalIdByAnyId(transactionId);
+      if (localId != null) {
+        await TransactionLocalRepository.instance.removeByLocalId(localId);
+      }
+      await NotificationRefreshHelper.refreshSafely();
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      await TransactionLocalRepository.instance.markPendingDelete(
+        transactionId,
+      );
+      final localId = await TransactionLocalRepository.instance
+          .findLocalIdByAnyId(transactionId);
+      if (localId != null) {
+        await SyncQueueRepository.instance.enqueue(
+          entityType: LocalEntityType.transactionDraft,
+          entityLocalId: localId,
+          operation: SyncOperation.delete,
+          payload: {'id': transactionId},
+        );
+      }
+      unawaited(SyncManager.instance.triggerSync());
+    }
   }
 
   static Future<http.Response> _sendJson({

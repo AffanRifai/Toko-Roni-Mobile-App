@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'core/offline/offline_bootstrap.dart';
 import 'core/state/app_state.dart';
 import 'core/ui/app_interaction_wrapper.dart';
 import 'features/splash/splash_page.dart';
@@ -12,6 +13,8 @@ void main() {
   runApp(const MyApp());
   // Run global app state init in background to avoid blocking first frame.
   unawaited(AppState.instance.init());
+  // Initialize offline-first storage and background auto-sync.
+  unawaited(OfflineBootstrap.instance.init());
 }
 
 class MyApp extends StatelessWidget {

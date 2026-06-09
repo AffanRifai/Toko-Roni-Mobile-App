@@ -3,6 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
+import '../offline/member_local_repository.dart';
+import '../offline/offline_utils.dart';
+import '../offline/sync_manager.dart';
+import '../offline/sync_queue_repository.dart';
+import '../offline/sync_types.dart';
 import 'auth_service.dart';
 import 'notification_refresh_helper.dart';
 
@@ -114,27 +119,41 @@ class MemberService {
       ApiConfig.memberIndex,
     ).replace(queryParameters: query);
 
-    final response = await _performRequest(
-      () async => http
-          .get(uri, headers: await AuthService.authHeaders())
-          .timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () async => http
+            .get(uri, headers: await AuthService.authHeaders())
+            .timeout(const Duration(seconds: 20)),
+      );
 
-    final json = _decode(
-      response,
-      fallbackMessage: 'Gagal memuat data member',
-      allowEmptyBody: false,
-    );
+      final json = _decode(
+        response,
+        fallbackMessage: 'Gagal memuat data member',
+        allowEmptyBody: false,
+      );
 
-    final list = _extractList(json['data']).isNotEmpty
-        ? _extractList(json['data'])
-        : _extractList(json);
-
-    return list
-        .map(_asMap)
-        .where((e) => e.isNotEmpty)
-        .map(MemberRecord.fromJson)
-        .toList();
+      final list = _extractList(json['data']).isNotEmpty
+          ? _extractList(json['data'])
+          : _extractList(json);
+      final rows = list.map(_asMap).where((e) => e.isNotEmpty).toList();
+      await MemberLocalRepository.instance.cacheMembers(rows);
+      return rows.map(MemberRecord.fromJson).toList(growable: false);
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      var local = await MemberLocalRepository.instance.getMembers();
+      final q = cleanSearch.toLowerCase();
+      if (q.isNotEmpty) {
+        local = local
+            .where(
+              (m) =>
+                  m.nama.toLowerCase().contains(q) ||
+                  m.kodeMember.toLowerCase().contains(q) ||
+                  m.email.toLowerCase().contains(q),
+            )
+            .toList(growable: false);
+      }
+      return local;
+    }
   }
 
   static Future<MemberRecord> createMember({
@@ -157,25 +176,59 @@ class MemberService {
     if (noTelepon.trim().isNotEmpty) payload['no_telepon'] = noTelepon.trim();
     if (alamat.trim().isNotEmpty) payload['alamat'] = alamat.trim();
 
-    final response = await _performRequest(
-      () => _sendJson(
-        method: 'POST',
-        uri: Uri.parse(ApiConfig.memberIndex),
-        body: payload,
-      ).timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () => _sendJson(
+          method: 'POST',
+          uri: Uri.parse(ApiConfig.memberIndex),
+          body: payload,
+        ).timeout(const Duration(seconds: 20)),
+      );
 
-    final parsed = _decode(
-      response,
-      fallbackMessage: 'Gagal menambah member',
-      allowEmptyBody: true,
-    );
-    final data = _asMap(parsed['data']);
-
-    if (data.isEmpty) {
-      final created = MemberRecord.fromJson({
-        'id': 0,
-        'kode_member': '',
+      final parsed = _decode(
+        response,
+        fallbackMessage: 'Gagal menambah member',
+        allowEmptyBody: true,
+      );
+      final data = _asMap(parsed['data']);
+      final row = data.isNotEmpty
+          ? data
+          : {
+              'id': 0,
+              'kode_member': '',
+              'nama': payload['nama'],
+              'email': payload['email'] ?? '',
+              'no_telepon': payload['no_telepon'] ?? '',
+              'alamat': payload['alamat'] ?? '',
+              'tipe_member': payload['tipe_member'],
+              'limit_kredit': payload['limit_kredit'],
+              'total_piutang': 0,
+              'is_active': payload['is_active'],
+              'tanggal_registrasi': DateTime.now().toIso8601String(),
+              'created_at': DateTime.now().toIso8601String(),
+              'updated_at': DateTime.now().toIso8601String(),
+            };
+      await MemberLocalRepository.instance.upsertLocalRow({
+        ...row,
+        'local_id': 'srv-${row['id'] ?? DateTime.now().microsecondsSinceEpoch}',
+        'server_id': row['id'],
+        'sync_status': SyncStatus.synced.value,
+      });
+      final created = MemberRecord.fromJson(row);
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Member berhasil ditambahkan',
+        message: 'Data member baru telah disimpan.',
+        type: 'member',
+      );
+      return created;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final localId = 'loc-${DateTime.now().microsecondsSinceEpoch}';
+      final row = {
+        'id': generateTempId(),
+        'local_id': localId,
+        'server_id': null,
+        'kode_member': 'OFF-${DateTime.now().millisecondsSinceEpoch}',
         'nama': payload['nama'],
         'email': payload['email'] ?? '',
         'no_telepon': payload['no_telepon'] ?? '',
@@ -187,14 +240,26 @@ class MemberService {
         'tanggal_registrasi': DateTime.now().toIso8601String(),
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
-      });
-      await NotificationRefreshHelper.refreshSafely();
-      return created;
+        'sync_status': SyncStatus.pendingCreate.value,
+      };
+      await MemberLocalRepository.instance.upsertLocalRow(row);
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.member,
+        entityLocalId: localId,
+        operation: SyncOperation.create,
+        payload: payload,
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Member disimpan offline',
+        message: 'Akan sinkron otomatis saat online.',
+        type: 'member',
+        priority: 'high',
+        important: true,
+        enqueueSync: true,
+      );
+      return MemberRecord.fromJson(row);
     }
-
-    final created = MemberRecord.fromJson(data);
-    await NotificationRefreshHelper.refreshSafely();
-    return created;
   }
 
   static Future<MemberRecord> updateMember({
@@ -217,79 +282,165 @@ class MemberService {
       'alamat': alamat.trim(),
     };
 
-    final response = await _performRequest(
-      () => _sendJson(
-        method: 'PUT',
-        uri: Uri.parse(ApiConfig.memberDetail(memberId)),
-        body: payload,
-      ).timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () => _sendJson(
+          method: 'PUT',
+          uri: Uri.parse(ApiConfig.memberDetail(memberId)),
+          body: payload,
+        ).timeout(const Duration(seconds: 20)),
+      );
 
-    final parsed = _decode(
-      response,
-      fallbackMessage: 'Gagal memperbarui member',
-      allowEmptyBody: true,
-    );
-    final data = _asMap(parsed['data']);
-
-    if (data.isEmpty) {
-      final updated = MemberRecord.fromJson({
+      final parsed = _decode(
+        response,
+        fallbackMessage: 'Gagal memperbarui member',
+        allowEmptyBody: true,
+      );
+      final data = _asMap(parsed['data']);
+      final row = data.isNotEmpty
+          ? data
+          : {
+              'id': memberId,
+              'kode_member': '',
+              'nama': payload['nama'],
+              'email': payload['email'],
+              'no_telepon': payload['no_telepon'],
+              'alamat': payload['alamat'],
+              'tipe_member': payload['tipe_member'],
+              'limit_kredit': payload['limit_kredit'],
+              'total_piutang': 0,
+              'is_active': payload['is_active'],
+              'created_at': DateTime.now().toIso8601String(),
+              'updated_at': DateTime.now().toIso8601String(),
+            };
+      await MemberLocalRepository.instance.upsertLocalRow({
+        ...row,
+        'local_id': 'srv-$memberId',
+        'server_id': memberId,
+        'sync_status': SyncStatus.synced.value,
+      });
+      final updated = MemberRecord.fromJson(row);
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Member berhasil diperbarui',
+        message: 'Perubahan data member telah disimpan.',
+        type: 'member',
+      );
+      return updated;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final row = {
         'id': memberId,
-        'kode_member': '',
+        'local_id': 'srv-$memberId',
+        'server_id': memberId,
         'nama': payload['nama'],
         'email': payload['email'],
         'no_telepon': payload['no_telepon'],
         'alamat': payload['alamat'],
         'tipe_member': payload['tipe_member'],
         'limit_kredit': payload['limit_kredit'],
-        'total_piutang': 0,
         'is_active': payload['is_active'],
-        'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
-      });
-      await NotificationRefreshHelper.refreshSafely();
-      return updated;
+        'sync_status': SyncStatus.pendingUpdate.value,
+      };
+      await MemberLocalRepository.instance.upsertLocalRow(row);
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.member,
+        entityLocalId: 'srv-$memberId',
+        operation: SyncOperation.update,
+        payload: payload,
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Perubahan member disimpan offline',
+        message: 'Akan sinkron otomatis saat online.',
+        type: 'member',
+        priority: 'high',
+        important: true,
+        enqueueSync: true,
+      );
+      return MemberRecord.fromJson(row);
     }
-
-    final updated = MemberRecord.fromJson(data);
-    await NotificationRefreshHelper.refreshSafely();
-    return updated;
   }
 
   static Future<bool> toggleMemberStatus({required int memberId}) async {
-    final response = await _performRequest(
-      () => _sendJson(
-        method: 'POST',
-        uri: Uri.parse(ApiConfig.memberToggleStatus(memberId)),
-        body: const {},
-      ).timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () => _sendJson(
+          method: 'POST',
+          uri: Uri.parse(ApiConfig.memberToggleStatus(memberId)),
+          body: const {},
+        ).timeout(const Duration(seconds: 20)),
+      );
 
-    final parsed = _decode(
-      response,
-      fallbackMessage: 'Gagal mengubah status member',
-      allowEmptyBody: true,
-    );
-    final data = _asMap(parsed['data']);
+      final parsed = _decode(
+        response,
+        fallbackMessage: 'Gagal mengubah status member',
+        allowEmptyBody: true,
+      );
+      final data = _asMap(parsed['data']);
 
-    if (data.containsKey('is_active')) {
-      final value = _toBool(data['is_active'], defaultValue: false);
-      await NotificationRefreshHelper.refreshSafely();
-      return value;
-    }
+      if (data.containsKey('is_active')) {
+        final value = _toBool(data['is_active'], defaultValue: false);
+        await NotificationRefreshHelper.notifyLocalAction(
+          title: 'Status member diperbarui',
+          message: 'Status member berhasil diubah.',
+          type: 'member',
+        );
+        return value;
+      }
 
-    final message = (parsed['message'] ?? '').toString().toLowerCase();
-    if (message.contains('diaktifkan')) {
-      await NotificationRefreshHelper.refreshSafely();
-      return true;
+      final message = (parsed['message'] ?? '').toString().toLowerCase();
+      if (message.contains('diaktifkan')) {
+        await NotificationRefreshHelper.notifyLocalAction(
+          title: 'Status member diperbarui',
+          message: 'Member berhasil diaktifkan.',
+          type: 'member',
+        );
+        return true;
+      }
+      if (message.contains('dinonaktifkan')) {
+        await NotificationRefreshHelper.notifyLocalAction(
+          title: 'Status member diperbarui',
+          message: 'Member berhasil dinonaktifkan.',
+          type: 'member',
+        );
+        return false;
+      }
+      throw Exception(
+        'Status member tidak dapat dipastikan dari respons server.',
+      );
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final members = await MemberLocalRepository.instance.getMemberRows();
+      final idx = members.indexWhere((m) => _toInt(m['id']) == memberId);
+      if (idx < 0) {
+        throw Exception('Data member lokal tidak ditemukan.');
+      }
+      final current = _toBool(members[idx]['is_active'], defaultValue: true);
+      members[idx] = {
+        ...members[idx],
+        'is_active': current ? 0 : 1,
+        'sync_status': SyncStatus.pendingUpdate.value,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      await MemberLocalRepository.instance.upsertLocalRow(members[idx]);
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.member,
+        entityLocalId: (members[idx]['local_id'] ?? 'srv-$memberId').toString(),
+        operation: SyncOperation.update,
+        payload: {'action': 'toggle_status', 'member_id': memberId},
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Status member disimpan offline',
+        message: 'Perubahan akan sinkron otomatis saat online.',
+        type: 'member',
+        priority: 'high',
+        important: true,
+        enqueueSync: true,
+      );
+      return !current;
     }
-    if (message.contains('dinonaktifkan')) {
-      await NotificationRefreshHelper.refreshSafely();
-      return false;
-    }
-    throw Exception(
-      'Status member tidak dapat dipastikan dari respons server.',
-    );
   }
 
   static Future<MemberReceivableSummary> getMemberReceivableSummary({
@@ -299,42 +450,66 @@ class MemberService {
       ApiConfig.memberReceivables(memberId),
     ).replace(queryParameters: const {'per_page': '1'});
 
-    final response = await _performRequest(
-      () async => http
-          .get(uri, headers: await AuthService.authHeaders())
-          .timeout(const Duration(seconds: 20)),
-    );
+    try {
+      final response = await _performRequest(
+        () async => http
+            .get(uri, headers: await AuthService.authHeaders())
+            .timeout(const Duration(seconds: 20)),
+      );
 
-    final parsed = _decode(
-      response,
-      fallbackMessage: 'Gagal memuat detail piutang member',
-      allowEmptyBody: false,
-    );
+      final parsed = _decode(
+        response,
+        fallbackMessage: 'Gagal memuat detail piutang member',
+        allowEmptyBody: false,
+      );
 
-    final data = _asMap(parsed['data']);
-    final stats = _asMap(data['stats']);
-    final receivables = _extractList(data['receivables']);
-    final latest = receivables.isNotEmpty
-        ? _asMap(receivables.first)
-        : <String, dynamic>{};
+      final data = _asMap(parsed['data']);
+      final stats = _asMap(data['stats']);
+      final receivables = _extractList(data['receivables']);
+      final latest = receivables.isNotEmpty
+          ? _asMap(receivables.first)
+          : <String, dynamic>{};
 
-    return MemberReceivableSummary(
-      noPiutang: (latest['no_piutang'] ?? '').toString().trim(),
-      invoiceNumber: (latest['invoice_number'] ?? '').toString().trim(),
-      tanggalTransaksiRaw:
-          (latest['tanggal_transaksi'] ?? latest['created_at'] ?? '')
-              .toString()
-              .trim(),
-      jatuhTempoRaw: (latest['jatuh_tempo'] ?? '').toString().trim(),
-      status: (latest['status'] ?? '').toString().trim(),
-      totalPiutang: _toDouble(
-        latest['total_piutang'] ?? stats['total_piutang'],
-      ),
-      sisaPiutang: _toDouble(latest['sisa_piutang'] ?? stats['total_piutang']),
-      totalLimit: _toDouble(stats['limit_kredit']),
-      sisaLimit: _toDouble(stats['sisa_limit']),
-      totalTransaksiKredit: _toInt(stats['jumlah_piutang']),
-    );
+      final summary = MemberReceivableSummary(
+        noPiutang: (latest['no_piutang'] ?? '').toString().trim(),
+        invoiceNumber: (latest['invoice_number'] ?? '').toString().trim(),
+        tanggalTransaksiRaw:
+            (latest['tanggal_transaksi'] ?? latest['created_at'] ?? '')
+                .toString()
+                .trim(),
+        jatuhTempoRaw: (latest['jatuh_tempo'] ?? '').toString().trim(),
+        status: (latest['status'] ?? '').toString().trim(),
+        totalPiutang: _toDouble(
+          latest['total_piutang'] ?? stats['total_piutang'],
+        ),
+        sisaPiutang: _toDouble(
+          latest['sisa_piutang'] ?? stats['total_piutang'],
+        ),
+        totalLimit: _toDouble(stats['limit_kredit']),
+        sisaLimit: _toDouble(stats['sisa_limit']),
+        totalTransaksiKredit: _toInt(stats['jumlah_piutang']),
+      );
+      await MemberLocalRepository.instance.cacheReceivableSummary(memberId, {
+        'no_piutang': summary.noPiutang,
+        'invoice_number': summary.invoiceNumber,
+        'tanggal_transaksi_raw': summary.tanggalTransaksiRaw,
+        'jatuh_tempo_raw': summary.jatuhTempoRaw,
+        'status': summary.status,
+        'total_piutang': summary.totalPiutang,
+        'sisa_piutang': summary.sisaPiutang,
+        'total_limit': summary.totalLimit,
+        'sisa_limit': summary.sisaLimit,
+        'total_transaksi_kredit': summary.totalTransaksiKredit,
+      });
+      return summary;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final cached = await MemberLocalRepository.instance.getReceivableSummary(
+        memberId,
+      );
+      if (cached != null) return cached;
+      rethrow;
+    }
   }
 
   static String _statusApiFromLabel(String label) {

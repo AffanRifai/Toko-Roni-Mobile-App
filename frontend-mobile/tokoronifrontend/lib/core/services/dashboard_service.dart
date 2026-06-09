@@ -44,6 +44,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import '../config/api_config.dart';
+import '../offline/dashboard_cache_repository.dart';
+import '../offline/offline_utils.dart';
 
 // ── Model: Summary Stats ──────────────────────────────────────────────────────
 class DashboardStats {
@@ -343,11 +345,23 @@ class DashboardService {
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   static Future<DashboardStats> getStats() async {
-    final json = await _getJson(
-      ApiConfig.dashboardStats,
-      fallbackMessage: 'Gagal memuat statistik dashboard',
-    );
-    return DashboardStats.fromJson(json);
+    try {
+      final json = await _getJson(
+        ApiConfig.dashboardStats,
+        fallbackMessage: 'Gagal memuat statistik dashboard',
+      );
+      final stats = DashboardStats.fromJson(json);
+      await _updateMainCache({'stats': _statsToMap(stats)});
+      return stats;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final cached = await DashboardCacheRepository.instance.getMain();
+      final statsMap = _asMap(cached['stats']);
+      if (statsMap.isNotEmpty) {
+        return DashboardStats.fromJson({'data': statsMap});
+      }
+      rethrow;
+    }
   }
 
   // ── Stok menipis ─────────────────────────────────────────────────────────
@@ -355,15 +369,41 @@ class DashboardService {
     int limit = 5,
   }) async {
     final safeLimit = limit <= 0 ? 5 : limit;
-    final json = await _getJson(
-      '${ApiConfig.productLowStock}?limit=$safeLimit',
-      fallbackMessage: 'Gagal memuat data stok menipis',
-    );
-    final list = _extractList(json['data']);
-    return list
-        .map((e) => StokMenipisItem.fromJson(_asMap(e)))
-        .take(safeLimit)
-        .toList();
+    try {
+      final json = await _getJson(
+        '${ApiConfig.productLowStock}?limit=$safeLimit',
+        fallbackMessage: 'Gagal memuat data stok menipis',
+      );
+      final list = _extractList(json['data']);
+      final items = list
+          .map((e) => StokMenipisItem.fromJson(_asMap(e)))
+          .take(safeLimit)
+          .toList(growable: false);
+      await _updateMainCache({
+        'low_stock': items
+            .map(
+              (e) => {
+                'product_name': e.produk,
+                'category_name': e.kategori,
+                'min_stock': e.stokMin,
+                'stock': e.sisaStok,
+              },
+            )
+            .toList(growable: false),
+      });
+      return items;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final cached = await DashboardCacheRepository.instance.getMain();
+      final rows = _extractList(cached['low_stock']);
+      if (rows.isNotEmpty) {
+        return rows
+            .map((e) => StokMenipisItem.fromJson(_asMap(e)))
+            .take(safeLimit)
+            .toList(growable: false);
+      }
+      rethrow;
+    }
   }
 
   // ── Produk akan kadaluarsa ────────────────────────────────────────────────
@@ -373,16 +413,33 @@ class DashboardService {
     int limit = 5,
   }) async {
     final safeLimit = limit <= 0 ? 5 : limit;
-    final json = await _getJson(
-      ApiConfig.dashboardStats,
-      fallbackMessage: 'Gagal memuat data produk kadaluarsa',
-    );
-    final data = _asMap(json['data']);
-    final list = _extractList(data['expiring_products']);
-    return list
-        .map((e) => KadaluarsaItem.fromJson(_asMap(e)))
-        .take(safeLimit)
-        .toList();
+    try {
+      final json = await _getJson(
+        ApiConfig.dashboardStats,
+        fallbackMessage: 'Gagal memuat data produk kadaluarsa',
+      );
+      final data = _asMap(json['data']);
+      final list = _extractList(data['expiring_products']);
+      final items = list
+          .map((e) => KadaluarsaItem.fromJson(_asMap(e)))
+          .take(safeLimit)
+          .toList(growable: false);
+      await _updateMainCache({
+        'expiring_products': list.map(_asMap).toList(growable: false),
+      });
+      return items;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final cached = await DashboardCacheRepository.instance.getMain();
+      final rows = _extractList(cached['expiring_products']);
+      if (rows.isNotEmpty) {
+        return rows
+            .map((e) => KadaluarsaItem.fromJson(_asMap(e)))
+            .take(safeLimit)
+            .toList(growable: false);
+      }
+      return const [];
+    }
   }
 
   // ── Transaksi terbaru ────────────────────────────────────────────────────
@@ -390,15 +447,32 @@ class DashboardService {
     int limit = 5,
   }) async {
     final safeLimit = limit <= 0 ? 5 : limit;
-    final json = await _getJson(
-      '${ApiConfig.transactionsRecent}?limit=$safeLimit',
-      fallbackMessage: 'Gagal memuat transaksi terbaru',
-    );
-    final list = _extractList(json['data']);
-    return list
-        .map((e) => TransaksiItem.fromJson(_asMap(e)))
-        .take(safeLimit)
-        .toList();
+    try {
+      final json = await _getJson(
+        '${ApiConfig.transactionsRecent}?limit=$safeLimit',
+        fallbackMessage: 'Gagal memuat transaksi terbaru',
+      );
+      final list = _extractList(json['data']);
+      final items = list
+          .map((e) => TransaksiItem.fromJson(_asMap(e)))
+          .take(safeLimit)
+          .toList(growable: false);
+      await _updateMainCache({
+        'recent_transactions': list.map(_asMap).toList(growable: false),
+      });
+      return items;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final cached = await DashboardCacheRepository.instance.getMain();
+      final rows = _extractList(cached['recent_transactions']);
+      if (rows.isNotEmpty) {
+        return rows
+            .map((e) => TransaksiItem.fromJson(_asMap(e)))
+            .take(safeLimit)
+            .toList(growable: false);
+      }
+      rethrow;
+    }
   }
 
   // ── Chart penjualan & stok keluar ────────────────────────────────────────
@@ -438,7 +512,7 @@ class DashboardService {
           [];
 
       if (labels.isNotEmpty) {
-        return ChartData(
+        final chart = ChartData(
           labels: labels,
           penjualan: penjualan.isEmpty
               ? List.filled(labels.length, 0.0)
@@ -447,9 +521,54 @@ class DashboardService {
               ? List.filled(labels.length, 0.0)
               : stokKeluar,
         );
+        await _updateMainCache({
+          'chart_$period': {
+            'labels': chart.labels,
+            'penjualan': chart.penjualan,
+            'stok_keluar': chart.stokKeluar,
+          },
+        });
+        return chart;
       }
-    } catch (_) {}
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) return null;
+      final period = _filterToPeriod(filter);
+      final cached = await DashboardCacheRepository.instance.getMain();
+      final row = _asMap(cached['chart_$period']);
+      final labels = _extractList(row['labels']).map((e) => '$e').toList();
+      if (labels.isEmpty) return null;
+      final penjualan = _extractList(
+        row['penjualan'],
+      ).map((e) => double.tryParse(e.toString()) ?? 0.0).toList();
+      final stokKeluar = _extractList(
+        row['stok_keluar'],
+      ).map((e) => double.tryParse(e.toString()) ?? 0.0).toList();
+      return ChartData(
+        labels: labels,
+        penjualan: penjualan.isEmpty ? List.filled(labels.length, 0.0) : penjualan,
+        stokKeluar: stokKeluar.isEmpty
+            ? List.filled(labels.length, 0.0)
+            : stokKeluar,
+      );
+    }
     return null;
+  }
+
+  static Future<void> _updateMainCache(Map<String, dynamic> patch) async {
+    final current = await DashboardCacheRepository.instance.getMain();
+    await DashboardCacheRepository.instance.saveMain({...current, ...patch});
+  }
+
+  static Map<String, dynamic> _statsToMap(DashboardStats stats) {
+    return {
+      'products': {
+        'total': stats.totalProduk,
+        'low_stock': stats.stokHampirHabis,
+        'out_of_stock': stats.stokKritis,
+      },
+      'users': {'total': stats.totalKaryawan},
+      'akan_kadaluarsa': stats.akanKadaluarsa,
+    };
   }
 
   static Future<Map<String, dynamic>> _getJson(

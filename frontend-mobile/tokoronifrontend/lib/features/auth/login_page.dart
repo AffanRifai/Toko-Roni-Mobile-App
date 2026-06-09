@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../core/state/app_state.dart';
+import '../../core/offline/session_cache_repository.dart';
 
 import '../../core/config/api_config.dart';
 import '../home/dashboard_router.dart';
@@ -92,6 +93,25 @@ class _LoginPageState extends State<LoginPage> {
         );
         // Simpan user_id untuk WebSocket private channel subscription
         await prefs.setString('user_id', user['id']?.toString() ?? '');
+        final sessionRepo = SessionCacheRepository.instance;
+        await sessionRepo.upsert('auth_token', token);
+        await sessionRepo.upsert(
+          'user_name',
+          user['name']?.toString().trim() ?? '',
+        );
+        await sessionRepo.upsert(
+          'user_email',
+          user['email']?.toString().trim() ?? '',
+        );
+        await sessionRepo.upsert(
+          'user_role',
+          user['role']?.toString().trim() ?? '',
+        );
+        await sessionRepo.upsert(
+          'user_photo',
+          user['avatar']?.toString().trim() ?? '',
+        );
+        await sessionRepo.upsert('user_id', user['id']?.toString() ?? '');
 
         if (!mounted) return;
 
@@ -263,71 +283,71 @@ class _LoginPageState extends State<LoginPage> {
                           const SizedBox(height: 20),
 
                           // ── Divider ──
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Divider(color: Colors.grey.shade300),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                child: Text(
-                                  '-atau-',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Divider(color: Colors.grey.shade300),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
+                          // Row(
+                          //   children: [
+                          //     Expanded(
+                          //       child: Divider(color: Colors.grey.shade300),
+                          //     ),
+                          //     Padding(
+                          //       padding: const EdgeInsets.symmetric(
+                          //         horizontal: 8,
+                          //       ),
+                          //       child: Text(
+                          //         '-atau-',
+                          //         style: TextStyle(
+                          //           fontSize: 12,
+                          //           color: Colors.grey.shade500,
+                          //         ),
+                          //       ),
+                          //     ),
+                          //     Expanded(
+                          //       child: Divider(color: Colors.grey.shade300),
+                          //     ),
+                          //   ],
+                          // ),
+                          // const SizedBox(height: 10),
 
                           // ── Face Login ──
-                          Text(
-                            'Login dengan pengenalan wajah',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          GestureDetector(
-                            onTap: _handleFaceLogin,
-                            child: Column(
-                              children: [
-                                Text(
-                                  'klik disini',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade500,
-                                    decoration: TextDecoration.underline,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Container(
-                                  width: 56,
-                                  height: 56,
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: Colors.grey.shade400,
-                                      width: 1.5,
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(
-                                    Icons.face_outlined,
-                                    size: 32,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          // Text(
+                          //   'Login dengan pengenalan wajah',
+                          //   style: TextStyle(
+                          //     fontSize: 13,
+                          //     color: Colors.grey.shade600,
+                          //   ),
+                          // ),
+                          // const SizedBox(height: 12),
+                          // GestureDetector(
+                          //   onTap: _handleFaceLogin,
+                          //   child: Column(
+                          //     children: [
+                          //       Text(
+                          //         'klik disini',
+                          //         style: TextStyle(
+                          //           fontSize: 11,
+                          //           color: Colors.grey.shade500,
+                          //           decoration: TextDecoration.underline,
+                          //         ),
+                          //       ),
+                          //       const SizedBox(height: 6),
+                          //       Container(
+                          //         width: 56,
+                          //         height: 56,
+                          //         decoration: BoxDecoration(
+                          //           border: Border.all(
+                          //             color: Colors.grey.shade400,
+                          //             width: 1.5,
+                          //           ),
+                          //           borderRadius: BorderRadius.circular(12),
+                          //         ),
+                          //         child: Icon(
+                          //           Icons.face_outlined,
+                          //           size: 32,
+                          //           color: Colors.grey.shade500,
+                          //         ),
+                          //       ),
+                          //     ],
+                          //   ),
+                          // ),
                         ],
                       ),
                     ),

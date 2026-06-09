@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+import '../offline/dashboard_cache_repository.dart';
+import '../offline/offline_utils.dart';
 import 'auth_service.dart';
 
 class DashboardGudangSummary {
@@ -126,60 +128,72 @@ class DashboardGudangService {
   };
 
   static Future<DashboardGudangData> getDashboardData() async {
-    final results = await Future.wait([
-      _getStatsJson(),
-      _getAllProducts(),
-      getLowStockProducts(limit: 10),
-      getCategories(limit: 20),
-      _getTotalRevenueAllTime(),
-      _getTotalSoldUnitsAllTime(),
-    ]);
+    try {
+      final results = await Future.wait([
+        _getStatsJson(),
+        _getAllProducts(),
+        getLowStockProducts(limit: 10),
+        getCategories(limit: 20),
+        _getTotalRevenueAllTime(),
+        _getTotalSoldUnitsAllTime(),
+      ]);
 
-    final statsJson = results[0] as Map<String, dynamic>;
-    final products = results[1] as List<Map<String, dynamic>>;
-    final lowStockItems = results[2] as List<DashboardGudangLowStockItem>;
-    final categories = results[3] as List<DashboardGudangCategoryItem>;
-    final totalRevenue = results[4] as double;
-    final soldUnits = results[5] as int;
+      final statsJson = results[0] as Map<String, dynamic>;
+      final products = results[1] as List<Map<String, dynamic>>;
+      final lowStockItems = results[2] as List<DashboardGudangLowStockItem>;
+      final categories = results[3] as List<DashboardGudangCategoryItem>;
+      final totalRevenue = results[4] as double;
+      final soldUnits = results[5] as int;
 
-    final statsData = _asMap(statsJson['data']);
-    final productStats = _asMap(statsData['products']);
+      final statsData = _asMap(statsJson['data']);
+      final productStats = _asMap(statsData['products']);
 
-    final totalProduk = _toInt(
-      productStats['total'],
-      fallback: products.length,
-    );
-    final stokRendah = _toInt(productStats['low_stock']);
-    final nilaiInventori = _toDouble(productStats['total_value']);
+      final totalProduk = _toInt(
+        productStats['total'],
+        fallback: products.length,
+      );
+      final stokRendah = _toInt(productStats['low_stock']);
+      final nilaiInventori = _toDouble(productStats['total_value']);
 
-    final avgPrice = products.isEmpty
-        ? 0.0
-        : products
-                  .map((p) => _toDouble(p['price']))
-                  .fold<double>(0, (sum, v) => sum + v) /
-              products.length;
+      final avgPrice = products.isEmpty
+          ? 0.0
+          : products
+                    .map((p) => _toDouble(p['price']))
+                    .fold<double>(0, (sum, v) => sum + v) /
+                products.length;
 
-    final stockUpdates =
-        products.map(DashboardGudangStockUpdateItem.fromJson).toList()
-          ..sort((a, b) {
-            final aTime = a.updatedAt?.millisecondsSinceEpoch ?? 0;
-            final bTime = b.updatedAt?.millisecondsSinceEpoch ?? 0;
-            return bTime.compareTo(aTime);
-          });
+      final stockUpdates =
+          products.map(DashboardGudangStockUpdateItem.fromJson).toList()
+            ..sort((a, b) {
+              final aTime = a.updatedAt?.millisecondsSinceEpoch ?? 0;
+              final bTime = b.updatedAt?.millisecondsSinceEpoch ?? 0;
+              return bTime.compareTo(aTime);
+            });
 
-    return DashboardGudangData(
-      summary: DashboardGudangSummary(
-        totalProduk: totalProduk,
-        stokRendah: stokRendah,
-        nilaiInventori: nilaiInventori,
-        totalTerjualUnit: soldUnits,
-        totalPendapatan: totalRevenue,
-        rataRataHargaPerItem: avgPrice,
-      ),
-      lowStockItems: lowStockItems,
-      categoryItems: categories,
-      stockUpdates: stockUpdates.take(10).toList(),
-    );
+      final result = DashboardGudangData(
+        summary: DashboardGudangSummary(
+          totalProduk: totalProduk,
+          stokRendah: stokRendah,
+          nilaiInventori: nilaiInventori,
+          totalTerjualUnit: soldUnits,
+          totalPendapatan: totalRevenue,
+          rataRataHargaPerItem: avgPrice,
+        ),
+        lowStockItems: lowStockItems,
+        categoryItems: categories,
+        stockUpdates: stockUpdates.take(10).toList(),
+      );
+
+      await DashboardCacheRepository.instance.saveGudang(
+        _serializeDashboardData(result),
+      );
+      return result;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final cached = await DashboardCacheRepository.instance.getGudang();
+      if (cached.isEmpty) rethrow;
+      return _deserializeDashboardData(cached);
+    }
   }
 
   static Future<List<DashboardGudangLowStockItem>> getLowStockProducts({
@@ -407,6 +421,75 @@ class DashboardGudangService {
     if (error != null && error.isNotEmpty) return error;
     if (message != null && message.isNotEmpty) return message;
     return '$fallbackMessage (HTTP $statusCode)';
+  }
+
+  static Map<String, dynamic> _serializeDashboardData(
+    DashboardGudangData data,
+  ) {
+    return {
+      'summary': {
+        'total_produk': data.summary.totalProduk,
+        'stok_rendah': data.summary.stokRendah,
+        'nilai_inventori': data.summary.nilaiInventori,
+        'total_terjual_unit': data.summary.totalTerjualUnit,
+        'total_pendapatan': data.summary.totalPendapatan,
+        'rata_rata_harga_per_item': data.summary.rataRataHargaPerItem,
+      },
+      'low_stock_items': data.lowStockItems
+          .map(
+            (e) => {
+              'name': e.namaProduk,
+              'category_name': e.kategori,
+              'stock': e.stok,
+              'min_stock': e.stokMinimum,
+            },
+          )
+          .toList(growable: false),
+      'category_items': data.categoryItems
+          .map(
+            (e) => {
+              'name': e.namaKategori,
+              'products_count': e.totalProduk,
+              'is_active': e.aktif,
+            },
+          )
+          .toList(growable: false),
+      'stock_updates': data.stockUpdates
+          .map(
+            (e) => {
+              'name': e.namaProduk,
+              'category_name': e.kategori,
+              'stock': e.stok,
+              'updated_at': e.updatedAt?.toUtc().toIso8601String(),
+            },
+          )
+          .toList(growable: false),
+    };
+  }
+
+  static DashboardGudangData _deserializeDashboardData(
+    Map<String, dynamic> payload,
+  ) {
+    final summary = _asMap(payload['summary']);
+    return DashboardGudangData(
+      summary: DashboardGudangSummary(
+        totalProduk: _toInt(summary['total_produk']),
+        stokRendah: _toInt(summary['stok_rendah']),
+        nilaiInventori: _toDouble(summary['nilai_inventori']),
+        totalTerjualUnit: _toInt(summary['total_terjual_unit']),
+        totalPendapatan: _toDouble(summary['total_pendapatan']),
+        rataRataHargaPerItem: _toDouble(summary['rata_rata_harga_per_item']),
+      ),
+      lowStockItems: _extractList(payload['low_stock_items'])
+          .map((e) => DashboardGudangLowStockItem.fromJson(_asMap(e)))
+          .toList(growable: false),
+      categoryItems: _extractList(payload['category_items'])
+          .map((e) => DashboardGudangCategoryItem.fromJson(_asMap(e)))
+          .toList(growable: false),
+      stockUpdates: _extractList(payload['stock_updates'])
+          .map((e) => DashboardGudangStockUpdateItem.fromJson(_asMap(e)))
+          .toList(growable: false),
+    );
   }
 }
 

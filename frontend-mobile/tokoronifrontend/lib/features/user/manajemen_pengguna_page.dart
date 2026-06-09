@@ -850,31 +850,31 @@ class _ManajemenPenggunaPageState extends State<ManajemenPenggunaPage>
                                       await _loadAllData();
                                     },
                                   ),
-                                  const SizedBox(width: 8),
-                                  _AksiBtn(
-                                    icon: Icons.face_rounded,
-                                    color: const Color(0xFF4169E1),
-                                    label: 'Daftar wajah',
-                                    onTap: () async {
-                                      final result = await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => RegistrasiWajahPage(
-                                            namaUser: p.nama,
-                                            userId: p.id,
-                                          ),
-                                        ),
-                                      );
-                                      if (!mounted) return;
-                                      if (result == true) {
-                                        _showSnack(
-                                          'Wajah untuk ${p.nama} berhasil didaftarkan',
-                                          const Color(0xFF48BB78),
-                                        );
-                                      }
-                                    },
-                                  ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 10),
+                                  // _AksiBtn(
+                                  //   icon: Icons.face_rounded,
+                                  //   color: const Color(0xFF4169E1),
+                                  //   label: 'Daftar wajah',
+                                  //   onTap: () async {
+                                  //     final result = await Navigator.push(
+                                  //       context,
+                                  //       MaterialPageRoute(
+                                  //         builder: (_) => RegistrasiWajahPage(
+                                  //           namaUser: p.nama,
+                                  //           userId: p.id,
+                                  //         ),
+                                  //       ),
+                                  //     );
+                                  //     if (!mounted) return;
+                                  //     if (result == true) {
+                                  //       _showSnack(
+                                  //         'Wajah untuk ${p.nama} berhasil didaftarkan',
+                                  //         const Color(0xFF48BB78),
+                                  //       );
+                                  //     }
+                                  //   },
+                                  // ),
+                                  //const SizedBox(width: 8),
                                   _AksiBtn(
                                     icon: Icons.delete_rounded,
                                     color: const Color(0xFFE53E3E),

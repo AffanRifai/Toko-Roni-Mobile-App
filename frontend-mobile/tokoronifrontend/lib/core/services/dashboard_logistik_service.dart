@@ -1,5 +1,7 @@
 import '../../models/kendaraan_model.dart';
 import '../../models/pengiriman_model.dart';
+import '../offline/dashboard_cache_repository.dart';
+import '../offline/offline_utils.dart';
 import 'auth_service.dart';
 import 'delivery_service.dart';
 import 'vehicle_service.dart';
@@ -64,32 +66,110 @@ class DashboardLogistikService {
     required bool onlyMyDeliveries,
     String chartFilter = '7 Hari',
   }) async {
-    final deliveries = await _fetchDeliveries(
-      onlyMyDeliveries: onlyMyDeliveries,
-    );
+    try {
+      final deliveries = await _fetchDeliveries(
+        onlyMyDeliveries: onlyMyDeliveries,
+      );
 
-    final armada = await _fetchArmada();
-    final armadaTersedia = await _fetchArmadaTersediaCount(
-      fallbackArmada: armada,
-    );
+      final armada = await _fetchArmada();
+      final armadaTersedia = await _fetchArmadaTersediaCount(
+        fallbackArmada: armada,
+      );
 
-    final summary = _buildSummary(
-      deliveries: deliveries,
-      armadaTersedia: armadaTersedia,
-    );
+      final summary = _buildSummary(
+        deliveries: deliveries,
+        armadaTersedia: armadaTersedia,
+      );
 
-    final chartData = buildChartData(
-      deliveries: deliveries,
-      filter: chartFilter,
-    );
+      final chartData = buildChartData(
+        deliveries: deliveries,
+        filter: chartFilter,
+      );
 
-    return DashboardLogistikData(
-      summary: summary,
-      pengirimanSaya: deliveries,
-      armada: armada,
-      chartSourceDeliveries: deliveries,
-      chartData: chartData,
-    );
+      final result = DashboardLogistikData(
+        summary: summary,
+        pengirimanSaya: deliveries,
+        armada: armada,
+        chartSourceDeliveries: deliveries,
+        chartData: chartData,
+      );
+      await DashboardCacheRepository.instance.saveLogistik({
+        'summary': {
+          'pengiriman_hari_ini': summary.pengirimanHariIni,
+          'pengiriman_dalam_proses': summary.pengirimanDalamProses,
+          'barang_dikirim': summary.barangDikirim,
+          'on_time_rate': summary.onTimeRate,
+          'armada_tersedia': summary.armadaTersedia,
+        },
+        'deliveries': deliveries
+            .map(
+              (e) => {
+                'id': e.id,
+                'transaction_id': e.transactionId,
+                'delivery_code': e.kodePengiriman,
+                'invoice': e.invoice,
+                'destination': e.tujuan,
+                'origin': e.asal,
+                'created_at': e.createdAt.toUtc().toIso8601String(),
+                'customer_name': e.namaCustomer,
+                'total_amount': e.totalBelanja,
+                'total_items': e.totalItem,
+                'status': e.statusApi,
+                'notes': e.catatan,
+                'estimated_delivery_time': e.estimatedDeliveryRaw,
+                'delivered_at': e.deliveredAtRaw,
+                'user_id': e.kurirId,
+                'vehicle_id': e.kendaraanId,
+                'driver_name': e.namaKurir,
+                'driver_phone': e.nomorKurir,
+                'vehicle': e.kendaraan,
+              },
+            )
+            .toList(growable: false),
+        'vehicles': armada
+            .map(
+              (e) => {
+                'id': e.id,
+                'name': e.nama,
+                'license_plate': e.platNomor,
+                'type': kendaraanTypeApiFromLabel(e.jenis),
+                'status': kendaraanStatusApiFromLabel(e.status),
+                'last_maintenance': formatDateForApi(e.tanggalMaintenance),
+                'capacity_weight': e.kapasitasBerat,
+                'capacity_volume': e.kapasitasVolume,
+                'notes': e.catatan,
+              },
+            )
+            .toList(growable: false),
+      });
+      return result;
+    } catch (error) {
+      if (!isNetworkReachabilityError(error)) rethrow;
+      final cached = await DashboardCacheRepository.instance.getLogistik();
+      if (cached.isEmpty) rethrow;
+      final deliveries = _extractList(cached['deliveries'])
+          .map((e) => PengirimanItem.fromJson(_asMap(e)))
+          .toList(growable: false);
+      final vehicles = _extractList(cached['vehicles'])
+          .map((e) => KendaraanItem.fromJson(_asMap(e)))
+          .toList(growable: false);
+      final chart = buildChartData(deliveries: deliveries, filter: chartFilter);
+      final summaryMap = _asMap(cached['summary']);
+      final summary = DashboardLogistikSummary(
+        pengirimanHariIni: _toInt(summaryMap['pengiriman_hari_ini']),
+        pengirimanDalamProses: _toInt(summaryMap['pengiriman_dalam_proses']),
+        barangDikirim: _toInt(summaryMap['barang_dikirim']),
+        onTimeRate: _toDouble(summaryMap['on_time_rate']),
+        armadaTersedia: _toInt(summaryMap['armada_tersedia']),
+      );
+      return DashboardLogistikData(
+        summary: summary,
+        pengirimanSaya: deliveries,
+        armada: vehicles,
+        chartSourceDeliveries: deliveries,
+        chartData: chart,
+      );
+    }
   }
 
   static DashboardLogistikChartData buildChartData({
@@ -321,6 +401,33 @@ class DashboardLogistikService {
     final text = raw.trim();
     if (text.isEmpty) return null;
     return DateTime.tryParse(text)?.toLocal();
+  }
+
+  static Map<String, dynamic> _asMap(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) {
+      return raw.map((k, v) => MapEntry(k.toString(), v));
+    }
+    return const <String, dynamic>{};
+  }
+
+  static List<dynamic> _extractList(dynamic raw) {
+    if (raw is List) return raw;
+    if (raw is Map<String, dynamic>) {
+      final data = raw['data'];
+      if (data is List) return data;
+    }
+    return const [];
+  }
+
+  static int _toInt(dynamic value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 }
 

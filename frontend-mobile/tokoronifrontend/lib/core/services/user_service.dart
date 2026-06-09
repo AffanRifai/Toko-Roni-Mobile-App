@@ -5,6 +5,11 @@ import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
+import '../offline/offline_utils.dart';
+import '../offline/sync_manager.dart';
+import '../offline/sync_queue_repository.dart';
+import '../offline/sync_types.dart';
+import '../offline/user_local_repository.dart';
 import 'auth_service.dart';
 import 'notification_refresh_helper.dart';
 
@@ -160,6 +165,11 @@ class UserService {
       }
     }
 
+    final localRows = await UserLocalRepository.instance.getUsers();
+    if (localRows.isNotEmpty && isNetworkReachabilityError(lastError ?? Exception(''))) {
+      return localRows;
+    }
+
     final cached = await _loadUsersCache();
     if (cached.isNotEmpty) {
       return cached;
@@ -269,6 +279,36 @@ class UserService {
       }
 
       if (endpointNotFound) continue;
+    }
+
+    if (lastError != null && isNetworkReachabilityError(lastError)) {
+      final localId = 'loc-${DateTime.now().microsecondsSinceEpoch}';
+      final localRow = {
+        'id': generateTempId(),
+        'code': '',
+        ...payload,
+        'local_id': localId,
+        'server_id': null,
+        'sync_status': SyncStatus.pendingCreate.value,
+        'created_at': DateTime.now().toIso8601String(),
+      };
+      await UserLocalRepository.instance.upsertLocalRow(localRow);
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.user,
+        entityLocalId: localId,
+        operation: SyncOperation.create,
+        payload: payload,
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Pengguna disimpan offline',
+        message: 'Akan sinkron otomatis saat online.',
+        type: 'user',
+        priority: 'high',
+        important: true,
+        enqueueSync: true,
+      );
+      return UserRecord.fromJson(localRow);
     }
 
     throw lastError ?? Exception('Gagal menambah pengguna');
@@ -388,6 +428,43 @@ class UserService {
       if (endpointNotFound) continue;
     }
 
+    if (lastError != null && isNetworkReachabilityError(lastError)) {
+      final payload = payloadCandidates.isNotEmpty
+          ? payloadCandidates.first
+          : <String, dynamic>{};
+      final localRow = {
+        'id': userId,
+        'name': nama,
+        'email': email,
+        'role': role,
+        'jenis_toko': jenisToko,
+        'is_active': aktif ? 1 : 0,
+        if ((telepon ?? '').trim().isNotEmpty) 'phone': telepon!.trim(),
+        if ((alamat ?? '').trim().isNotEmpty) 'address': alamat!.trim(),
+        'local_id': 'srv-$userId',
+        'server_id': userId,
+        'sync_status': SyncStatus.pendingUpdate.value,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      await UserLocalRepository.instance.upsertLocalRow(localRow);
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.user,
+        entityLocalId: 'srv-$userId',
+        operation: SyncOperation.update,
+        payload: payload,
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Perubahan pengguna disimpan offline',
+        message: 'Akan sinkron otomatis saat online.',
+        type: 'user',
+        priority: 'high',
+        important: true,
+        enqueueSync: true,
+      );
+      return UserRecord.fromJson(localRow);
+    }
+
     throw lastError ?? Exception('Gagal memperbarui pengguna');
   }
 
@@ -432,6 +509,25 @@ class UserService {
           throw lastError;
         }
       }
+    }
+    if (lastError != null && isNetworkReachabilityError(lastError)) {
+      await UserLocalRepository.instance.removeByLocalId('srv-$userId');
+      await SyncQueueRepository.instance.enqueue(
+        entityType: LocalEntityType.user,
+        entityLocalId: 'srv-$userId',
+        operation: SyncOperation.delete,
+        payload: {'user_id': userId},
+      );
+      unawaited(SyncManager.instance.triggerSync());
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Hapus pengguna disimpan offline',
+        message: 'Akan sinkron otomatis saat online.',
+        type: 'user',
+        priority: 'high',
+        important: true,
+        enqueueSync: true,
+      );
+      return;
     }
     throw lastError ?? Exception('Gagal menghapus pengguna');
   }
@@ -646,6 +742,25 @@ class UserService {
       );
     }
 
+    if (lastError != null && isNetworkReachabilityError(lastError)) {
+      await UserLocalRepository.instance.cacheFaceMeta({
+        'user_id': userId,
+        'image_path': imagePath,
+        'quality_score': qualityScore,
+        'updated_at': DateTime.now().toIso8601String(),
+        'sync_status': SyncStatus.pendingCreate.value,
+      });
+      await NotificationRefreshHelper.notifyLocalAction(
+        title: 'Registrasi wajah disimpan offline',
+        message: 'Metadata tersimpan lokal dan akan diproses saat online.',
+        type: 'user',
+        priority: 'high',
+        important: true,
+        enqueueSync: true,
+      );
+      return;
+    }
+
     throw lastError ?? Exception('Gagal menyimpan registrasi wajah');
   }
 
@@ -676,6 +791,9 @@ class UserService {
 
     if (records.isNotEmpty) {
       await _saveUsersCache(records);
+      await UserLocalRepository.instance.cacheUsers(
+        records.map((e) => e.toJson()).toList(growable: false),
+      );
     }
 
     return records;
@@ -1151,6 +1269,12 @@ class UserService {
       users.insert(0, record);
     }
     await _saveUsersCache(users);
+    await UserLocalRepository.instance.upsertLocalRow({
+      ...record.toJson(),
+      'local_id': record.id > 0 ? 'srv-${record.id}' : 'loc-${DateTime.now().microsecondsSinceEpoch}',
+      'server_id': record.id > 0 ? record.id : null,
+      'sync_status': SyncStatus.synced.value,
+    });
   }
 
   static Future<void> _removeUsersCache(int userId) async {
@@ -1158,6 +1282,7 @@ class UserService {
     final users = List<UserRecord>.from(await _loadUsersCache());
     users.removeWhere((u) => u.id == userId);
     await _saveUsersCache(users);
+    await UserLocalRepository.instance.removeByLocalId('srv-$userId');
   }
 
   static String _buildErrorMessage(
